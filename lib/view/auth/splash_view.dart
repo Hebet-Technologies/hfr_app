@@ -1,55 +1,61 @@
 import 'package:flutter/material.dart';
-import 'package:staffportal/utils/colors.dart';
-import 'package:staffportal/widget/button_widget.dart';
-import 'package:provider/provider.dart';
-import '../../view_model/service/splash_service.dart';
-import '../../view_model/user_view_model.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SplashView extends StatefulWidget {
+import '../../view_model/providers.dart';
+import '../../utils/routes/routes_name.dart';
+
+class SplashView extends ConsumerStatefulWidget {
   const SplashView({super.key});
 
   @override
-  State<SplashView> createState() => _SplashViewState();
+  ConsumerState<SplashView> createState() => _SplashViewState();
 }
 
-class _SplashViewState extends State<SplashView> {
-
-  SplashService splashService = SplashService();
-
+class _SplashViewState extends ConsumerState<SplashView> {
   @override
   void initState() {
-    splashService.checkUserAuth(context);
     super.initState();
+    _checkAuthStatus();
+  }
+
+  Future<void> _checkAuthStatus() async {
+    await Future.delayed(const Duration(seconds: 2));
+
+    if (!mounted) return;
+
+    final authViewModel = ref.read(authViewModelProvider.notifier);
+    final isLoggedIn = await authViewModel.checkLoginStatus();
+
+    if (!mounted) return;
+
+    if (isLoggedIn) {
+      Navigator.pushReplacementNamed(context, RoutesName.home);
+    } else {
+      Navigator.pushReplacementNamed(context, RoutesName.intro);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Consumer<UserViewModel>(builder: (context, userModel, child){
-        return Center(
-            child: userModel.isLoading
-              ? const CircularProgressIndicator()
-              : userModel.msg == "error"
-              ? SizedBox(
-                height: 100,
-                child: Column(
-                  children: [
-                    const Text("No Internet Connection"),
-                    const SizedBox(height: 10,),
-                    SizedBox(
-                      width: 100,
-                      child: ButtonWidget(
-                          title: "Retry",
-                          color: blueAccent,
-                          textColor: white,
-                          onPressed: ()=> userModel.loginApi(context)
-                      ),
-                    )
-                  ],
-                ),
-              ): const CircularProgressIndicator(),
-        );
-      })
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset('assets/images/logo.png', height: 120),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(
+              'Staff Portal',
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -5,8 +5,7 @@ import '../model/working_station.dart';
 import '../repository/auth_repository.dart';
 import '../utils/routes/routes_name.dart';
 
-class UserViewModel with ChangeNotifier{
-
+class UserViewModel with ChangeNotifier {
   bool _isLoading = false;
   bool _isDashboardLoading = false;
   bool get isLoading => _isLoading;
@@ -19,7 +18,8 @@ class UserViewModel with ChangeNotifier{
   String get msg => _msg;
   String get msgDashboard => _msgDashboard;
 
-  final TextEditingController searchLocationController = TextEditingController();
+  final TextEditingController searchLocationController =
+      TextEditingController();
 
   String? _selectedStationId;
   String? _selectedStationName;
@@ -39,9 +39,11 @@ class UserViewModel with ChangeNotifier{
   final List<WorkingStation> _stations = [];
   List<WorkingStation> get stations => _stations;
 
-  final _authRepository = AuthRepository();
+  final AuthRepository _authRepository;
 
-  Future<bool> saveUser(String token, String email, String password) async{
+  UserViewModel(this._authRepository);
+
+  Future<bool> saveUser(String token, String email, String password) async {
     final SharedPreferences sp = await SharedPreferences.getInstance();
     sp.setString("token", token);
     sp.setString("email", email);
@@ -50,49 +52,54 @@ class UserViewModel with ChangeNotifier{
     return true;
   }
 
-  Future<void> getUserToken() async{
+  Future<void> getUserToken() async {
     final SharedPreferences sp = await SharedPreferences.getInstance();
-    if(sp.getString("token") == null){
+    if (sp.getString("token") == null) {
       _userToken = "";
-    }else{
+    } else {
       _userToken = sp.getString("token")!;
     }
     notifyListeners();
   }
 
-  Future<dynamic> loginApi(BuildContext context) async{
-
+  Future<dynamic> loginApi(BuildContext context) async {
     _isLoading = true;
     _msg = "";
     notifyListeners();
 
     final SharedPreferences sp = await SharedPreferences.getInstance();
     Map data = {
-      'email' : sp.getString("email")!,
-      'password' : sp.getString("password")!
+      'email': sp.getString("email")!,
+      'password': sp.getString("password")!,
     };
 
-    _authRepository.loginApi(data).then((value) async{
-      _isLoading = false;
-      notifyListeners();
+    _authRepository
+        .loginApi(data)
+        .then((value) async {
+          _isLoading = false;
+          notifyListeners();
 
-      await saveUser(
-          value["data"]['token'],
-          value["data"]['email'],
-          sp.getString("password")!
-      );
+          await saveUser(
+            value["data"]['token'],
+            value["data"]['email'],
+            sp.getString("password")!,
+          );
 
-      if (!context.mounted) return;
-      Navigator.pushNamedAndRemoveUntil(context, RoutesName.home, (route) => false);
-
-    }).onError((error, stackTrace){
-      _isLoading = false;
-      _msg = "error";
-      notifyListeners();
-    });
+          if (!context.mounted) return;
+          Navigator.pushNamedAndRemoveUntil(
+            context,
+            RoutesName.home,
+            (route) => false,
+          );
+        })
+        .onError((error, stackTrace) {
+          _isLoading = false;
+          _msg = "error";
+          notifyListeners();
+        });
   }
 
-  Future<dynamic> getDashboard(BuildContext context) async{
+  Future<dynamic> getDashboard(BuildContext context) async {
     _selectedStationId = null;
     _isDashboardLoading = true;
     _selectedStationName = null;
@@ -100,60 +107,66 @@ class UserViewModel with ChangeNotifier{
     _dashboard.clear();
     notifyListeners();
 
-    _authRepository.defaultDashboard().then((value) async{
-      _dashboard.add(EmployeeStats.fromJson(value));
-      _isDashboardLoading = false;
-      notifyListeners();
+    _authRepository
+        .defaultDashboard()
+        .then((value) async {
+          _dashboard.add(EmployeeStats.fromJson(value));
+          _isDashboardLoading = false;
+          notifyListeners();
 
-      if(_msgStation == "error"){
-        getStations(context);
-      }
-
-    }).onError((error, stackTrace){
-      _isDashboardLoading = false;
-      _msgDashboard = "error";
-      notifyListeners();
-    });
+          if (_msgStation == "error") {
+            getStations(context);
+          }
+        })
+        .onError((error, stackTrace) {
+          _isDashboardLoading = false;
+          _msgDashboard = "error";
+          notifyListeners();
+        });
   }
 
-  Future<dynamic> getSelectedDashboard(BuildContext context, int id) async{
-
+  Future<dynamic> getSelectedDashboard(BuildContext context, int id) async {
     _isDashboardLoading = true;
     _msgDashboard = "";
     _dashboard.clear();
     notifyListeners();
 
-    _authRepository.selectedDashboard(id).then((value) async{
-      _dashboard.add(EmployeeStats.fromJson(value));
-      _isDashboardLoading = false;
-      notifyListeners();
-    }).onError((error, stackTrace){
-      _isDashboardLoading = false;
-      _msgDashboard = "error";
-      notifyListeners();
-    });
+    _authRepository
+        .selectedDashboard(id)
+        .then((value) async {
+          _dashboard.add(EmployeeStats.fromJson(value));
+          _isDashboardLoading = false;
+          notifyListeners();
+        })
+        .onError((error, stackTrace) {
+          _isDashboardLoading = false;
+          _msgDashboard = "error";
+          notifyListeners();
+        });
   }
 
-  Future<dynamic> getStations(BuildContext context) async{
-
-    if(_stations.isNotEmpty) return;
+  Future<dynamic> getStations(BuildContext context) async {
+    if (_stations.isNotEmpty) return;
 
     _msgStation = "";
     notifyListeners();
 
-    _authRepository.getWorkStation().then((value) async{
-      if(value["statusCode"] == 200){
-        for(var data in value["data"]){
-          if(data['deleted_at'] == null){
-            _stations.add(WorkingStation.fromJson(data));
+    _authRepository
+        .getWorkStation()
+        .then((value) async {
+          if (value["statusCode"] == 200) {
+            for (var data in value["data"]) {
+              if (data['deleted_at'] == null) {
+                _stations.add(WorkingStation.fromJson(data));
+              }
+            }
+            notifyListeners();
           }
-        }
-        notifyListeners();
-      }
-    }).onError((error, stackTrace){
-      _msgStation = "error";
-      notifyListeners();
-    });
+        })
+        .onError((error, stackTrace) {
+          _msgStation = "error";
+          notifyListeners();
+        });
   }
 
   @override

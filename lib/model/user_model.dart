@@ -1,68 +1,59 @@
 class UserModel {
-  String? accessToken;
-  Data? data;
+  final String userId;
+  final String email;
+  final String fullName;
+  final String loginStatus;
+  final String workingStationId;
+  final String workingStationName;
+  final String? workingStationType;
+  final String personalInformationId;
+  final String token;
+  final List<String> roles;
+  final List<String> permissions;
 
-  UserModel({this.accessToken, this.data});
+  UserModel({
+    required this.userId,
+    required this.email,
+    required this.fullName,
+    required this.loginStatus,
+    required this.workingStationId,
+    required this.workingStationName,
+    this.workingStationType,
+    required this.personalInformationId,
+    required this.token,
+    required this.roles,
+    required this.permissions,
+  });
 
-  UserModel.fromJson(Map<String, dynamic> json) {
-    accessToken = json['access_token'];
-    data = json['data'] != null ? Data.fromJson(json['data']) : null;
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      userId: json['user_id'] ?? '',
+      email: json['email'] ?? '',
+      fullName: json['full_name'] ?? '',
+      loginStatus: json['login_status'] ?? '',
+      workingStationId: json['working_station_id'] ?? '',
+      workingStationName: json['working_station_name'] ?? '',
+      workingStationType: json['working_station_type'],
+      personalInformationId: json['personal_information_id'] ?? '',
+      token: json['token'] ?? '',
+      roles: List<String>.from(json['roles'] ?? []),
+      permissions: List<String>.from(json['permissions'] ?? []),
+    );
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = <String, dynamic>{};
-    data['access_token'] = accessToken;
-    if (this.data != null) {
-      data['data'] = this.data!.toJson();
-    }
-    return data;
-  }
-}
-
-class Data {
-  String? firstName;
-  String? middleName;
-  String? lastName;
-  String? address;
-  String? gender;
-  String? phone;
-  dynamic? loginStatus;
-  String? email;
-
-  Data(
-      {
-        this.firstName,
-        this.middleName,
-        this.lastName,
-        this.address,
-        this.gender,
-        this.phone,
-        this.loginStatus,
-        this.email,
-      }
-  );
-
-  Data.fromJson(Map<String, dynamic> json) {
-    firstName = json['first_name'];
-    middleName = json['middle_name'];
-    lastName = json['last_name'];
-    address = json['address'];
-    gender = json['gender'];
-    phone = json['phone'];
-    loginStatus = json['login_status'];
-    email = json['email'];
-  }
-
-  Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = <String, dynamic>{};
-    data['first_name'] = firstName;
-    data['middle_name'] = middleName;
-    data['last_name'] = lastName;
-    data['address'] = address;
-    data['gender'] = gender;
-    data['phone'] = phone;
-    data['login_status'] = loginStatus;
-    data['email'] = email;
-    return data;
+    return {
+      'user_id': userId,
+      'email': email,
+      'full_name': fullName,
+      'login_status': loginStatus,
+      'working_station_id': workingStationId,
+      'working_station_name': workingStationName,
+      'working_station_type': workingStationType,
+      'personal_information_id': personalInformationId,
+      'token': token,
+      'roles': roles,
+      'permissions': permissions,
+    };
   }
 }

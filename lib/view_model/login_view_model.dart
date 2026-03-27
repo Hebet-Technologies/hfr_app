@@ -1,12 +1,16 @@
 import 'package:flutter/cupertino.dart';
-import 'package:staffportal/view_model/user_view_model.dart';
-import 'package:provider/provider.dart';
+
 import '../model/user_model.dart';
 import '../repository/auth_repository.dart';
 import '../utils/routes/routes_name.dart';
 import '../utils/utils.dart';
 
-class LoginViewModel with ChangeNotifier{
+import 'user_view_model.dart';
+
+class LoginViewModel with ChangeNotifier {
+  final AuthRepository _authRepository;
+
+  LoginViewModel(this._authRepository);
 
   bool _isLoading = false;
   bool _isSecured = true;
@@ -15,8 +19,6 @@ class LoginViewModel with ChangeNotifier{
   String _password = '';
 
   UserModel? _user;
-  
-  final _authRepository = AuthRepository();
 
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
@@ -32,12 +34,12 @@ class LoginViewModel with ChangeNotifier{
   FocusNode get emailFocusNode => _emailFocusNode;
   FocusNode get passwordFocusNode => _passwordFocusNode;
 
-  void setLoading(bool val){
+  void setLoading(bool val) {
     _isLoading = val;
     notifyListeners();
   }
 
-  void setSecure(bool val){
+  void setSecure(bool val) {
     _isSecured = val;
     notifyListeners();
   }
@@ -52,40 +54,42 @@ class LoginViewModel with ChangeNotifier{
     notifyListeners();
   }
 
-  Future<dynamic> loginApi(BuildContext context) async{
-    final userViewModel = Provider.of<UserViewModel>(context, listen: false);
-
-    Map data = {
-      'email' : _email,
-      'password' : _password
-    };
+  Future<void> loginApi(
+    BuildContext context,
+    UserViewModel userViewModel,
+  ) async {
+    Map data = {'email': _email, 'password': _password};
 
     setLoading(true);
 
-    _authRepository.loginApi(data).then((value) async{
-      setLoading(false);
+    _authRepository
+        .loginApi(data)
+        .then((value) async {
+          setLoading(false);
 
-      if(value['statusCode'] == 401){
-        if (!context.mounted) return;
-        Utils.flushBar("Incorrect email or password", context, "warning");
-      }else{
+          if (value['statusCode'] == 401) {
+            if (!context.mounted) return;
+            Utils.flushBar("Incorrect email or password", context, "warning");
+          } else {
+            await userViewModel.saveUser(
+              value["data"]['token'],
+              _email,
+              _password,
+            );
 
-        await userViewModel.saveUser(
-            value["data"]['token'],
-            _email,
-            _password
-        );
+            if (!context.mounted) return;
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              RoutesName.home,
+              (route) => false,
+            );
+          }
+        })
+        .onError((error, stackTrace) {
+          setLoading(false);
 
-        if (!context.mounted) return;
-        Navigator.pushNamedAndRemoveUntil(context, RoutesName.home, (route) => false);
-      }
-
-    }).onError((error, stackTrace){
-      setLoading(false);
-
-      if (!context.mounted) return;
-     Utils.flushBar(error.toString(), context, "error");
-    });
+          if (!context.mounted) return;
+          Utils.flushBar(error.toString(), context, "error");
+        });
   }
-
 }
