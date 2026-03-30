@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+
 import 'home/home_tab.dart';
 import 'requests/requests_screen.dart';
 import 'attendance/attendance_screen.dart';
 import 'community/community_screen.dart';
 import 'profile/profile_screen.dart';
+import '../widget/app_svg_icon.dart';
 
 class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
@@ -13,6 +15,9 @@ class MainNavigation extends StatefulWidget {
 }
 
 class _MainNavigationState extends State<MainNavigation> {
+  static const _accentColor = Color(0xFF1F6BFF);
+  static const _mutedColor = Color(0xFF98A2B3);
+
   int _currentIndex = 0;
 
   final List<Widget> _screens = [
@@ -29,57 +34,58 @@ class _MainNavigationState extends State<MainNavigation> {
       body: _screens[_currentIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
+          color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
+              color: const Color(0xFF101828).withValues(alpha: 0.06),
               spreadRadius: 1,
-              blurRadius: 10,
+              blurRadius: 18,
+              offset: const Offset(0, -4),
             ),
           ],
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
-            setState(() {
-              _currentIndex = index;
-            });
-          },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          selectedItemColor: Theme.of(context).primaryColor,
-          unselectedItemColor: Colors.grey[400],
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          elevation: 0,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home',
+        child: SafeArea(
+          top: false,
+          child: BottomNavigationBar(
+            currentIndex: _currentIndex,
+            onTap: (index) {
+              setState(() {
+                _currentIndex = index;
+              });
+            },
+            type: BottomNavigationBarType.fixed,
+            backgroundColor: Colors.white,
+            selectedItemColor: _accentColor,
+            unselectedItemColor: _mutedColor,
+            selectedFontSize: 11,
+            unselectedFontSize: 11,
+            selectedLabelStyle: const TextStyle(
+              fontWeight: FontWeight.w600,
+              height: 1.2,
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.grid_view_outlined),
-              activeIcon: Icon(Icons.grid_view),
-              label: 'Requests',
+            unselectedLabelStyle: const TextStyle(
+              fontWeight: FontWeight.w500,
+              height: 1.2,
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_today_outlined),
-              activeIcon: Icon(Icons.calendar_today),
-              label: 'Attendance',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.people_outline),
-              activeIcon: Icon(Icons.people),
-              label: 'Community',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Profile',
-            ),
-          ],
+            elevation: 0,
+            items: [
+              _buildItem('Home', 'assets/icons/home.svg'),
+              _buildItem('Requests', 'assets/icons/request.svg'),
+              _buildItem('Attendance', 'assets/icons/calender.svg'),
+              _buildItem('Community', 'assets/icons/community.svg'),
+              _buildItem('Profile', 'assets/icons/profile.svg'),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  BottomNavigationBarItem _buildItem(String label, String assetName) {
+    return BottomNavigationBarItem(
+      icon: AppSvgIcon(assetName: assetName, color: _mutedColor),
+      activeIcon: AppSvgIcon(assetName: assetName, color: _accentColor),
+      label: label,
     );
   }
 }

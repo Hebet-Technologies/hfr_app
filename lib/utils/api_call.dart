@@ -1,8 +1,5 @@
-
-
-class ApiCall{
-
-  static String baseUrl = "http://102.214.45.136:8081/api";
+class ApiCall {
+  static String baseUrl = " https://hris-staff-portal.hezo.co.tz/api";
 
   static String loginApi = '$baseUrl/login';
   static String defaultDashboard = '$baseUrl/getDefaultHeadCount';

@@ -23,6 +23,7 @@ dependencies:
   cached_network_image: ^3.4.1
   auto_size_text: ^3.0.0
   google_fonts: ^8.0.2
+  flutter_svg: ^2.0.10+1
 
 dev_dependencies:
   flutter_test:
@@ -37,6 +38,7 @@ flutter:
 
   assets:
     - assets/images/logo.png
+    - assets/icons/
     - assets/languages/en.json
     - assets/languages/sw.json
     - AI-assests/

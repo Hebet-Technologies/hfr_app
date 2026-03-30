@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../data/network/api_service.dart';
@@ -14,7 +16,7 @@ class AuthRepository {
   Future<UserModel> login(String email, String password) async {
     try {
       final response = await _apiService.login(email, password);
-      
+      log(response.data.toString());
       if (response.statusCode == 200 && response.data['data'] != null) {
         final userData = UserModel.fromJson(response.data['data']);
         await _saveUserData(userData);
@@ -31,10 +33,13 @@ class AuthRepository {
     }
   }
 
-  Future<Map<String, dynamic>> getPersonalInfo(String payroll, String dateOfBirth) async {
+  Future<Map<String, dynamic>> getPersonalInfo(
+    String payroll,
+    String dateOfBirth,
+  ) async {
     try {
       final response = await _apiService.getPersonalInfo(payroll, dateOfBirth);
-      
+
       if (response.statusCode == 200) {
         return response.data;
       } else {
@@ -42,17 +47,23 @@ class AuthRepository {
       }
     } on DioException catch (e) {
       if (e.response != null) {
-        throw Exception(e.response?.data['message'] ?? 'Failed to fetch personal information');
+        throw Exception(
+          e.response?.data['message'] ?? 'Failed to fetch personal information',
+        );
       } else {
         throw Exception('Network error. Please check your connection.');
       }
     }
   }
 
-  Future<Map<String, dynamic>> register(RegistrationModel registrationModel) async {
+  Future<Map<String, dynamic>> register(
+    RegistrationModel registrationModel,
+  ) async {
     try {
-      final response = await _apiService.createAccount(registrationModel.toJson());
-      
+      final response = await _apiService.createAccount(
+        registrationModel.toJson(),
+      );
+
       if (response.statusCode == 200) {
         return response.data;
       } else {
@@ -93,38 +104,46 @@ class AuthRepository {
 
   final NetworkApiService _networkApiService = NetworkApiService();
 
-  Future<dynamic> loginApi(dynamic data) async{
-    try{
-      dynamic response = await _networkApiService.getPostApiResponse(ApiCall.loginApi, data);
+  Future<dynamic> loginApi(dynamic data) async {
+    try {
+      dynamic response = await _networkApiService.getPostApiResponse(
+        ApiCall.loginApi,
+        data,
+      );
       return response;
-    }catch(e){
+    } catch (e) {
       rethrow;
     }
   }
 
-  Future<dynamic> defaultDashboard() async{
-    try{
-      dynamic response = await _networkApiService.getGetApiResponseWithToken(ApiCall.defaultDashboard);
+  Future<dynamic> defaultDashboard() async {
+    try {
+      dynamic response = await _networkApiService.getGetApiResponseWithToken(
+        ApiCall.defaultDashboard,
+      );
       return response;
-    }catch(e){
+    } catch (e) {
       rethrow;
     }
   }
 
-  Future<dynamic> selectedDashboard(int id) async{
-    try{
-      dynamic response = await _networkApiService.getGetApiResponseWithTokenById(ApiCall.selectedDashboard, id);
+  Future<dynamic> selectedDashboard(int id) async {
+    try {
+      dynamic response = await _networkApiService
+          .getGetApiResponseWithTokenById(ApiCall.selectedDashboard, id);
       return response;
-    }catch(e){
+    } catch (e) {
       rethrow;
     }
   }
 
-  Future<dynamic> getWorkStation() async{
-    try{
-      dynamic response = await _networkApiService.getGetApiResponseWithToken(ApiCall.getWorkStation);
+  Future<dynamic> getWorkStation() async {
+    try {
+      dynamic response = await _networkApiService.getGetApiResponseWithToken(
+        ApiCall.getWorkStation,
+      );
       return response;
-    }catch(e){
+    } catch (e) {
       rethrow;
     }
   }

@@ -38,6 +38,11 @@ class _VerifyPersonalInfoScreenState
   Map<String, dynamic>? _personalInfo;
   bool _isVerified = false;
 
+  String _asString(dynamic value) {
+    if (value == null) return '';
+    return value.toString();
+  }
+
   @override
   void dispose() {
     _payrollController.dispose();
@@ -87,15 +92,15 @@ class _VerifyPersonalInfoScreenState
       firstName: widget.firstName,
       middleName: widget.middleName,
       lastName: widget.lastName,
-      locationId: _personalInfo!['location_id'] ?? '',
+      locationId: _asString(_personalInfo!['location_id']),
       gender: widget.gender,
       phoneNo: widget.phone,
       dateOfBirth: _dobController.text.trim(),
       email: widget.email,
       password: widget.password,
-      workingStationId: _personalInfo!['working_station_id'] ?? '',
-      personalInformationId: _personalInfo!['personal_information_id'] ?? '',
-      pathId: _personalInfo!['path_id'] ?? '',
+      workingStationId: _asString(_personalInfo!['working_station_id']),
+      personalInformationId: _asString(_personalInfo!['personal_information_id']),
+      pathId: _asString(_personalInfo!['path_id']),
     );
 
     final success = await authViewModel.register(registrationModel);
