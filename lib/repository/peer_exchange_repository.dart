@@ -106,6 +106,25 @@ class PeerExchangeRepository {
     );
   }
 
+  Future<PeerConversation> updateGroup({
+    required String groupUuid,
+    required String name,
+    String? description,
+  }) async {
+    final response = await _putForm(
+      '/conversations/groups/$groupUuid',
+      data: _cleanMap({'name': name, 'description': description}),
+    );
+
+    return PeerConversation.fromJson(
+      _requireMap(response.data['group'], 'group'),
+    );
+  }
+
+  Future<void> deleteGroup(String groupUuid) async {
+    await _delete('/conversations/groups/$groupUuid');
+  }
+
   Future<List<PeerMember>> fetchGroupMembers(String groupUuid) async {
     final response = await _get('/conversations/groups/$groupUuid/members');
     return _listFromResponse(response.data['members'], PeerMember.fromJson);
@@ -158,6 +177,24 @@ class PeerExchangeRepository {
     );
   }
 
+  Future<PeerQuestionCategory> updateQuestionCategory({
+    required String categoryUuid,
+    required String name,
+  }) async {
+    final response = await _putJson(
+      '/question-categories/$categoryUuid',
+      data: {'name': name},
+    );
+
+    return PeerQuestionCategory.fromJson(
+      _requireMap(response.data['question_category'], 'question_category'),
+    );
+  }
+
+  Future<void> deleteQuestionCategory(String categoryUuid) async {
+    await _delete('/question-categories/$categoryUuid');
+  }
+
   Future<List<PeerQuestion>> fetchQuestions({
     String? search,
     String? categoryUuid,
@@ -187,6 +224,25 @@ class PeerExchangeRepository {
     return PeerQuestion.fromJson(
       _requireMap(response.data['question'], 'question'),
     );
+  }
+
+  Future<PeerQuestion> updateQuestion({
+    required String questionUuid,
+    required String categoryUuid,
+    required String content,
+  }) async {
+    final response = await _putForm(
+      '/questions/$questionUuid',
+      data: {'category_uuid': categoryUuid, 'content': content},
+    );
+
+    return PeerQuestion.fromJson(
+      _requireMap(response.data['question'], 'question'),
+    );
+  }
+
+  Future<void> deleteQuestion(String questionUuid) async {
+    await _delete('/questions/$questionUuid');
   }
 
   Future<List<PeerComment>> fetchQuestionComments(
@@ -237,6 +293,23 @@ class PeerExchangeRepository {
     );
 
     return PeerTopic.fromJson(_requireMap(response.data['topic'], 'topic'));
+  }
+
+  Future<PeerTopic> updateTopic({
+    required String topicUuid,
+    required String name,
+    String? description,
+  }) async {
+    final response = await _putJson(
+      '/topics/$topicUuid',
+      data: _cleanMap({'name': name, 'description': description}),
+    );
+
+    return PeerTopic.fromJson(_requireMap(response.data['topic'], 'topic'));
+  }
+
+  Future<void> deleteTopic(String topicUuid) async {
+    await _delete('/topics/$topicUuid');
   }
 
   Future<List<PeerComment>> fetchTopicComments(
@@ -297,12 +370,46 @@ class PeerExchangeRepository {
     }
   }
 
+  Future<Response<dynamic>> _putJson(
+    String path, {
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      return await _dio.put(
+        path,
+        data: data,
+        options: await _authorizedOptions(
+          extraHeaders: const {'Content-Type': 'application/json'},
+        ),
+      );
+    } on DioException catch (error) {
+      throw Exception(_resolveMessage(error));
+    }
+  }
+
   Future<Response<dynamic>> _postForm(
     String path, {
     required Map<String, dynamic> data,
   }) async {
     try {
       return await _dio.post(
+        path,
+        data: FormData.fromMap(data),
+        options: await _authorizedOptions(
+          extraHeaders: const {'Content-Type': 'multipart/form-data'},
+        ),
+      );
+    } on DioException catch (error) {
+      throw Exception(_resolveMessage(error));
+    }
+  }
+
+  Future<Response<dynamic>> _putForm(
+    String path, {
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      return await _dio.put(
         path,
         data: FormData.fromMap(data),
         options: await _authorizedOptions(

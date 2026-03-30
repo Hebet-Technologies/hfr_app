@@ -20,15 +20,16 @@ const _peerSoftGreen = Color(0xFFE8FFF1);
 const _peerSoftOrange = Color(0xFFFFF1E6);
 
 enum _CommunitySection {
-  overview('Overview'),
-  questions('Questions'),
-  topics('Topics'),
+  inbox('Inbox'),
   groups('Groups'),
-  chats('Chats');
+  questions('Q&A'),
+  topics('Topics');
 
   const _CommunitySection(this.label);
   final String label;
 }
+
+enum _ItemMenuAction { edit, delete }
 
 class CommunityScreen extends ConsumerStatefulWidget {
   const CommunityScreen({super.key});
@@ -40,7 +41,7 @@ class CommunityScreen extends ConsumerStatefulWidget {
 class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
-  _CommunitySection _section = _CommunitySection.overview;
+  _CommunitySection _section = _CommunitySection.inbox;
 
   @override
   void initState() {
@@ -272,8 +273,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     required int topics,
     required int chats,
   }) {
+    final textScaleFactor = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final cardHeight = (128 + ((textScaleFactor - 1) * 40)).clamp(128.0, 164.0);
+
     return SizedBox(
-      height: 108,
+      height: cardHeight,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
@@ -358,114 +362,30 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     List<PeerConversation> directConversations,
   ) {
     switch (_section) {
-      case _CommunitySection.overview:
-        return _buildOverview(state, directConversations);
+      case _CommunitySection.inbox:
+        return _buildChats(directConversations);
+      case _CommunitySection.groups:
+        return _buildGroups(state.groups);
       case _CommunitySection.questions:
         return _buildQuestions(state);
       case _CommunitySection.topics:
         return _buildTopics(state);
-      case _CommunitySection.groups:
-        return _buildGroups(state.groups);
-      case _CommunitySection.chats:
-        return _buildChats(directConversations);
     }
-  }
-
-  Widget _buildOverview(
-    PeerExchangeState state,
-    List<PeerConversation> directConversations,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionHeader(
-          title: 'My Groups',
-          actionLabel: 'See all',
-          onTap: () => setState(() => _section = _CommunitySection.groups),
-        ),
-        const SizedBox(height: 12),
-        if (state.groups.isEmpty)
-          const _EmptyStateCard(
-            title: 'No group discussions yet',
-            subtitle:
-                'Create a team room for your department, program, or activity.',
-          )
-        else
-          ...state.groups.take(2).map(_buildGroupCard),
-        const SizedBox(height: 22),
-        _SectionHeader(
-          title: 'Latest Questions',
-          actionLabel: 'See all',
-          onTap: () => setState(() => _section = _CommunitySection.questions),
-        ),
-        const SizedBox(height: 12),
-        if (state.questions.isEmpty)
-          const _EmptyStateCard(
-            title: 'No questions have been posted',
-            subtitle:
-                'Ask a question to start peer support and knowledge sharing.',
-          )
-        else
-          ...state.questions.take(3).map(_buildQuestionCard),
-        const SizedBox(height: 22),
-        _SectionHeader(
-          title: 'Active Topics',
-          actionLabel: 'See all',
-          onTap: () => setState(() => _section = _CommunitySection.topics),
-        ),
-        const SizedBox(height: 12),
-        if (state.topics.isEmpty)
-          const _EmptyStateCard(
-            title: 'No topics published yet',
-            subtitle:
-                'Create a topic to guide focused discussion for your team.',
-          )
-        else
-          ...state.topics.take(3).map(_buildTopicCard),
-        const SizedBox(height: 22),
-        _SectionHeader(
-          title: 'Recent Chats',
-          actionLabel: 'See all',
-          onTap: () => setState(() => _section = _CommunitySection.chats),
-        ),
-        const SizedBox(height: 12),
-        if (directConversations.isEmpty)
-          const _EmptyStateCard(
-            title: 'No direct conversations yet',
-            subtitle:
-                'Start a new one-to-one conversation using a receiver ID.',
-          )
-        else
-          ...directConversations.take(3).map(_buildConversationCard),
-      ],
-    );
   }
 
   Widget _buildQuestions(PeerExchangeState state) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Question categories',
-                style: _textStyle(fontSize: 15, fontWeight: FontWeight.w700),
-              ),
-            ),
-            TextButton.icon(
-              onPressed: _showCreateCategorySheet,
-              icon: const Icon(Icons.add_rounded, size: 18),
-              label: Text(
-                'Add category',
-                style: _textStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: _peerPrimary,
-                ),
-              ),
-            ),
-          ],
+        _SectionHeader(
+          title: 'Q&A Forum',
+          actionLabel: 'Manage categories',
+          onTap: () => _showManageCategoriesSheet(state),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Searchable professional questions with category filters and threaded replies.',
+          style: _textStyle(fontSize: 13, color: _peerMuted, height: 1.45),
         ),
         const SizedBox(height: 10),
         SingleChildScrollView(
@@ -504,17 +424,46 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }
 
   Widget _buildTopics(PeerExchangeState state) {
+    if (state.topics.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeaderLabel(
+            title: 'Moderated Topics',
+            subtitle:
+                'Professional topics for guided discussion and moderator-led updates.',
+          ),
+          const SizedBox(height: 12),
+          ...state.topics.map(_buildTopicCard),
+        ],
+      );
+    }
+
     if (state.topics.isEmpty) {
       return const _EmptyStateCard(
         title: 'No topics available',
         subtitle: 'Create a topic to organize focused discussion threads.',
       );
     }
-
-    return Column(children: state.topics.map(_buildTopicCard).toList());
+    return const SizedBox.shrink();
   }
 
   Widget _buildGroups(List<PeerConversation> groups) {
+    if (groups.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeaderLabel(
+            title: 'Closed Groups',
+            subtitle:
+                'Private group spaces for cohorts, task teams, and assigned members only.',
+          ),
+          const SizedBox(height: 12),
+          ...groups.map(_buildGroupCard),
+        ],
+      );
+    }
+
     if (groups.isEmpty) {
       return const _EmptyStateCard(
         title: 'No groups available',
@@ -522,19 +471,32 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             'Create a group for shared discussions, updates, and planning.',
       );
     }
-
-    return Column(children: groups.map(_buildGroupCard).toList());
+    return const SizedBox.shrink();
   }
 
   Widget _buildChats(List<PeerConversation> conversations) {
+    if (conversations.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _SectionHeaderLabel(
+            title: 'Inbox',
+            subtitle:
+                'Direct one-to-one conversations with recent messages and quick follow-up.',
+          ),
+          const SizedBox(height: 12),
+          ...conversations.map(_buildConversationCard),
+        ],
+      );
+    }
+
     if (conversations.isEmpty) {
       return const _EmptyStateCard(
         title: 'No chats available',
         subtitle: 'Start a direct message thread using a receiver ID.',
       );
     }
-
-    return Column(children: conversations.map(_buildConversationCard).toList());
+    return const SizedBox.shrink();
   }
 
   Widget _buildGroupCard(PeerConversation group) {
@@ -600,25 +562,45 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: group.isActive ? _peerSoftGreen : _peerSoftOrange,
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: Text(
-                      group.isActive ? 'Active' : 'Muted',
-                      style: _textStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: group.isActive
-                            ? const Color(0xFF0B8F55)
-                            : const Color(0xFFB95817),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: group.isActive
+                              ? _peerSoftGreen
+                              : _peerSoftOrange,
+                          borderRadius: BorderRadius.circular(30),
+                        ),
+                        child: Text(
+                          group.isActive ? 'Active' : 'Muted',
+                          style: _textStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: group.isActive
+                                ? const Color(0xFF0B8F55)
+                                : const Color(0xFFB95817),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 4),
+                      _buildEntityMenu(
+                        onSelected: (action) async {
+                          switch (action) {
+                            case _ItemMenuAction.edit:
+                              await _showEditGroupSheet(group);
+                              return;
+                            case _ItemMenuAction.delete:
+                              await _deleteGroup(group);
+                              return;
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -636,6 +618,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                     label: '${group.messagesCount} messages',
                     color: _peerSoftOrange,
                     textColor: const Color(0xFFB95817),
+                  ),
+                  _MetaChip(
+                    label: 'Closed group',
+                    color: const Color(0xFFF2F4F7),
+                    textColor: _peerMuted,
                   ),
                   _MetaChip(
                     label: _formatRelative(group.lastMessageAt),
@@ -704,11 +691,29 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                       ],
                     ),
                   ),
-                  Text(
-                    _formatRelative(
-                      question.lastCommentAt ?? question.createdAt,
-                    ),
-                    style: _textStyle(fontSize: 12, color: _peerMuted),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _formatRelative(
+                          question.lastCommentAt ?? question.createdAt,
+                        ),
+                        style: _textStyle(fontSize: 12, color: _peerMuted),
+                      ),
+                      const SizedBox(width: 4),
+                      _buildEntityMenu(
+                        onSelected: (action) async {
+                          switch (action) {
+                            case _ItemMenuAction.edit:
+                              await _showEditQuestionSheet(question);
+                              return;
+                            case _ItemMenuAction.delete:
+                              await _deleteQuestion(question);
+                              return;
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -791,9 +796,27 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                       ),
                     ),
                   ),
-                  Text(
-                    _formatRelative(topic.lastCommentAt ?? topic.createdAt),
-                    style: _textStyle(fontSize: 12, color: _peerMuted),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _formatRelative(topic.lastCommentAt ?? topic.createdAt),
+                        style: _textStyle(fontSize: 12, color: _peerMuted),
+                      ),
+                      const SizedBox(width: 4),
+                      _buildEntityMenu(
+                        onSelected: (action) async {
+                          switch (action) {
+                            case _ItemMenuAction.edit:
+                              await _showEditTopicSheet(topic);
+                              return;
+                            case _ItemMenuAction.delete:
+                              await _deleteTopic(topic);
+                              return;
+                          }
+                        },
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -813,6 +836,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                     label: '${topic.commentsCount} comments',
                     color: _peerSoftGreen,
                     textColor: const Color(0xFF0B8F55),
+                  ),
+                  _MetaChip(
+                    label: 'Moderated',
+                    color: const Color(0xFFF1EDFF),
+                    textColor: const Color(0xFF6941C6),
                   ),
                   _MetaChip(
                     label: '${topic.audiences.length} audiences',
@@ -911,6 +939,28 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     );
   }
 
+  Widget _buildEntityMenu({
+    required Future<void> Function(_ItemMenuAction action) onSelected,
+  }) {
+    return PopupMenuButton<_ItemMenuAction>(
+      icon: const Icon(Icons.more_horiz_rounded, color: _peerMuted, size: 20),
+      padding: EdgeInsets.zero,
+      splashRadius: 18,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      onSelected: (action) async => onSelected(action),
+      itemBuilder: (context) => const [
+        PopupMenuItem<_ItemMenuAction>(
+          value: _ItemMenuAction.edit,
+          child: Text('Edit'),
+        ),
+        PopupMenuItem<_ItemMenuAction>(
+          value: _ItemMenuAction.delete,
+          child: Text('Delete'),
+        ),
+      ],
+    );
+  }
+
   Widget _buildErrorBanner(String message) {
     return Container(
       width: double.infinity,
@@ -995,35 +1045,30 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   String _actionLabelForSection() {
     switch (_section) {
-      case _CommunitySection.overview:
-        return 'Create';
+      case _CommunitySection.inbox:
+        return 'New Chat';
+      case _CommunitySection.groups:
+        return 'New Group';
       case _CommunitySection.questions:
         return 'Ask Question';
       case _CommunitySection.topics:
         return 'New Topic';
-      case _CommunitySection.groups:
-        return 'New Group';
-      case _CommunitySection.chats:
-        return 'New Chat';
     }
   }
 
   Future<void> _handlePrimaryAction(PeerExchangeState state) async {
     switch (_section) {
-      case _CommunitySection.overview:
-        await _showOverviewActionsSheet();
+      case _CommunitySection.inbox:
+        await _showCreateConversationSheet();
+        return;
+      case _CommunitySection.groups:
+        await _showCreateGroupSheet();
         return;
       case _CommunitySection.questions:
         await _showCreateQuestionSheet(state);
         return;
       case _CommunitySection.topics:
         await _showCreateTopicSheet();
-        return;
-      case _CommunitySection.groups:
-        await _showCreateGroupSheet();
-        return;
-      case _CommunitySection.chats:
-        await _showCreateConversationSheet();
         return;
     }
   }
@@ -1082,22 +1127,136 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     );
   }
 
-  Future<void> _showCreateCategorySheet() async {
-    final controller = TextEditingController();
+  Future<void> _showManageCategoriesSheet(PeerExchangeState state) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return Consumer(
+          builder: (context, ref, _) {
+            final currentState = ref.watch(peerExchangeViewModelProvider);
+
+            return _BottomSheetCard(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _BottomSheetTitle(
+                    title: 'Manage categories',
+                    subtitle:
+                        'Create, rename, or remove question categories used by the Q&A forum.',
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    child: currentState.categories.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.only(bottom: 16),
+                            child: Text('No categories available yet.'),
+                          )
+                        : ListView.separated(
+                            shrinkWrap: true,
+                            itemCount: currentState.categories.length,
+                            separatorBuilder: (context, index) =>
+                                const SizedBox(height: 10),
+                            itemBuilder: (context, index) {
+                              final category = currentState.categories[index];
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF8FAFC),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            category.name,
+                                            style: _textStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            category.isActive
+                                                ? 'Active category'
+                                                : 'Inactive category',
+                                            style: _textStyle(
+                                              fontSize: 12,
+                                              color: _peerMuted,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.pop(sheetContext);
+                                        _showCreateCategorySheet(
+                                          category: category,
+                                        );
+                                      },
+                                      icon: const Icon(
+                                        Icons.edit_outlined,
+                                        color: _peerPrimary,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () async {
+                                        if (!sheetContext.mounted) return;
+                                        Navigator.pop(sheetContext);
+                                        await _deleteQuestionCategory(category);
+                                      },
+                                      icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: Color(0xFFD92D20),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+                  _PrimaryButton(
+                    label: state.categories.isEmpty
+                        ? 'Create first category'
+                        : 'Add category',
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      _showCreateCategorySheet();
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showCreateCategorySheet({
+    PeerQuestionCategory? category,
+  }) async {
+    final controller = TextEditingController(text: category?.name ?? '');
+    var isSaving = false;
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final isSubmitting = ref.watch(
-              peerExchangeViewModelProvider.select(
-                (state) => state.isSubmitting,
-              ),
-            );
-
+        return StatefulBuilder(
+          builder: (context, setModalState) {
             return _BottomSheetCard(
               child: Padding(
                 padding: EdgeInsets.only(
@@ -1107,9 +1266,13 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const _BottomSheetTitle(
-                      title: 'New question category',
-                      subtitle: 'Create a category to organize peer questions.',
+                    _BottomSheetTitle(
+                      title: category == null
+                          ? 'New question category'
+                          : 'Edit question category',
+                      subtitle: category == null
+                          ? 'Create a category to organize peer questions.'
+                          : 'Rename this category for the Q&A forum.',
                     ),
                     _FormField(
                       controller: controller,
@@ -1118,9 +1281,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                     ),
                     const SizedBox(height: 18),
                     _PrimaryButton(
-                      label: isSubmitting ? 'Saving...' : 'Save category',
-                      isBusy: isSubmitting,
-                      onTap: isSubmitting
+                      label: isSaving ? 'Saving...' : 'Save category',
+                      isBusy: isSaving,
+                      onTap: isSaving
                           ? null
                           : () async {
                               final name = controller.text.trim();
@@ -1132,13 +1295,47 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                 return;
                               }
 
-                              final created = await ref
-                                  .read(peerExchangeViewModelProvider.notifier)
-                                  .createQuestionCategory(name);
-                              if (created == null || !mounted) return;
-                              if (!sheetContext.mounted) return;
-                              Navigator.pop(sheetContext);
-                              _showMessage('Question category created.');
+                              setModalState(() => isSaving = true);
+                              try {
+                                final repository = ref.read(
+                                  peerExchangeRepositoryProvider,
+                                );
+                                if (category == null) {
+                                  await repository.createQuestionCategory(
+                                    name: name,
+                                  );
+                                } else {
+                                  await repository.updateQuestionCategory(
+                                    categoryUuid: category.uuid,
+                                    name: name,
+                                  );
+                                }
+                                if (!mounted || !sheetContext.mounted) return;
+                                Navigator.pop(sheetContext);
+                                await ref
+                                    .read(
+                                      peerExchangeViewModelProvider.notifier,
+                                    )
+                                    .loadAll();
+                                _showMessage(
+                                  category == null
+                                      ? 'Question category created.'
+                                      : 'Question category updated.',
+                                );
+                              } catch (error) {
+                                if (!mounted) return;
+                                _showMessage(
+                                  error.toString().replaceFirst(
+                                    'Exception: ',
+                                    '',
+                                  ),
+                                  error: true,
+                                );
+                              } finally {
+                                if (sheetContext.mounted) {
+                                  setModalState(() => isSaving = false);
+                                }
+                              }
                             },
                     ),
                   ],
@@ -1436,6 +1633,455 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     );
   }
 
+  Future<void> _showEditGroupSheet(PeerConversation group) async {
+    final nameController = TextEditingController(text: group.title);
+    final descriptionController = TextEditingController(
+      text: group.description,
+    );
+    var isSaving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return _BottomSheetCard(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _BottomSheetTitle(
+                      title: 'Edit group',
+                      subtitle:
+                          'Update the name or description of this closed group.',
+                    ),
+                    _FormField(
+                      controller: nameController,
+                      label: 'Group name',
+                      hintText: 'Group name',
+                    ),
+                    const SizedBox(height: 14),
+                    _FormField(
+                      controller: descriptionController,
+                      label: 'Description',
+                      hintText: 'Describe the group purpose',
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 18),
+                    _PrimaryButton(
+                      label: isSaving ? 'Saving...' : 'Save changes',
+                      isBusy: isSaving,
+                      onTap: isSaving
+                          ? null
+                          : () async {
+                              final name = nameController.text.trim();
+                              if (name.isEmpty) {
+                                _showMessage(
+                                  'Enter a group name.',
+                                  error: true,
+                                );
+                                return;
+                              }
+
+                              setModalState(() => isSaving = true);
+                              try {
+                                await ref
+                                    .read(peerExchangeRepositoryProvider)
+                                    .updateGroup(
+                                      groupUuid: group.uuid,
+                                      name: name,
+                                      description: descriptionController.text
+                                          .trim(),
+                                    );
+                                if (!mounted || !sheetContext.mounted) return;
+                                Navigator.pop(sheetContext);
+                                await ref
+                                    .read(
+                                      peerExchangeViewModelProvider.notifier,
+                                    )
+                                    .loadAll();
+                                _showMessage('Group updated successfully.');
+                              } catch (error) {
+                                if (!mounted) return;
+                                _showMessage(
+                                  error.toString().replaceFirst(
+                                    'Exception: ',
+                                    '',
+                                  ),
+                                  error: true,
+                                );
+                              } finally {
+                                if (sheetContext.mounted) {
+                                  setModalState(() => isSaving = false);
+                                }
+                              }
+                            },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditQuestionSheet(PeerQuestion question) async {
+    final currentState = ref.read(peerExchangeViewModelProvider);
+    if (currentState.categories.isEmpty) {
+      _showMessage(
+        'No categories are available for updating this question.',
+        error: true,
+      );
+      return;
+    }
+
+    final contentController = TextEditingController(text: question.content);
+    String selectedCategoryUuid = question.categoryUuid;
+    var isSaving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return _BottomSheetCard(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _BottomSheetTitle(
+                      title: 'Edit question',
+                      subtitle:
+                          'Refine the category or wording for this Q&A entry.',
+                    ),
+                    _DropdownField<String>(
+                      label: 'Category',
+                      value: selectedCategoryUuid,
+                      items: currentState.categories
+                          .map(
+                            (category) => DropdownMenuItem<String>(
+                              value: category.uuid,
+                              child: Text(category.name),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setModalState(() => selectedCategoryUuid = value);
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    _FormField(
+                      controller: contentController,
+                      label: 'Question',
+                      hintText: 'What do you need help with?',
+                      maxLines: 5,
+                    ),
+                    const SizedBox(height: 18),
+                    _PrimaryButton(
+                      label: isSaving ? 'Saving...' : 'Save changes',
+                      isBusy: isSaving,
+                      onTap: isSaving
+                          ? null
+                          : () async {
+                              final content = contentController.text.trim();
+                              if (content.isEmpty) {
+                                _showMessage(
+                                  'Enter your question first.',
+                                  error: true,
+                                );
+                                return;
+                              }
+
+                              setModalState(() => isSaving = true);
+                              try {
+                                await ref
+                                    .read(peerExchangeRepositoryProvider)
+                                    .updateQuestion(
+                                      questionUuid: question.uuid,
+                                      categoryUuid: selectedCategoryUuid,
+                                      content: content,
+                                    );
+                                if (!mounted || !sheetContext.mounted) return;
+                                Navigator.pop(sheetContext);
+                                await ref
+                                    .read(
+                                      peerExchangeViewModelProvider.notifier,
+                                    )
+                                    .loadAll();
+                                _showMessage('Question updated successfully.');
+                              } catch (error) {
+                                if (!mounted) return;
+                                _showMessage(
+                                  error.toString().replaceFirst(
+                                    'Exception: ',
+                                    '',
+                                  ),
+                                  error: true,
+                                );
+                              } finally {
+                                if (sheetContext.mounted) {
+                                  setModalState(() => isSaving = false);
+                                }
+                              }
+                            },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showEditTopicSheet(PeerTopic topic) async {
+    final titleController = TextEditingController(text: topic.name);
+    final descriptionController = TextEditingController(
+      text: topic.description,
+    );
+    var isSaving = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return _BottomSheetCard(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const _BottomSheetTitle(
+                      title: 'Edit topic',
+                      subtitle:
+                          'Update this moderated discussion topic and its description.',
+                    ),
+                    _FormField(
+                      controller: titleController,
+                      label: 'Topic name',
+                      hintText: 'Topic name',
+                    ),
+                    const SizedBox(height: 14),
+                    _FormField(
+                      controller: descriptionController,
+                      label: 'Description',
+                      hintText: 'Topic description',
+                      maxLines: 4,
+                    ),
+                    const SizedBox(height: 18),
+                    _PrimaryButton(
+                      label: isSaving ? 'Saving...' : 'Save changes',
+                      isBusy: isSaving,
+                      onTap: isSaving
+                          ? null
+                          : () async {
+                              final name = titleController.text.trim();
+                              if (name.isEmpty) {
+                                _showMessage(
+                                  'Enter a topic name.',
+                                  error: true,
+                                );
+                                return;
+                              }
+
+                              setModalState(() => isSaving = true);
+                              try {
+                                await ref
+                                    .read(peerExchangeRepositoryProvider)
+                                    .updateTopic(
+                                      topicUuid: topic.uuid,
+                                      name: name,
+                                      description: descriptionController.text
+                                          .trim(),
+                                    );
+                                if (!mounted || !sheetContext.mounted) return;
+                                Navigator.pop(sheetContext);
+                                await ref
+                                    .read(
+                                      peerExchangeViewModelProvider.notifier,
+                                    )
+                                    .loadAll();
+                                _showMessage('Topic updated successfully.');
+                              } catch (error) {
+                                if (!mounted) return;
+                                _showMessage(
+                                  error.toString().replaceFirst(
+                                    'Exception: ',
+                                    '',
+                                  ),
+                                  error: true,
+                                );
+                              } finally {
+                                if (sheetContext.mounted) {
+                                  setModalState(() => isSaving = false);
+                                }
+                              }
+                            },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteGroup(PeerConversation group) async {
+    final shouldDelete = await _confirmDestructiveAction(
+      title: 'Delete group?',
+      body:
+          'This will remove "${group.title}" and its group metadata from peer exchange.',
+    );
+    if (!shouldDelete) return;
+
+    try {
+      await ref.read(peerExchangeRepositoryProvider).deleteGroup(group.uuid);
+      await ref.read(peerExchangeViewModelProvider.notifier).loadAll();
+      _showMessage('Group deleted successfully.');
+    } catch (error) {
+      _showMessage(
+        error.toString().replaceFirst('Exception: ', ''),
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _deleteQuestion(PeerQuestion question) async {
+    final shouldDelete = await _confirmDestructiveAction(
+      title: 'Delete question?',
+      body: 'This will permanently remove this Q&A post.',
+    );
+    if (!shouldDelete) return;
+
+    try {
+      await ref
+          .read(peerExchangeRepositoryProvider)
+          .deleteQuestion(question.uuid);
+      await ref.read(peerExchangeViewModelProvider.notifier).loadAll();
+      _showMessage('Question deleted successfully.');
+    } catch (error) {
+      _showMessage(
+        error.toString().replaceFirst('Exception: ', ''),
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _deleteTopic(PeerTopic topic) async {
+    final shouldDelete = await _confirmDestructiveAction(
+      title: 'Delete topic?',
+      body: 'This will remove the moderated topic and its discussion thread.',
+    );
+    if (!shouldDelete) return;
+
+    try {
+      await ref.read(peerExchangeRepositoryProvider).deleteTopic(topic.uuid);
+      await ref.read(peerExchangeViewModelProvider.notifier).loadAll();
+      _showMessage('Topic deleted successfully.');
+    } catch (error) {
+      _showMessage(
+        error.toString().replaceFirst('Exception: ', ''),
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _deleteQuestionCategory(PeerQuestionCategory category) async {
+    final shouldDelete = await _confirmDestructiveAction(
+      title: 'Delete category?',
+      body:
+          'This will remove the "${category.name}" category. Use with care if questions already reference it.',
+    );
+    if (!shouldDelete) return;
+
+    try {
+      await ref
+          .read(peerExchangeRepositoryProvider)
+          .deleteQuestionCategory(category.uuid);
+      await ref.read(peerExchangeViewModelProvider.notifier).loadAll();
+      _showMessage('Question category deleted successfully.');
+    } catch (error) {
+      _showMessage(
+        error.toString().replaceFirst('Exception: ', ''),
+        error: true,
+      );
+    }
+  }
+
+  Future<bool> _confirmDestructiveAction({
+    required String title,
+    required String body,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(
+            title,
+            style: _textStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+          content: Text(
+            body,
+            style: _textStyle(fontSize: 14, color: _peerMuted, height: 1.45),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(
+                'Cancel',
+                style: _textStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: _peerMuted,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(
+                'Delete',
+                style: _textStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                  color: const Color(0xFFD92D20),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result ?? false;
+  }
+
   Future<void> _showCreateConversationSheet() async {
     final receiverController = TextEditingController();
     final messageController = TextEditingController();
@@ -1517,7 +2163,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                               if (!sheetContext.mounted) return;
                               Navigator.pop(sheetContext);
                               setState(
-                                () => _section = _CommunitySection.chats,
+                                () => _section = _CommunitySection.inbox,
                               );
                               _showMessage('Conversation started.');
                             },
@@ -2391,7 +3037,7 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 138,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -2417,17 +3063,21 @@ class _MetricCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: _textStyle(fontSize: 13, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 6),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
               color: background,
               borderRadius: BorderRadius.circular(30),
             ),
             child: Text(
               subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: _textStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
@@ -2498,6 +3148,31 @@ class _SectionHeader extends StatelessWidget {
               color: _peerPrimary,
             ),
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionHeaderLabel extends StatelessWidget {
+  const _SectionHeaderLabel({required this.title, required this.subtitle});
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: _textStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: _textStyle(fontSize: 13, color: _peerMuted, height: 1.45),
         ),
       ],
     );
