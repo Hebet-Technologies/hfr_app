@@ -484,7 +484,10 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
           value: draft.departmentLabel ?? 'Not selected',
         ),
         RequestDetailField(label: 'Reason', value: draft.reasonLabel),
-        RequestDetailField(label: 'Notes', value: draft.reasonText),
+        RequestDetailField(
+          label: 'Transfer Notes',
+          value: draft.reasonText.isEmpty ? 'Not provided' : draft.reasonText,
+        ),
         RequestDetailField(
           label: 'Preferred Transfer Date',
           value: _displayDate(draft.preferredTransferDate),

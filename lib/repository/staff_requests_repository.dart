@@ -131,10 +131,27 @@ class StaffRequestsRepository {
                 value: _stringValue(item['transfer_to'], fallback: 'N/A'),
               ),
               RequestDetailField(
+                label: 'To Department',
+                value: _stringValue(item['to_department'], fallback: 'N/A'),
+              ),
+              RequestDetailField(
                 label: 'Cadre',
                 value: _stringValue(
                   item['post_category_name'],
                   fallback: 'General',
+                ),
+              ),
+              RequestDetailField(
+                label: 'Transfer Notes',
+                value: _stringValue(
+                  item['request_from'],
+                  fallback: 'Not provided',
+                ),
+              ),
+              RequestDetailField(
+                label: 'Preferred Transfer Date',
+                value: _displayOptionalDate(
+                  _dateValue(item['preferred_transfer_date']),
                 ),
               ),
               RequestDetailField(
@@ -393,7 +410,7 @@ class StaffRequestsRepository {
               _stringValue(item['transfer_to']),
             ].where((value) => value.isNotEmpty).join(' → '),
             status: _statusFromApi(item['status']),
-            submittedAt: DateTime.now(),
+            submittedAt: _dateValue(item['created_at']) ?? DateTime.now(),
             referenceNumber:
                 'TR-${_stringValue(item['transfer_request_id']).padLeft(5, '0')}',
             attachmentName: _stringValue(item['upload_file_name']),
@@ -420,6 +437,10 @@ class StaffRequestsRepository {
                 value: _stringValue(item['transfer_to'], fallback: 'N/A'),
               ),
               RequestDetailField(
+                label: 'To Department',
+                value: _stringValue(item['to_department'], fallback: 'N/A'),
+              ),
+              RequestDetailField(
                 label: 'Position',
                 value: _stringValue(
                   item['post_category_name'],
@@ -435,6 +456,19 @@ class StaffRequestsRepository {
                 value: _stringValue(
                   item['staff_phone_number'],
                   fallback: 'N/A',
+                ),
+              ),
+              RequestDetailField(
+                label: 'Transfer Notes',
+                value: _stringValue(
+                  item['request_from'],
+                  fallback: 'Not provided',
+                ),
+              ),
+              RequestDetailField(
+                label: 'Preferred Transfer Date',
+                value: _displayOptionalDate(
+                  _dateValue(item['preferred_transfer_date']),
                 ),
               ),
             ],
@@ -699,7 +733,7 @@ class StaffRequestsRepository {
         'working_station_id_from': user.workingStationId,
       if ((draft.departmentId ?? '').trim().isNotEmpty)
         'working_position_id_to': draft.departmentId,
-      if (draft.reasonText.trim().isNotEmpty) 'reason': draft.reasonText,
+      if (draft.reasonText.trim().isNotEmpty) 'request_from': draft.reasonText,
       if (draft.reasonText.trim().isNotEmpty) 'reason_text': draft.reasonText,
     };
 
@@ -727,7 +761,10 @@ class StaffRequestsRepository {
           value: draft.departmentLabel ?? 'Not selected',
         ),
         RequestDetailField(label: 'Reason', value: draft.reasonLabel),
-        RequestDetailField(label: 'Notes', value: draft.reasonText),
+        RequestDetailField(
+          label: 'Transfer Notes',
+          value: draft.reasonText.isEmpty ? 'Not provided' : draft.reasonText,
+        ),
         RequestDetailField(
           label: 'Preferred Transfer Date',
           value: _displayDate(draft.preferredTransferDate),
