@@ -327,11 +327,19 @@ class _RequestBoardToggleChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onTap,
+    this.fontSize = 12,
+    this.horizontalPadding = 12,
+    this.verticalPadding = 10,
+    this.scaleDownLabel = false,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
+  final double fontSize;
+  final double horizontalPadding;
+  final double verticalPadding;
+  final bool scaleDownLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -339,7 +347,10 @@ class _RequestBoardToggleChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: EdgeInsets.symmetric(
+          horizontal: horizontalPadding,
+          vertical: verticalPadding,
+        ),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFEAF2FF) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
@@ -347,15 +358,28 @@ class _RequestBoardToggleChip extends StatelessWidget {
             color: selected ? const Color(0xFFB7D3FF) : Colors.transparent,
           ),
         ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: _requestTextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: selected ? _requestBlue : _requestMuted,
-          ),
-        ),
+        child: scaleDownLabel
+            ? FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: _requestTextStyle(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w700,
+                    color: selected ? _requestBlue : _requestMuted,
+                  ),
+                ),
+              )
+            : Text(
+                label,
+                textAlign: TextAlign.center,
+                style: _requestTextStyle(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? _requestBlue : _requestMuted,
+                ),
+              ),
       ),
     );
   }
@@ -661,41 +685,9 @@ class _ApprovalTaskListScreenState
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _ApprovalFilterChip(
-                  label: 'All',
-                  selected: _filterStatus == null,
-                  onTap: () => setState(() => _filterStatus = null),
-                ),
-                const SizedBox(width: 8),
-                _ApprovalFilterChip(
-                  label: 'Pending',
-                  selected: _filterStatus == StaffRequestStatus.pending,
-                  onTap: () => setState(
-                    () => _filterStatus = StaffRequestStatus.pending,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _ApprovalFilterChip(
-                  label: 'Approved',
-                  selected: _filterStatus == StaffRequestStatus.approved,
-                  onTap: () => setState(
-                    () => _filterStatus = StaffRequestStatus.approved,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _ApprovalFilterChip(
-                  label: 'Rejected',
-                  selected: _filterStatus == StaffRequestStatus.rejected,
-                  onTap: () => setState(
-                    () => _filterStatus = StaffRequestStatus.rejected,
-                  ),
-                ),
-              ],
-            ),
+          _StatusFilterTabs(
+            selectedStatus: _filterStatus,
+            onChanged: (value) => setState(() => _filterStatus = value),
           ),
           const SizedBox(height: 16),
           if (filteredItems.isEmpty)
@@ -722,39 +714,74 @@ class _ApprovalTaskListScreenState
   }
 }
 
-class _ApprovalFilterChip extends StatelessWidget {
-  const _ApprovalFilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
+class _StatusFilterTabs extends StatelessWidget {
+  const _StatusFilterTabs({
+    required this.selectedStatus,
+    required this.onChanged,
   });
 
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+  final StaffRequestStatus? selectedStatus;
+  final ValueChanged<StaffRequestStatus?> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(999),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFEAF2FF) : Colors.white,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected ? const Color(0xFFB7D3FF) : _requestBorder,
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _requestBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _RequestBoardToggleChip(
+              label: 'All',
+              selected: selectedStatus == null,
+              onTap: () => onChanged(null),
+              fontSize: 11,
+              horizontalPadding: 6,
+              verticalPadding: 9,
+              scaleDownLabel: true,
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: _requestTextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: selected ? _requestBlue : _requestMuted,
+          const SizedBox(width: 4),
+          Expanded(
+            child: _RequestBoardToggleChip(
+              label: 'Pending',
+              selected: selectedStatus == StaffRequestStatus.pending,
+              onTap: () => onChanged(StaffRequestStatus.pending),
+              fontSize: 11,
+              horizontalPadding: 6,
+              verticalPadding: 9,
+              scaleDownLabel: true,
+            ),
           ),
-        ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _RequestBoardToggleChip(
+              label: 'Approved',
+              selected: selectedStatus == StaffRequestStatus.approved,
+              onTap: () => onChanged(StaffRequestStatus.approved),
+              fontSize: 11,
+              horizontalPadding: 6,
+              verticalPadding: 9,
+              scaleDownLabel: true,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _RequestBoardToggleChip(
+              label: 'Rejected',
+              selected: selectedStatus == StaffRequestStatus.rejected,
+              onTap: () => onChanged(StaffRequestStatus.rejected),
+              fontSize: 11,
+              horizontalPadding: 6,
+              verticalPadding: 9,
+              scaleDownLabel: true,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1351,41 +1378,9 @@ class _RequestCategoryListScreenState
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _ApprovalFilterChip(
-                  label: 'All',
-                  selected: _filterStatus == null,
-                  onTap: () => setState(() => _filterStatus = null),
-                ),
-                const SizedBox(width: 8),
-                _ApprovalFilterChip(
-                  label: 'Pending',
-                  selected: _filterStatus == StaffRequestStatus.pending,
-                  onTap: () => setState(
-                    () => _filterStatus = StaffRequestStatus.pending,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _ApprovalFilterChip(
-                  label: 'Approved',
-                  selected: _filterStatus == StaffRequestStatus.approved,
-                  onTap: () => setState(
-                    () => _filterStatus = StaffRequestStatus.approved,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _ApprovalFilterChip(
-                  label: 'Rejected',
-                  selected: _filterStatus == StaffRequestStatus.rejected,
-                  onTap: () => setState(
-                    () => _filterStatus = StaffRequestStatus.rejected,
-                  ),
-                ),
-              ],
-            ),
+          _StatusFilterTabs(
+            selectedStatus: _filterStatus,
+            onChanged: (value) => setState(() => _filterStatus = value),
           ),
           const SizedBox(height: 16),
           if (filteredItems.isEmpty)
@@ -2324,7 +2319,8 @@ class _LoanRequestFormScreenState extends ConsumerState<LoanRequestFormScreen> {
                   value: _repaymentPeriod,
                   hintText: 'Select',
                   items: _repaymentOptions,
-                  onChanged: (value) => setState(() => _repaymentPeriod = value),
+                  onChanged: (value) =>
+                      setState(() => _repaymentPeriod = value),
                 ),
                 _AppTextField(
                   label: 'Purpose of Loan',
