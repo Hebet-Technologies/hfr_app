@@ -1,8 +1,10 @@
+import 'package:another_flushbar/flushbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:another_flushbar/flushbar.dart';
+
 import '../../model/registration_model.dart';
 import '../../view_model/providers.dart';
+import 'auth_styles.dart';
 
 class VerifyPersonalInfoScreen extends ConsumerStatefulWidget {
   final String firstName;
@@ -36,6 +38,8 @@ class _VerifyPersonalInfoScreenState
   final _dobController = TextEditingController();
 
   Map<String, dynamic>? _personalInfo;
+  List<Map<String, dynamic>> _pathOptions = const [];
+  String? _selectedPathId;
   bool _isVerified = false;
 
   String _asString(dynamic value) {
@@ -51,42 +55,59 @@ class _VerifyPersonalInfoScreenState
   }
 
   Future<void> _verifyPersonalInfo() async {
-    if (_formKey.currentState!.validate()) {
-      final authViewModel = ref.read(authViewModelProvider.notifier);
+    if (!_formKey.currentState!.validate()) return;
 
-      final result = await authViewModel.getPersonalInfo(
-        _payrollController.text.trim(),
-        _dobController.text.trim(),
+    final authViewModel = ref.read(authViewModelProvider.notifier);
+    final result = await authViewModel.getPersonalInfo(
+      _payrollController.text.trim(),
+      _dobController.text.trim(),
+    );
+
+    if (!mounted) return;
+    if (result == null) {
+      _showError(
+        ref.read(authViewModelProvider).errorMessage ?? 'Verification failed',
       );
-
-      if (!mounted) return;
-
-      if (result != null) {
-        setState(() {
-          _personalInfo = result;
-          _isVerified = true;
-        });
-
-        Flushbar(
-          message: 'Personal information verified successfully',
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ).show(context);
-      } else {
-        Flushbar(
-          message: ref.read(authViewModelProvider).errorMessage ??
-              'Verification failed',
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ).show(context);
-      }
+      return;
     }
+
+    final personalInfo = _extractPersonalInfo(result);
+    final pathOptions = _extractPathOptions(result);
+
+    if (personalInfo == null) {
+      _showError('Verification response is missing staff information.');
+      return;
+    }
+    if (pathOptions.isEmpty) {
+      _showError('No approval path was found for this staff profile.');
+      return;
+    }
+
+    setState(() {
+      _personalInfo = personalInfo;
+      _pathOptions = pathOptions;
+      _selectedPathId = pathOptions.length == 1
+          ? _asString(pathOptions.first['leave_path_id'])
+          : null;
+      _isVerified = true;
+    });
+
+    Flushbar(
+      message: 'Personal information verified successfully',
+      backgroundColor: Colors.green,
+      duration: const Duration(seconds: 2),
+    ).show(context);
   }
 
   Future<void> _completeRegistration() async {
     if (_personalInfo == null) return;
+    if ((_selectedPathId ?? '').trim().isEmpty) {
+      _showError('Select the approval path linked to this staff profile.');
+      return;
+    }
 
     final authViewModel = ref.read(authViewModelProvider.notifier);
+    final verifiedDateOfBirth = _asString(_personalInfo!['date_of_birth']);
 
     final registrationModel = RegistrationModel(
       firstName: widget.firstName,
@@ -95,12 +116,16 @@ class _VerifyPersonalInfoScreenState
       locationId: _asString(_personalInfo!['location_id']),
       gender: widget.gender,
       phoneNo: widget.phone,
-      dateOfBirth: _dobController.text.trim(),
+      dateOfBirth: verifiedDateOfBirth.isNotEmpty
+          ? verifiedDateOfBirth
+          : _dobController.text.trim(),
       email: widget.email,
       password: widget.password,
       workingStationId: _asString(_personalInfo!['working_station_id']),
-      personalInformationId: _asString(_personalInfo!['personal_information_id']),
-      pathId: _asString(_personalInfo!['path_id']),
+      personalInformationId: _asString(
+        _personalInfo!['personal_information_id'],
+      ),
+      pathId: _selectedPathId!,
     );
 
     final success = await authViewModel.register(registrationModel);
@@ -118,14 +143,54 @@ class _VerifyPersonalInfoScreenState
       if (mounted) {
         Navigator.popUntil(context, (route) => route.isFirst);
       }
-    } else {
-      Flushbar(
-        message: ref.read(authViewModelProvider).errorMessage ??
-            'Registration failed',
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      ).show(context);
+      return;
     }
+
+    _showError(
+      ref.read(authViewModelProvider).errorMessage ?? 'Registration failed',
+    );
+  }
+
+  Map<String, dynamic>? _extractPersonalInfo(Map<String, dynamic> result) {
+    final data = result['data'];
+    if (data is List && data.isNotEmpty && data.first is Map) {
+      return Map<String, dynamic>.from(data.first as Map);
+    }
+    if (data is Map) {
+      return Map<String, dynamic>.from(data);
+    }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _extractPathOptions(Map<String, dynamic> result) {
+    final rawPaths = result['path'];
+    if (rawPaths is List) {
+      return rawPaths
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+    if (rawPaths is Map) {
+      return [Map<String, dynamic>.from(rawPaths)];
+    }
+    return const [];
+  }
+
+  String _verifiedName(Map<String, dynamic> info) {
+    final parts = [
+      _asString(info['first_name']),
+      _asString(info['middle_name']),
+      _asString(info['last_name']),
+    ].where((value) => value.trim().isNotEmpty);
+    return parts.join(' ');
+  }
+
+  void _showError(String message) {
+    Flushbar(
+      message: message,
+      backgroundColor: Colors.red,
+      duration: const Duration(seconds: 3),
+    ).show(context);
   }
 
   @override
@@ -133,7 +198,11 @@ class _VerifyPersonalInfoScreenState
     final authState = ref.watch(authViewModelProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify Personal Information')),
+      backgroundColor: Colors.white,
+      appBar: authAppBar(
+        context: context,
+        title: 'Verify Personal Information',
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -143,75 +212,60 @@ class _VerifyPersonalInfoScreenState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 20),
-
-                Text(
-                  'Verify Your Identity',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
+                authHeaderSection(
+                  icon: Icons.verified_user_outlined,
+                  title: 'Verify your identity',
+                  subtitle:
+                      'Enter your payroll number and date of birth to verify.',
                 ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  'Enter your payroll number and date of birth to verify',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
-                  textAlign: TextAlign.center,
-                ),
-
-                const SizedBox(height: 32),
-
-                TextFormField(
-                  controller: _payrollController,
-                  decoration: InputDecoration(
-                    labelText: 'Payroll Number',
-                    prefixIcon: const Icon(Icons.badge_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your payroll number';
-                    }
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                TextFormField(
-                  controller: _dobController,
-                  decoration: InputDecoration(
-                    labelText: 'Date of Birth (YYYY-MM-DD)',
-                    prefixIcon: const Icon(Icons.calendar_today),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your date of birth';
-                    }
-                    return null;
-                  },
-                ),
-
                 const SizedBox(height: 24),
-
+                authLabeledField(
+                  label: 'Payroll Number',
+                  child: TextFormField(
+                    controller: _payrollController,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Enter payroll number',
+                      prefixIcon: Icons.badge_outlined,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your payroll number';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                authLabeledField(
+                  label: 'Date of Birth',
+                  margin: EdgeInsets.zero,
+                  child: TextFormField(
+                    controller: _dobController,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'YYYY-MM-DD',
+                      prefixIcon: Icons.calendar_today_outlined,
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your date of birth';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: authState.isLoading || _isVerified
                       ? null
                       : _verifyPersonalInfo,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                  style: authPrimaryButtonStyle(),
                   child: authState.isLoading
                       ? const SizedBox(
                           height: 20,
@@ -223,29 +277,98 @@ class _VerifyPersonalInfoScreenState
                             ),
                           ),
                         )
-                      : Text(
-                          _isVerified ? 'Verified' : 'Verify',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      : Text(_isVerified ? 'Verified' : 'Verify'),
                 ),
-
                 if (_isVerified) ...[
                   const SizedBox(height: 24),
-
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFF),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: authBorder),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Verified Staff Information',
+                          style: authTextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          _verifiedName(_personalInfo!),
+                          style: authTextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          _asString(_personalInfo!['working_station_name']),
+                          style: authTextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: authTextSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Payroll: ${_asString(_personalInfo!['payroll'])}',
+                          style: authTextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: authTextSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  authLabeledField(
+                    label: 'Approval Path',
+                    margin: EdgeInsets.zero,
+                    child: DropdownButtonFormField<String>(
+                      initialValue: _selectedPathId,
+                      style: authTextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      iconEnabledColor: authIconColor,
+                      decoration: authInputDecoration(
+                        hintText: 'Select approval path',
+                        prefixIcon: Icons.alt_route_rounded,
+                      ),
+                      items: _pathOptions.map((item) {
+                        final pathId = _asString(item['leave_path_id']);
+                        final pathName = _asString(item['leave_path_name']);
+                        return DropdownMenuItem<String>(
+                          value: pathId,
+                          child: Text(
+                            pathName,
+                            style: authTextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedPathId = value;
+                        });
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: authState.isLoading
                         ? null
                         : _completeRegistration,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      backgroundColor: Colors.green,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
+                    style: authPrimaryButtonStyle(),
                     child: authState.isLoading
                         ? const SizedBox(
                             height: 20,
@@ -257,13 +380,7 @@ class _VerifyPersonalInfoScreenState
                               ),
                             ),
                           )
-                        : const Text(
-                            'Complete Registration',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        : const Text('Complete Registration'),
                   ),
                 ],
               ],

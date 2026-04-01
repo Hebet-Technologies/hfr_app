@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:staffportal/utils/routes/routes_name.dart';
 import '../../view/main_navigation.dart';
-import '../../view/attendance_screen.dart';
+import '../../view/training/training_screen.dart';
 import '../../view/tasks_screen.dart';
-import '../../view/profile_screen.dart';
+import '../../view/profile/profile_screen.dart';
 import '../../view/auth/intro_screen.dart';
 import '../../view/auth/login_screen.dart';
 import '../../view/auth/registration_screen.dart';
@@ -50,7 +50,8 @@ class Routes {
 
       case RoutesName.attendance:
         return MaterialPageRoute(
-          builder: (BuildContext context) => const AttendanceScreen(),
+          builder: (BuildContext context) =>
+              const TrainingScreen(standalone: true),
         );
 
       case RoutesName.tasks:

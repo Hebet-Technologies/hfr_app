@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'home/home_tab.dart';
 import 'requests/requests_screen.dart';
-import 'attendance/attendance_screen.dart';
+import 'training/training_screen.dart';
 import 'community/community_screen.dart';
 import 'profile/profile_screen.dart';
 import '../widget/app_svg_icon.dart';
@@ -23,7 +23,7 @@ class _MainNavigationState extends State<MainNavigation> {
   final List<Widget> _screens = [
     const HomeTab(),
     const RequestsScreen(),
-    const AttendanceScreen(),
+    const TrainingScreen(),
     const CommunityScreen(),
     const ProfileScreen(),
   ];
@@ -71,7 +71,7 @@ class _MainNavigationState extends State<MainNavigation> {
             items: [
               _buildItem('Home', 'assets/icons/home.svg'),
               _buildItem('Requests', 'assets/icons/request.svg'),
-              _buildItem('Attendance', 'assets/icons/calender.svg'),
+              _buildItem('Trainings', 'assets/icons/training.svg'),
               _buildItem('Community', 'assets/icons/community.svg'),
               _buildItem('Profile', 'assets/icons/profile.svg'),
             ],

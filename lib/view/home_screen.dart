@@ -149,7 +149,7 @@ class HomeScreen extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(50),
                     ),
                     child: const Icon(
@@ -188,8 +188,8 @@ class HomeScreen extends ConsumerWidget {
                 ),
                 _buildActionCard(
                   context,
-                  icon: Icons.check_circle_outline,
-                  title: 'Attendance',
+                  icon: Icons.school_outlined,
+                  title: 'Trainings',
                   color: const Color(0xFF1976D2),
                   onTap: () =>
                       Navigator.pushNamed(context, RoutesName.attendance),
@@ -235,7 +235,7 @@ class HomeScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.15),
+                color: color.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, size: 32, color: color),

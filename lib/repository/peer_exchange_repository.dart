@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -338,6 +340,37 @@ class PeerExchangeRepository {
     );
   }
 
+  Future<List<PeerDirectoryPerson>> fetchStaffDirectory({
+    String? search,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final workingStationId = prefs.getString('working_station_id') ?? '';
+    final currentUserId = prefs.getString('user_id') ?? '';
+    final paths = <String>[
+      '/getAllSectionStaff',
+      if (workingStationId.trim().isNotEmpty)
+        '/getAllEmployee/$workingStationId',
+      if (workingStationId.trim().isNotEmpty)
+        '/getActiveEmployee/$workingStationId',
+    ];
+
+    for (final path in paths) {
+      try {
+        final response = await _get(path);
+        final people = _directoryPeopleFromResponse(
+          response.data,
+        ).where((person) => person.id.toString() != currentUserId).toList();
+        if (people.isNotEmpty) {
+          return _filterDirectoryPeople(people, search);
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return const [];
+  }
+
   Future<Response<dynamic>> _get(
     String path, {
     Map<String, dynamic>? queryParameters,
@@ -489,5 +522,113 @@ class PeerExchangeRepository {
       result[entry.key] = value;
     }
     return result;
+  }
+
+  List<PeerDirectoryPerson> _directoryPeopleFromResponse(dynamic source) {
+    final resolved = _unwrapDirectoryPayload(source);
+    final rawList = _extractDirectoryList(resolved);
+
+    return rawList
+        .map(PeerDirectoryPerson.fromJson)
+        .where((person) => person.id > 0)
+        .toList();
+  }
+
+  dynamic _unwrapDirectoryPayload(dynamic source) {
+    if (source is Map<String, dynamic>) {
+      final data = source['data'];
+      if (data is String) {
+        final parsed = _tryDecodeJson(data);
+        return parsed ?? source;
+      }
+      if (data != null) {
+        return data;
+      }
+    }
+    if (source is Map && source['data'] != null) {
+      final data = source['data'];
+      if (data is String) {
+        final parsed = _tryDecodeJson(data);
+        return parsed ?? source;
+      }
+      return data;
+    }
+    if (source is String) {
+      return _tryDecodeJson(source) ?? source;
+    }
+    return source;
+  }
+
+  dynamic _tryDecodeJson(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    if (!(trimmed.startsWith('[') || trimmed.startsWith('{'))) return null;
+
+    try {
+      return jsonDecode(trimmed);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<Map<String, dynamic>> _extractDirectoryList(dynamic source) {
+    if (source is List) {
+      return source
+          .whereType<Map>()
+          .map((item) => item.map((key, value) => MapEntry('$key', value)))
+          .toList();
+    }
+
+    if (source is Map<String, dynamic>) {
+      for (final key in const [
+        'data',
+        'employees',
+        'staff',
+        'users',
+        'records',
+        'items',
+      ]) {
+        final value = source[key];
+        if (value is List) {
+          return value
+              .whereType<Map>()
+              .map(
+                (item) => item.map((entryKey, entryValue) {
+                  return MapEntry('$entryKey', entryValue);
+                }),
+              )
+              .toList();
+        }
+      }
+    }
+
+    if (source is Map) {
+      return _extractDirectoryList(
+        source.map((key, value) => MapEntry('$key', value)),
+      );
+    }
+
+    return const [];
+  }
+
+  List<PeerDirectoryPerson> _filterDirectoryPeople(
+    List<PeerDirectoryPerson> people,
+    String? search,
+  ) {
+    final query = (search ?? '').trim().toLowerCase();
+    if (query.isEmpty) {
+      return people;
+    }
+
+    return people.where((person) {
+      final haystack = [
+        person.fullName,
+        person.email,
+        person.phoneNo,
+        person.title,
+        person.workingStationName,
+      ].join(' ').toLowerCase();
+      return haystack.contains(query);
+    }).toList();
   }
 }

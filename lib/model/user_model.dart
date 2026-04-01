@@ -57,6 +57,34 @@ class UserModel {
     };
   }
 
+  UserModel copyWith({
+    String? userId,
+    String? email,
+    String? fullName,
+    String? loginStatus,
+    String? workingStationId,
+    String? workingStationName,
+    String? workingStationType,
+    String? personalInformationId,
+    String? token,
+    List<String>? roles,
+    List<String>? permissions,
+  }) {
+    return UserModel(
+      userId: userId ?? this.userId,
+      email: email ?? this.email,
+      fullName: fullName ?? this.fullName,
+      loginStatus: loginStatus ?? this.loginStatus,
+      workingStationId: workingStationId ?? this.workingStationId,
+      workingStationName: workingStationName ?? this.workingStationName,
+      workingStationType: workingStationType ?? this.workingStationType,
+      personalInformationId: personalInformationId ?? this.personalInformationId,
+      token: token ?? this.token,
+      roles: roles ?? this.roles,
+      permissions: permissions ?? this.permissions,
+    );
+  }
+
   static String _asString(dynamic value) {
     if (value == null) return '';
     return value.toString();

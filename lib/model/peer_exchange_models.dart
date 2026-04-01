@@ -30,6 +30,79 @@ class PeerAuthor {
   }
 }
 
+class PeerDirectoryPerson {
+  final int id;
+  final String fullName;
+  final String email;
+  final String phoneNo;
+  final String title;
+  final String workingStationName;
+
+  const PeerDirectoryPerson({
+    required this.id,
+    required this.fullName,
+    required this.email,
+    required this.phoneNo,
+    required this.title,
+    required this.workingStationName,
+  });
+
+  factory PeerDirectoryPerson.fromJson(Map<String, dynamic> json) {
+    final firstName = _asString(
+      json['first_name'] ?? json['firstname'] ?? json['given_name'],
+    );
+    final middleName = _asString(
+      json['middle_name'] ?? json['middlename'] ?? json['other_name'],
+    );
+    final lastName = _asString(
+      json['last_name'] ?? json['lastname'] ?? json['surname'],
+    );
+    final fullName = _asString(
+      json['full_name'] ??
+          json['name'] ??
+          json['employee_name'] ??
+          [
+            firstName,
+            middleName,
+            lastName,
+          ].where((part) => part.trim().isNotEmpty).join(' '),
+    );
+
+    return PeerDirectoryPerson(
+      id:
+          _nullableInt(
+            json['user_id'] ??
+                json['employee_id'] ??
+                json['id'] ??
+                json['staff_id'],
+          ) ??
+          0,
+      fullName: fullName.isEmpty ? 'Unknown staff' : fullName,
+      email: _asString(json['email']),
+      phoneNo: _asString(json['phone_no'] ?? json['phone']),
+      title: _asString(
+        json['designation'] ??
+            json['job_title'] ??
+            json['cadre_name'] ??
+            json['role'] ??
+            json['position'],
+      ),
+      workingStationName: _asString(
+        json['working_station_name'] ??
+            json['facility_name'] ??
+            json['department_name'],
+      ),
+    );
+  }
+
+  String get subtitle {
+    if (title.trim().isNotEmpty) return title.trim();
+    if (workingStationName.trim().isNotEmpty) return workingStationName.trim();
+    if (email.trim().isNotEmpty) return email.trim();
+    return 'Staff member';
+  }
+}
+
 class PeerAttachment {
   final String uuid;
   final String category;
@@ -369,6 +442,7 @@ class PeerQuestion {
   final PeerQuestionCategory? category;
   final List<PeerAttachment> attachments;
   final PeerComment? lastComment;
+  final PeerAuthor? author;
 
   const PeerQuestion({
     required this.uuid,
@@ -387,6 +461,7 @@ class PeerQuestion {
     required this.category,
     required this.attachments,
     required this.lastComment,
+    required this.author,
   });
 
   factory PeerQuestion.fromJson(Map<String, dynamic> json) {
@@ -413,8 +488,97 @@ class PeerQuestion {
       lastComment: _asMap(json['last_comment']) == null
           ? null
           : PeerComment.fromJson(_asMap(json['last_comment'])!),
+      author: _questionAuthorFromJson(json),
     );
   }
+}
+
+PeerAuthor? _questionAuthorFromJson(Map<String, dynamic> json) {
+  for (final key in const [
+    'author',
+    'asked_by',
+    'askedBy',
+    'created_by_user',
+    'createdByUser',
+    'creator',
+    'user',
+    'staff',
+  ]) {
+    final author = _normalizedAuthorMap(_asMap(json[key]));
+    if (_hasAuthorValues(author)) {
+      return PeerAuthor.fromJson(author);
+    }
+  }
+
+  final flattened = _normalizedAuthorMap({
+    'id': json['author_id'] ?? json['asked_by_id'] ?? json['created_by'],
+    'first_name':
+        json['author_first_name'] ??
+        json['asked_by_first_name'] ??
+        json['created_by_first_name'],
+    'middle_name':
+        json['author_middle_name'] ??
+        json['asked_by_middle_name'] ??
+        json['created_by_middle_name'],
+    'last_name':
+        json['author_last_name'] ??
+        json['asked_by_last_name'] ??
+        json['created_by_last_name'],
+    'full_name':
+        json['author_full_name'] ??
+        json['asked_by_name'] ??
+        json['asked_by_full_name'] ??
+        json['created_by_name'] ??
+        json['created_by_full_name'],
+    'email':
+        json['author_email'] ??
+        json['asked_by_email'] ??
+        json['created_by_email'],
+    'phone_no':
+        json['author_phone_no'] ??
+        json['asked_by_phone_no'] ??
+        json['created_by_phone_no'],
+  });
+
+  if (_hasAuthorValues(flattened)) {
+    return PeerAuthor.fromJson(flattened);
+  }
+
+  return null;
+}
+
+Map<String, dynamic> _normalizedAuthorMap(Map<String, dynamic>? raw) {
+  if (raw == null) return const {};
+
+  return {
+    'id': raw['id'] ?? raw['user_id'] ?? raw['author_id'],
+    'first_name':
+        raw['first_name'] ?? raw['firstname'] ?? raw['given_name'] ?? '',
+    'middle_name':
+        raw['middle_name'] ?? raw['middlename'] ?? raw['other_name'] ?? '',
+    'last_name': raw['last_name'] ?? raw['lastname'] ?? raw['surname'] ?? '',
+    'full_name': raw['full_name'] ?? raw['name'] ?? raw['display_name'] ?? '',
+    'email': raw['email'] ?? '',
+    'phone_no': raw['phone_no'] ?? raw['phone'] ?? '',
+  };
+}
+
+bool _hasAuthorValues(Map<String, dynamic>? value) {
+  if (value == null || value.isEmpty) return false;
+
+  for (final key in const [
+    'full_name',
+    'first_name',
+    'last_name',
+    'email',
+    'phone_no',
+  ]) {
+    if (_asString(value[key]).trim().isNotEmpty) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 class PeerTopicAudience {

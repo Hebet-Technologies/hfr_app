@@ -4,26 +4,26 @@ import '../model/registration_model.dart';
 import '../repository/auth_repository.dart';
 import 'providers.dart';
 
+const _sentinel = Object();
+
 class AuthState {
   final bool isLoading;
   final UserModel? user;
   final String? errorMessage;
 
-  const AuthState({
-    this.isLoading = false,
-    this.user,
-    this.errorMessage,
-  });
+  const AuthState({this.isLoading = false, this.user, this.errorMessage});
 
   AuthState copyWith({
     bool? isLoading,
-    UserModel? user,
-    String? errorMessage,
+    Object? user = _sentinel,
+    Object? errorMessage = _sentinel,
   }) {
     return AuthState(
       isLoading: isLoading ?? this.isLoading,
-      user: user ?? this.user,
-      errorMessage: errorMessage ?? this.errorMessage,
+      user: user == _sentinel ? this.user : user as UserModel?,
+      errorMessage: errorMessage == _sentinel
+          ? this.errorMessage
+          : errorMessage as String?,
     );
   }
 }
@@ -34,7 +34,14 @@ class AuthViewModel extends Notifier<AuthState> {
   @override
   AuthState build() {
     _authRepository = ref.watch(authRepositoryProvider);
+    Future<void>.microtask(_restoreSavedUser);
     return const AuthState();
+  }
+
+  Future<void> _restoreSavedUser() async {
+    final user = await _authRepository.getSavedUser();
+    if (user == null) return;
+    state = state.copyWith(user: user);
   }
 
   Future<bool> login(String email, String password) async {
@@ -53,11 +60,17 @@ class AuthViewModel extends Notifier<AuthState> {
     }
   }
 
-  Future<Map<String, dynamic>?> getPersonalInfo(String payroll, String dateOfBirth) async {
+  Future<Map<String, dynamic>?> getPersonalInfo(
+    String payroll,
+    String dateOfBirth,
+  ) async {
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     try {
-      final result = await _authRepository.getPersonalInfo(payroll, dateOfBirth);
+      final result = await _authRepository.getPersonalInfo(
+        payroll,
+        dateOfBirth,
+      );
       state = state.copyWith(isLoading: false);
       return result;
     } catch (e) {
@@ -90,11 +103,16 @@ class AuthViewModel extends Notifier<AuthState> {
     state = state.copyWith(user: null);
   }
 
+  Future<void> updateUser(UserModel user) async {
+    await _authRepository.persistUser(user);
+    state = state.copyWith(user: user);
+  }
+
   Future<bool> checkLoginStatus() async {
     return await _authRepository.isLoggedIn();
   }
 
   void clearError() {
-    state = const AuthState().copyWith(isLoading: state.isLoading, user: state.user, errorMessage: null);
+    state = state.copyWith(errorMessage: null);
   }
 }

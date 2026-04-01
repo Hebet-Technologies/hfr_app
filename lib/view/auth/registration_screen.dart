@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:another_flushbar/flushbar.dart';
-import '../../view_model/auth_view_model.dart';
-import '../../model/registration_model.dart';
 import '../../utils/validators.dart';
+import 'auth_styles.dart';
 import 'verify_personal_info_screen.dart';
 
 class RegistrationScreen extends StatefulWidget {
@@ -61,7 +59,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(title: const Text('Create Account'), centerTitle: true),
+      appBar: authAppBar(context: context, title: 'Create Account'),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -71,223 +69,226 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: 20),
-
-                Text(
-                  'Register',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                  textAlign: TextAlign.center,
+                authHeaderSection(
+                  title: 'Create your account',
+                  subtitle: 'Enter your details to register.',
                 ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  'Create your staff portal account',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
-                  textAlign: TextAlign.center,
-                ),
-
-                const SizedBox(height: 32),
-
-                // First Name
-                TextFormField(
-                  controller: _firstNameController,
-                  decoration: InputDecoration(
-                    labelText: 'First Name',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: Validators.validateRequired,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Middle Name
-                TextFormField(
-                  controller: _middleNameController,
-                  decoration: InputDecoration(
-                    labelText: 'Middle Name',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: Validators.validateRequired,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Last Name
-                TextFormField(
-                  controller: _lastNameController,
-                  decoration: InputDecoration(
-                    labelText: 'Last Name',
-                    prefixIcon: const Icon(Icons.person_outline),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: Validators.validateRequired,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Gender
-                DropdownButtonFormField<String>(
-                  value: _selectedGender,
-                  decoration: InputDecoration(
-                    labelText: 'Gender',
-                    prefixIcon: const Icon(Icons.wc),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  items: ['Male', 'Female', 'Other'].map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedGender = newValue!;
-                    });
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Phone
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    labelText: 'Phone Number',
-                    prefixIcon: const Icon(Icons.phone_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: Validators.validatePhone,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Email
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: Validators.validateEmail,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Password
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: Validators.validatePassword,
-                ),
-
-                const SizedBox(height: 16),
-
-                // Confirm Password
-                TextFormField(
-                  controller: _confirmPasswordController,
-                  obscureText: _obscureConfirmPassword,
-                  decoration: InputDecoration(
-                    labelText: 'Confirm Password',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscureConfirmPassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscureConfirmPassword = !_obscureConfirmPassword;
-                        });
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value != _passwordController.text) {
-                      return 'Passwords do not match';
-                    }
-                    return null;
-                  },
-                ),
-
                 const SizedBox(height: 24),
-
-                // Continue Button
+                authLabeledField(
+                  label: 'First Name',
+                  child: TextFormField(
+                    controller: _firstNameController,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Enter first name',
+                      prefixIcon: Icons.person_outline,
+                    ),
+                    validator: Validators.validateRequired,
+                  ),
+                ),
+                authLabeledField(
+                  label: 'Middle Name',
+                  child: TextFormField(
+                    controller: _middleNameController,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Enter middle name',
+                      prefixIcon: Icons.person_outline,
+                    ),
+                    validator: Validators.validateRequired,
+                  ),
+                ),
+                authLabeledField(
+                  label: 'Last Name',
+                  child: TextFormField(
+                    controller: _lastNameController,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Enter last name',
+                      prefixIcon: Icons.person_outline,
+                    ),
+                    validator: Validators.validateRequired,
+                  ),
+                ),
+                authLabeledField(
+                  label: 'Gender',
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedGender,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    iconEnabledColor: authIconColor,
+                    decoration: authInputDecoration(
+                      hintText: 'Select gender',
+                      prefixIcon: Icons.wc,
+                    ),
+                    items: ['Male', 'Female', 'Other'].map((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(
+                          value,
+                          style: authTextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        _selectedGender = newValue!;
+                      });
+                    },
+                  ),
+                ),
+                authLabeledField(
+                  label: 'Phone Number',
+                  child: TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Enter phone number',
+                      prefixIcon: Icons.phone_outlined,
+                    ),
+                    validator: Validators.validatePhone,
+                  ),
+                ),
+                authLabeledField(
+                  label: 'Email Address',
+                  child: TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Enter your email',
+                      prefixIcon: Icons.email_outlined,
+                    ),
+                    validator: Validators.validateGovernmentEmail,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    'Use an approved government email such as @mohz.go.tz.',
+                    style: authTextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: authTextSecondary,
+                    ),
+                  ),
+                ),
+                authLabeledField(
+                  label: 'Password',
+                  child: TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Create a password',
+                      prefixIcon: Icons.lock_outline,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: authIconColor,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                    ),
+                    validator: Validators.validatePassword,
+                  ),
+                ),
+                authLabeledField(
+                  label: 'Confirm Password',
+                  margin: EdgeInsets.zero,
+                  child: TextFormField(
+                    controller: _confirmPasswordController,
+                    obscureText: _obscureConfirmPassword,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Confirm your password',
+                      prefixIcon: Icons.lock_outline,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: authIconColor,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
+                          });
+                        },
+                      ),
+                    ),
+                    validator: (value) {
+                      if (value != _passwordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: _navigateToVerification,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Continue',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
+                  style: authPrimaryButtonStyle(),
+                  child: const Text('Continue'),
                 ),
-
                 const SizedBox(height: 16),
-
-                // Login Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       'Already have an account? ',
-                      style: TextStyle(color: Colors.grey[600]),
+                      style: authTextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: authTextSecondary,
+                      ),
                     ),
                     TextButton(
                       onPressed: () {
                         Navigator.pop(context);
                       },
-                      child: const Text(
+                      style: TextButton.styleFrom(
+                        foregroundColor: authPrimary,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
                         'Login',
-                        style: TextStyle(fontWeight: FontWeight.bold),
+                        style: authUnderlineLinkStyle(color: authPrimary),
                       ),
                     ),
                   ],

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../utils/routes/routes_name.dart';
 import '../../utils/validators.dart';
 import '../../view_model/providers.dart';
+import 'auth_styles.dart';
 import 'registration_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -43,7 +44,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         Navigator.pushReplacementNamed(context, RoutesName.home);
       } else {
         Flushbar(
-          message: ref.read(authViewModelProvider).errorMessage ?? 'Login failed',
+          message:
+              ref.read(authViewModelProvider).errorMessage ?? 'Login failed',
           backgroundColor: const Color(0xFFE53935),
           duration: const Duration(seconds: 3),
           margin: const EdgeInsets.all(8),
@@ -67,109 +69,56 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: 60),
-                Center(
-                  child: Image.asset('assets/images/logo.png', height: 80),
+                const SizedBox(height: 48),
+                authHeaderSection(
+                  title: 'Login to your account',
+                  subtitle: 'Enter your details to login.',
                 ),
-                const SizedBox(height: 32),
-                Text(
-                  'Sign in to your account',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF1A1A1A),
+                const SizedBox(height: 24),
+                authLabeledField(
+                  label: 'Email Address',
+                  child: TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    decoration: authInputDecoration(
+                      hintText: 'Enter your email',
+                      prefixIcon: Icons.email_outlined,
+                    ),
+                    validator: Validators.validateEmail,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Enter your credentials to access your account',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF757575),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 40),
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'Enter your email',
-                    prefixIcon: const Icon(
-                      Icons.email_outlined,
-                      color: Color(0xFF43A047),
+                authLabeledField(
+                  label: 'Password',
+                  child: TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    style: authTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF43A047),
-                        width: 2,
+                    decoration: authInputDecoration(
+                      hintText: 'Enter your password',
+                      prefixIcon: Icons.lock_outline,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                          color: authIconColor,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
                       ),
                     ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE53935)),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFFFAFAFA),
+                    validator: Validators.validatePassword,
                   ),
-                  validator: Validators.validateEmail,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    hintText: 'Enter your password',
-                    prefixIcon: const Icon(
-                      Icons.lock_outline,
-                      color: Color(0xFF43A047),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: const Color(0xFF757575),
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF43A047),
-                        width: 2,
-                      ),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE53935)),
-                    ),
-                    filled: true,
-                    fillColor: const Color(0xFFFAFAFA),
-                  ),
-                  validator: Validators.validatePassword,
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -187,15 +136,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 _rememberMe = value ?? false;
                               });
                             },
-                            activeColor: const Color(0xFF43A047),
+                            activeColor: authPrimary,
+                            side: const BorderSide(color: authBorder),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        const Text(
-                          'Remember me',
-                          style: TextStyle(
-                            color: Color(0xFF757575),
+                        Text(
+                          'Keep me logged in',
+                          style: authTextStyle(
                             fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
@@ -204,12 +154,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: () {
                         Navigator.pushNamed(context, RoutesName.forgotPassword);
                       },
-                      child: const Text(
+                      style: TextButton.styleFrom(
+                        foregroundColor: authTextSecondary,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
                         'Forgot password?',
-                        style: TextStyle(
-                          color: Color(0xFF43A047),
-                          fontWeight: FontWeight.w600,
-                        ),
+                        style: authUnderlineLinkStyle(),
                       ),
                     ),
                   ],
@@ -217,15 +170,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: authState.isLoading ? null : _handleLogin,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF43A047),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
+                  style: authPrimaryButtonStyle(),
                   child: authState.isLoading
                       ? const SizedBox(
                           height: 20,
@@ -237,21 +182,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ),
                         )
-                      : const Text(
-                          'Sign In',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                      : const Text('Login'),
                 ),
                 const SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text(
+                    Text(
                       'Don\'t have an account? ',
-                      style: TextStyle(color: Color(0xFF757575)),
+                      style: authTextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: authTextSecondary,
+                      ),
                     ),
                     TextButton(
                       onPressed: () {
@@ -262,12 +205,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                         );
                       },
-                      child: const Text(
+                      style: TextButton.styleFrom(
+                        foregroundColor: authPrimary,
+                        padding: EdgeInsets.zero,
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
                         'Register',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF43A047),
-                        ),
+                        style: authUnderlineLinkStyle(color: authPrimary),
                       ),
                     ),
                   ],
