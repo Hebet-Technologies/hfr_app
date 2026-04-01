@@ -289,6 +289,181 @@ class TrainingRepository {
     );
   }
 
+  Future<List<TrainingApprovalRecord>> fetchApprovalQueue({
+    List<TrainingProgram> publishedTrainings = const [],
+  }) async {
+    final response = await _get('/getTrainingRequestForForwarding');
+    final items = _extractList(response.data);
+    if (items.isEmpty) {
+      return const [];
+    }
+
+    final approvals = items.map((item) {
+      final fallbackProgram = _findMatchingPublishedTraining(
+        item['training_name'],
+        publishedTrainings,
+      );
+      final resources = <TrainingResource>[];
+      final listResource = _approvalResourceFromItem(
+        item,
+        idPrefix:
+            'approval-list-${_stringValue(item['training_application_id'])}',
+      );
+      if (listResource != null) {
+        resources.add(listResource);
+      }
+
+      return TrainingApprovalRecord(
+        id: 'approval-${_stringValue(item['training_application_id'])}',
+        trainingApplicationId: _stringValue(item['training_application_id']),
+        trainingAppStatusId: _stringValue(item['training_app_status_id']),
+        title: _stringValue(item['training_name'], fallback: 'Training'),
+        applicantName: _fullName(
+          item['first_name'],
+          item['middle_name'],
+          item['last_name'],
+        ),
+        applicantPhone: _stringValue(item['phone_no']),
+        applicantEmail: _stringValue(item['email']),
+        applicantGender: _stringValue(item['gender']),
+        vendorName: _stringValue(item['vendor_name']),
+        cadreName: _stringValue(item['cader_name']),
+        instituteName: _stringValue(item['institute_name']),
+        educationLevelName: _stringValue(item['education_level_name']),
+        batchYear: _stringValue(item['batch_year']),
+        workingStationName: _stringValue(item['working_station_name']),
+        rawStatus: _stringValue(item['training_app_status']),
+        startDate: fallbackProgram?.startDate,
+        endDate: fallbackProgram?.endDate,
+        resources: resources,
+        isLive: true,
+      );
+    }).toList();
+
+    approvals.sort(
+      (first, second) => first.applicantName.compareTo(second.applicantName),
+    );
+    return approvals;
+  }
+
+  Future<TrainingApprovalRecord> fetchApprovalDetails(
+    TrainingApprovalRecord record, {
+    TrainingProgram? fallbackProgram,
+  }) async {
+    final response = await _postJson(
+      '/getTrainingRequestMoreDetails',
+      data: {'training_application_id': record.trainingApplicationId},
+    );
+
+    final details = _extractList(response.data);
+    final detail = details.isNotEmpty
+        ? details.first
+        : const <String, dynamic>{};
+    final attachments = _extractNamedList(response.data, 'attachment');
+    final resources = attachments
+        .map(
+          (item) => _approvalResourceFromItem(
+            item,
+            idPrefix:
+                'approval-detail-${record.trainingApplicationId}-${_stringValue(item['upload_type_id'])}',
+          ),
+        )
+        .whereType<TrainingResource>()
+        .toList();
+
+    return record.copyWith(
+      title: _stringValue(detail['training_name'], fallback: record.title),
+      applicantName: _fullName(
+        detail['first_name'],
+        detail['middle_name'],
+        detail['last_name'],
+        fallback: record.applicantName,
+      ),
+      applicantPhone: _stringValue(
+        detail['phone_no'],
+        fallback: record.applicantPhone,
+      ),
+      applicantEmail: _stringValue(
+        detail['email'],
+        fallback: record.applicantEmail,
+      ),
+      applicantGender: _stringValue(
+        detail['gender'],
+        fallback: record.applicantGender,
+      ),
+      vendorName: _stringValue(
+        detail['vendor_name'],
+        fallback: record.vendorName,
+      ),
+      cadreName: _stringValue(detail['cader_name'], fallback: record.cadreName),
+      instituteName: _stringValue(
+        detail['institute_name'],
+        fallback: record.instituteName,
+      ),
+      educationLevelName: _stringValue(
+        detail['education_level_name'],
+        fallback: record.educationLevelName,
+      ),
+      batchYear: _stringValue(detail['batch_year'], fallback: record.batchYear),
+      workingStationName: _stringValue(
+        detail['working_station_name'],
+        fallback: record.workingStationName,
+      ),
+      rawStatus: _stringValue(
+        detail['training_app_status'],
+        fallback: record.rawStatus,
+      ),
+      startDate: record.startDate ?? fallbackProgram?.startDate,
+      endDate: record.endDate ?? fallbackProgram?.endDate,
+      resources: resources.isNotEmpty ? resources : record.resources,
+      isLive: true,
+    );
+  }
+
+  Future<List<TrainingApprovalRecord>> fetchTrainingRequests({
+    List<TrainingProgram> publishedTrainings = const [],
+  }) async {
+    final response = await _get('/viewTrainingRequestAll');
+    final items = _extractList(response.data);
+    if (items.isEmpty) {
+      return const [];
+    }
+
+    final requests = items
+        .map(
+          (item) => _approvalRecordFromItem(
+            item,
+            publishedTrainings: publishedTrainings,
+            idPrefix: 'request',
+          ),
+        )
+        .toList();
+
+    requests.sort(
+      (first, second) => first.applicantName.compareTo(second.applicantName),
+    );
+    return requests;
+  }
+
+  Future<String> submitApprovalAction({
+    required TrainingApprovalRecord record,
+    required String comment,
+  }) async {
+    final response = await _postJson(
+      '/approveTrainingRequest',
+      data: {
+        'training_application_id': record.trainingApplicationId,
+        'training_app_status_id': record.trainingAppStatusId,
+        'app_comment': comment,
+      },
+    );
+
+    return _extractMessage(
+      response.data,
+      fallback: 'Training approval action completed successfully.',
+    );
+  }
+
   Future<TrainingProgram> applyForTraining({
     required UserModel user,
     required TrainingProgram training,
@@ -503,6 +678,59 @@ class TrainingRepository {
     return programs;
   }
 
+  List<TrainingApprovalRecord> buildMockApprovalQueue() {
+    return [
+      TrainingApprovalRecord(
+        id: 'approval-mock-3001',
+        trainingApplicationId: '3001',
+        trainingAppStatusId: '7001',
+        title: 'Maternal Health Capacity Training',
+        applicantName: 'Dr. Amina Salim',
+        applicantPhone: '0712345678',
+        applicantEmail: 'amina.salim@mohz.go.tz',
+        applicantGender: 'Female',
+        vendorName: 'Ministry of Health Zanzibar',
+        cadreName: 'Clinical Officer',
+        instituteName: 'Zanzibar Health Training Institute',
+        educationLevelName: 'Internal Training',
+        batchYear: '2026',
+        workingStationName: 'Mnazi Mmoja Hospital',
+        rawStatus: 'REQUESTED',
+        startDate: DateTime(2026, 4, 10),
+        endDate: DateTime(2026, 4, 12),
+        resources: const [
+          TrainingResource(
+            id: 'approval-resource-3001',
+            title: 'Training Invitation',
+            sizeLabel: '94 KB',
+            fileName: 'training_invitation.pdf',
+            filePath: '',
+            fileType: 'PDF',
+          ),
+        ],
+      ),
+      TrainingApprovalRecord(
+        id: 'approval-mock-3002',
+        trainingApplicationId: '3002',
+        trainingAppStatusId: '7002',
+        title: 'Infection Prevention Workshop',
+        applicantName: 'Dr. Hassan Juma',
+        applicantPhone: '0719876543',
+        applicantEmail: 'hassan.juma@mohz.go.tz',
+        applicantGender: 'Male',
+        vendorName: 'Public Health Surveillance Unit',
+        cadreName: 'Medical Officer',
+        instituteName: 'Ministry of Health HQ',
+        educationLevelName: 'Workshop',
+        batchYear: '2026',
+        workingStationName: 'Pemba Regional Hospital',
+        rawStatus: 'FORWARDED',
+        startDate: DateTime(2026, 4, 20),
+        endDate: DateTime(2026, 4, 22),
+      ),
+    ];
+  }
+
   List<TrainingResource> buildMockResources() {
     return const [
       TrainingResource(
@@ -690,6 +918,120 @@ class TrainingRepository {
       return 'XLS';
     }
     return 'FILE';
+  }
+
+  TrainingResource? _approvalResourceFromItem(
+    Map<String, dynamic> item, {
+    required String idPrefix,
+  }) {
+    final fileName = _stringValue(
+      item['upload_file_name'],
+      fallback: _stringValue(item['file_name']),
+    );
+    if (fileName.isEmpty) return null;
+
+    return TrainingResource(
+      id: idPrefix,
+      title: _stringValue(item['upload_name'], fallback: 'Training Document'),
+      sizeLabel: _resolveFileSize(fileName),
+      fileName: fileName,
+      filePath: _stringValue(item['file_path']),
+      fileType: _fileTypeFor(fileName),
+      isLive: true,
+    );
+  }
+
+  TrainingApprovalRecord _approvalRecordFromItem(
+    Map<String, dynamic> item, {
+    required List<TrainingProgram> publishedTrainings,
+    required String idPrefix,
+  }) {
+    final fallbackProgram = _findMatchingPublishedTraining(
+      item['training_name'],
+      publishedTrainings,
+    );
+    final resources = <TrainingResource>[];
+    final listResource = _approvalResourceFromItem(
+      item,
+      idPrefix:
+          '$idPrefix-list-${_stringValue(item['training_application_id'])}',
+    );
+    if (listResource != null) {
+      resources.add(listResource);
+    }
+
+    return TrainingApprovalRecord(
+      id: '$idPrefix-${_stringValue(item['training_application_id'])}',
+      trainingApplicationId: _stringValue(item['training_application_id']),
+      trainingAppStatusId: _stringValue(item['training_app_status_id']),
+      title: _stringValue(item['training_name'], fallback: 'Training'),
+      applicantName: _fullName(
+        item['first_name'],
+        item['middle_name'],
+        item['last_name'],
+      ),
+      applicantPhone: _stringValue(item['phone_no']),
+      applicantEmail: _stringValue(item['email']),
+      applicantGender: _stringValue(item['gender']),
+      vendorName: _stringValue(item['vendor_name']),
+      cadreName: _stringValue(item['cader_name']),
+      instituteName: _stringValue(item['institute_name']),
+      educationLevelName: _stringValue(item['education_level_name']),
+      batchYear: _stringValue(item['batch_year']),
+      workingStationName: _stringValue(item['working_station_name']),
+      rawStatus: _stringValue(item['training_app_status']),
+      startDate: fallbackProgram?.startDate,
+      endDate: fallbackProgram?.endDate,
+      resources: resources,
+      isLive: true,
+    );
+  }
+
+  String _fullName(
+    dynamic firstName,
+    dynamic middleName,
+    dynamic lastName, {
+    String fallback = 'Staff Member',
+  }) {
+    final fullName = [
+      _stringValue(firstName),
+      _stringValue(middleName),
+      _stringValue(lastName),
+    ].where((value) => value.isNotEmpty).join(' ');
+    return fullName.isEmpty ? fallback : fullName;
+  }
+
+  TrainingProgram? _findMatchingPublishedTraining(
+    dynamic trainingName,
+    List<TrainingProgram> publishedTrainings,
+  ) {
+    final needle = _normalizedKey(trainingName);
+    if (needle.isEmpty) return null;
+
+    for (final training in publishedTrainings) {
+      if (_normalizedKey(training.title) == needle) {
+        return training;
+      }
+    }
+    return null;
+  }
+
+  String _normalizedKey(dynamic value) {
+    return _stringValue(value).toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  String _extractMessage(dynamic responseData, {required String fallback}) {
+    if (responseData is Map<String, dynamic>) {
+      final message = _stringValue(responseData['message']);
+      return message.isEmpty ? fallback : message;
+    }
+    if (responseData is Map) {
+      return _extractMessage(
+        responseData.map((key, value) => MapEntry(key.toString(), value)),
+        fallback: fallback,
+      );
+    }
+    return fallback;
   }
 
   String _toApiDate(DateTime value) {

@@ -10,7 +10,10 @@ class PeerExchangeAccess {
     required this.persona,
   });
 
-  factory PeerExchangeAccess.fromUser(UserModel? user) {
+  factory PeerExchangeAccess.fromUser(
+    UserModel? user, {
+    bool? isApproverOverride,
+  }) {
     final roles = [...user?.roles ?? const <String>[]];
     final permissions = [...user?.permissions ?? const <String>[]];
     final values = [...roles, ...permissions].map(_normalize).toList();
@@ -29,7 +32,7 @@ class PeerExchangeAccess {
       'forum moderator',
       'content moderator',
     ]);
-    final isApprover = _containsAny(values, const [
+    final inferredApprover = _containsAny(values, const [
       'approver',
       'supervisor',
       'manager',
@@ -40,6 +43,7 @@ class PeerExchangeAccess {
       'officer',
       'reviewer',
     ]);
+    final isApprover = isApproverOverride ?? inferredApprover;
 
     final persona = isHrAdmin
         ? PeerExchangePersona.hrAdmin

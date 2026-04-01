@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../model/staff_portal_access.dart';
 import '../../model/staff_request_models.dart';
 import '../../view_model/providers.dart';
 import '../../view_model/staff_request_view_model.dart';
@@ -35,20 +36,39 @@ void openRequestFormScreen(BuildContext context, StaffRequestType type) {
   Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
 }
 
-class RequestsScreen extends ConsumerWidget {
-  const RequestsScreen({super.key});
+class RequestsScreen extends ConsumerStatefulWidget {
+  const RequestsScreen({super.key, this.initialShowApprovals = false});
+
+  final bool initialShowApprovals;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RequestsScreen> createState() => _RequestsScreenState();
+}
+
+class _RequestsScreenState extends ConsumerState<RequestsScreen> {
+  bool _showApprovals = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _showApprovals = widget.initialShowApprovals;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(staffRequestsViewModelProvider);
+    final access = ref.watch(staffPortalAccessProvider);
+    final showApprovals = access.isApproverMode && _showApprovals;
 
     return Scaffold(
       backgroundColor: _requestSurface,
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: _requestBlue,
-        onPressed: () => showRequestComposerSheet(context),
-        child: const Icon(Icons.add_rounded, color: Colors.white),
-      ),
+      floatingActionButton: access.isApproverMode && showApprovals
+          ? null
+          : FloatingActionButton(
+              backgroundColor: _requestBlue,
+              onPressed: () => showRequestComposerSheet(context),
+              child: const Icon(Icons.add_rounded, color: Colors.white),
+            ),
       body: SafeArea(
         child: RefreshIndicator(
           color: _requestBlue,
@@ -58,13 +78,58 @@ class RequestsScreen extends ConsumerWidget {
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
             children: [
-              Text(
-                'Requests',
-                style: _requestTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Requests',
+                      style: _requestTextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Use the status filters inside each request board.',
+                          ),
+                        ),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _requestMuted,
+                      side: const BorderSide(color: _requestBorder),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    icon: const Icon(Icons.filter_list_rounded, size: 16),
+                    label: Text(
+                      'Filter',
+                      style: _requestTextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _requestMuted,
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              if (access.isApproverMode) ...[
+                const SizedBox(height: 14),
+                _RequestBoardToggle(
+                  showApprovals: _showApprovals,
+                  approvalCount: state.totalApprovalCount,
+                  onChanged: (value) {
+                    setState(() {
+                      _showApprovals = value;
+                    });
+                  },
+                ),
+              ],
               const SizedBox(height: 18),
               if (state.errorMessage != null)
                 _InlineBanner(
@@ -74,7 +139,9 @@ class RequestsScreen extends ConsumerWidget {
                       .clearError(),
                 ),
               if (state.errorMessage != null) const SizedBox(height: 14),
-              if (state.isLoading && state.records.isEmpty)
+              if (showApprovals)
+                ..._buildApproverContent(context, state)
+              else if (state.isLoading && state.records.isEmpty)
                 const Padding(
                   padding: EdgeInsets.only(top: 80),
                   child: Center(child: CircularProgressIndicator()),
@@ -83,35 +150,63 @@ class RequestsScreen extends ConsumerWidget {
                 _RequestOverviewSection(
                   type: StaffRequestType.activity,
                   count: state.countFor(StaffRequestType.activity),
-                  preview: _previewFor(state, StaffRequestType.activity),
+                  approvedCount: _countForStatus(
+                    state,
+                    StaffRequestType.activity,
+                    StaffRequestStatus.approved,
+                  ),
+                  pendingCount: _countOpenFor(state, StaffRequestType.activity),
                   onTap: () => _openList(context, StaffRequestType.activity),
                 ),
                 const SizedBox(height: 14),
                 _RequestOverviewSection(
                   type: StaffRequestType.leave,
                   count: state.countFor(StaffRequestType.leave),
-                  preview: _previewFor(state, StaffRequestType.leave),
+                  approvedCount: _countForStatus(
+                    state,
+                    StaffRequestType.leave,
+                    StaffRequestStatus.approved,
+                  ),
+                  pendingCount: _countOpenFor(state, StaffRequestType.leave),
                   onTap: () => _openList(context, StaffRequestType.leave),
                 ),
                 const SizedBox(height: 14),
                 _RequestOverviewSection(
                   type: StaffRequestType.transfer,
                   count: state.countFor(StaffRequestType.transfer),
-                  preview: _previewFor(state, StaffRequestType.transfer),
+                  approvedCount: _countForStatus(
+                    state,
+                    StaffRequestType.transfer,
+                    StaffRequestStatus.approved,
+                  ),
+                  pendingCount: _countOpenFor(state, StaffRequestType.transfer),
                   onTap: () => _openList(context, StaffRequestType.transfer),
                 ),
                 const SizedBox(height: 14),
                 _RequestOverviewSection(
                   type: StaffRequestType.loan,
                   count: state.countFor(StaffRequestType.loan),
-                  preview: _previewFor(state, StaffRequestType.loan),
+                  approvedCount: _countForStatus(
+                    state,
+                    StaffRequestType.loan,
+                    StaffRequestStatus.approved,
+                  ),
+                  pendingCount: _countOpenFor(state, StaffRequestType.loan),
                   onTap: () => _openList(context, StaffRequestType.loan),
                 ),
                 const SizedBox(height: 14),
                 _RequestOverviewSection(
                   type: StaffRequestType.sickLeave,
                   count: state.countFor(StaffRequestType.sickLeave),
-                  preview: _previewFor(state, StaffRequestType.sickLeave),
+                  approvedCount: _countForStatus(
+                    state,
+                    StaffRequestType.sickLeave,
+                    StaffRequestStatus.approved,
+                  ),
+                  pendingCount: _countOpenFor(
+                    state,
+                    StaffRequestType.sickLeave,
+                  ),
                   onTap: () => _openList(context, StaffRequestType.sickLeave),
                 ),
               ],
@@ -122,22 +217,57 @@ class RequestsScreen extends ConsumerWidget {
     );
   }
 
-  static StaffRequestRecord _previewFor(
+  List<Widget> _buildApproverContent(
+    BuildContext context,
+    StaffRequestsState state,
+  ) {
+    final items = [
+      ...state.leaveApprovalTasks,
+      ...state.transferApprovalTasks,
+    ]..sort((first, second) => second.submittedAt.compareTo(first.submittedAt));
+
+    if (state.isLoading &&
+        state.leaveApprovalTasks.isEmpty &&
+        state.transferApprovalTasks.isEmpty) {
+      return const [
+        Padding(
+          padding: EdgeInsets.only(top: 80),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      ];
+    }
+
+    return [
+      if (items.isEmpty)
+        const _ApprovalEmptyState(
+          message: 'No pending leave or transfer approvals right now.',
+        )
+      else
+        ...items.map(
+          (task) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _ApproverInboxCard(task: task),
+          ),
+        ),
+    ];
+  }
+
+  static int _countForStatus(
     StaffRequestsState state,
     StaffRequestType type,
+    StaffRequestStatus status,
   ) {
-    final items = state.recordsFor(type);
-    if (items.isNotEmpty) return items.first;
+    return state
+        .recordsFor(type)
+        .where((record) => record.status == status)
+        .length;
+  }
 
-    return StaffRequestRecord(
-      id: 'empty-${type.name}',
-      type: type,
-      title: type.pluralLabel,
-      summary: 'No records yet',
-      status: StaffRequestStatus.pending,
-      submittedAt: DateTime.now(),
-      detailFields: const [],
-    );
+  static int _countOpenFor(StaffRequestsState state, StaffRequestType type) {
+    return state
+        .recordsFor(type)
+        .where((record) => record.status.isOpen)
+        .length;
   }
 
   static void _openList(BuildContext context, StaffRequestType type) {
@@ -149,64 +279,374 @@ class RequestsScreen extends ConsumerWidget {
   }
 }
 
-class RequestCategoryListScreen extends ConsumerWidget {
-  const RequestCategoryListScreen({super.key, required this.type});
+class _RequestBoardToggle extends StatelessWidget {
+  const _RequestBoardToggle({
+    required this.showApprovals,
+    required this.approvalCount,
+    required this.onChanged,
+  });
 
-  final StaffRequestType type;
+  final bool showApprovals;
+  final int approvalCount;
+  final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(staffRequestsViewModelProvider);
-    final items = state.recordsFor(type);
-
-    return Scaffold(
-      backgroundColor: _requestSurface,
-      appBar: AppBar(
-        backgroundColor: _requestSurface,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          type.pluralLabel,
-          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-        ),
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _requestBorder),
       ),
-      floatingActionButton: type == StaffRequestType.sickLeave
-          ? null
-          : FloatingActionButton(
-              backgroundColor: _requestBlue,
-              mini: true,
-              onPressed: () => openRequestFormScreen(context, type),
-              child: const Icon(Icons.add_rounded, color: Colors.white),
+      child: Row(
+        children: [
+          Expanded(
+            child: _RequestBoardToggleChip(
+              label: 'My Requests',
+              selected: !showApprovals,
+              onTap: () => onChanged(false),
             ),
-      body: ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-        itemCount: items.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          final item = items[index];
-          return _RequestListCard(
-            request: item,
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => RequestDetailScreen(request: item),
-                ),
-              );
-            },
-          );
-        },
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _RequestBoardToggleChip(
+              label: 'Approvals ($approvalCount)',
+              selected: showApprovals,
+              onTap: () => onChanged(true),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class RequestDetailScreen extends ConsumerWidget {
-  const RequestDetailScreen({super.key, required this.request});
+class _RequestBoardToggleChip extends StatelessWidget {
+  const _RequestBoardToggleChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
-  final StaffRequestRecord request;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEAF2FF) : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? const Color(0xFFB7D3FF) : Colors.transparent,
+          ),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: _requestTextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: selected ? _requestBlue : _requestMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ApproverInboxCard extends ConsumerWidget {
+  const _ApproverInboxCard({required this.task});
+
+  final ApprovalTask task;
+
+  Future<void> _handleAction(
+    BuildContext context,
+    WidgetRef ref,
+    ApproverAction action,
+  ) async {
+    var actionableTask = task;
+    if (task.type == ApproverRequestType.leave) {
+      try {
+        actionableTask = await ref
+            .read(staffRequestsViewModelProvider.notifier)
+            .loadApprovalTaskDetail(task);
+      } catch (error) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString().replaceAll('Exception: ', '')),
+          ),
+        );
+        return;
+      }
+    }
+    if (!context.mounted) return;
+
+    final result = await showModalBottomSheet<_ApprovalActionResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _ApprovalActionSheet(task: actionableTask, action: action),
+    );
+
+    if (result == null) return;
+
+    try {
+      final message = await ref
+          .read(staffRequestsViewModelProvider.notifier)
+          .performApprovalAction(
+            task: actionableTask,
+            action: action,
+            comment: result.comment,
+            startDate: result.startDate,
+            endDate: result.endDate,
+          );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final access = ref.watch(staffPortalAccessProvider);
+    final requestState = ref.watch(staffRequestsViewModelProvider);
+    final actions = _approvalActionsFor(access, task);
+    final hasApprove = actions.contains(ApproverAction.approve);
+    final hasDeny = actions.contains(ApproverAction.deny);
+    final hasForward = actions.contains(ApproverAction.forward);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _requestBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  task.type == ApproverRequestType.leave
+                      ? 'Leave Request'
+                      : 'Transfer Request',
+                  style: _requestTextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _StatusBadge(status: task.status),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 14,
+                color: _requestMuted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _formatShortDate(task.submittedAt),
+                style: _requestTextStyle(fontSize: 12, color: _requestMuted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 14,
+                backgroundColor: const Color(0xFFFFF0D6),
+                child: Text(
+                  _initials(task.subjectName),
+                  style: _requestTextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: const Color(0xFF7A3E00),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Submitted by ${task.subjectName}',
+                  style: _requestTextStyle(fontSize: 12, color: _requestMuted),
+                ),
+              ),
+            ],
+          ),
+          if (task.summary.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              task.summary,
+              style: _requestTextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (hasApprove && hasDeny && !hasForward)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: requestState.isSubmitting
+                        ? null
+                        : () =>
+                              _handleAction(context, ref, ApproverAction.deny),
+                    style: _outlinedDangerStyle(),
+                    child: Text(
+                      requestState.isSubmitting ? 'Submitting...' : 'Reject',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    style: _filledStyle(),
+                    onPressed: requestState.isSubmitting
+                        ? null
+                        : () => _handleAction(
+                            context,
+                            ref,
+                            ApproverAction.approve,
+                          ),
+                    child: Text(
+                      requestState.isSubmitting ? 'Submitting...' : 'Approve',
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else if (hasForward)
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    style: _filledStyle(),
+                    onPressed: requestState.isSubmitting
+                        ? null
+                        : () => _handleAction(
+                            context,
+                            ref,
+                            ApproverAction.forward,
+                          ),
+                    child: Text(
+                      requestState.isSubmitting ? 'Submitting...' : 'Forward',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                OutlinedButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => ApprovalTaskDetailScreen(task: task),
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _requestMuted,
+                    side: const BorderSide(color: _requestBorder),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('View'),
+                ),
+              ],
+            )
+          else
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ApprovalTaskDetailScreen(task: task),
+                    ),
+                  );
+                },
+                child: Text(
+                  'View Details',
+                  style: _requestTextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _requestBlue,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalEmptyState extends StatelessWidget {
+  const _ApprovalEmptyState({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _requestBorder),
+      ),
+      child: Text(
+        message,
+        style: _requestTextStyle(fontSize: 13, color: _requestMuted),
+      ),
+    );
+  }
+}
+
+class ApprovalTaskListScreen extends ConsumerStatefulWidget {
+  const ApprovalTaskListScreen({super.key, required this.type});
+
+  final ApproverRequestType type;
+
+  @override
+  ConsumerState<ApprovalTaskListScreen> createState() =>
+      _ApprovalTaskListScreenState();
+}
+
+class _ApprovalTaskListScreenState
+    extends ConsumerState<ApprovalTaskListScreen> {
+  StaffRequestStatus? _filterStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(staffRequestsViewModelProvider);
+    final items = switch (widget.type) {
+      ApproverRequestType.leave => state.leaveApprovalTasks,
+      ApproverRequestType.transfer => state.transferApprovalTasks,
+    };
+    final filteredItems = _filterStatus == null
+        ? items
+        : items.where((item) => item.status == _filterStatus).toList();
+
     return Scaffold(
       backgroundColor: _requestSurface,
       appBar: AppBar(
@@ -214,7 +654,286 @@ class RequestDetailScreen extends ConsumerWidget {
         elevation: 0,
         centerTitle: true,
         title: Text(
-          _detailTitle(request.type),
+          widget.type.pluralLabel,
+          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _ApprovalFilterChip(
+                  label: 'All',
+                  selected: _filterStatus == null,
+                  onTap: () => setState(() => _filterStatus = null),
+                ),
+                const SizedBox(width: 8),
+                _ApprovalFilterChip(
+                  label: 'Pending',
+                  selected: _filterStatus == StaffRequestStatus.pending,
+                  onTap: () => setState(
+                    () => _filterStatus = StaffRequestStatus.pending,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _ApprovalFilterChip(
+                  label: 'Approved',
+                  selected: _filterStatus == StaffRequestStatus.approved,
+                  onTap: () => setState(
+                    () => _filterStatus = StaffRequestStatus.approved,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _ApprovalFilterChip(
+                  label: 'Rejected',
+                  selected: _filterStatus == StaffRequestStatus.rejected,
+                  onTap: () => setState(
+                    () => _filterStatus = StaffRequestStatus.rejected,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (filteredItems.isEmpty)
+            const _ApprovalEmptyState(
+              message: 'No approval items match this status filter.',
+            )
+          else
+            ...filteredItems.map(
+              (task) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _ApprovalTaskCard(
+                  task: task,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ApprovalTaskDetailScreen(task: task),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalFilterChip extends StatelessWidget {
+  const _ApprovalFilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFEAF2FF) : Colors.white,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? const Color(0xFFB7D3FF) : _requestBorder,
+          ),
+        ),
+        child: Text(
+          label,
+          style: _requestTextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: selected ? _requestBlue : _requestMuted,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ApprovalTaskCard extends StatelessWidget {
+  const _ApprovalTaskCard({required this.task, required this.onTap});
+
+  final ApprovalTask task;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _requestCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _requestBorder),
+        ),
+        child: Row(
+          children: [
+            _SquareIcon(
+              icon: _approvalIconFor(task.type),
+              background: _approvalSoftFor(task.type),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    task.subjectName.isEmpty ? task.title : task.subjectName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _requestTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    task.referenceNumber ?? _formatShortDate(task.submittedAt),
+                    style: _requestTextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: _requestMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    task.summary,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _requestTextStyle(
+                      fontSize: 12,
+                      color: _requestMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _StatusBadge(status: task.status),
+                const SizedBox(height: 12),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: _requestMuted,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ApprovalTaskDetailScreen extends ConsumerStatefulWidget {
+  const ApprovalTaskDetailScreen({super.key, required this.task});
+
+  final ApprovalTask task;
+
+  @override
+  ConsumerState<ApprovalTaskDetailScreen> createState() =>
+      _ApprovalTaskDetailScreenState();
+}
+
+class _ApprovalTaskDetailScreenState
+    extends ConsumerState<ApprovalTaskDetailScreen> {
+  late ApprovalTask _task;
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _task = widget.task;
+    Future<void>.microtask(_loadDetail);
+  }
+
+  Future<void> _loadDetail() async {
+    if (widget.task.type != ApproverRequestType.leave) return;
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final task = await ref
+          .read(staffRequestsViewModelProvider.notifier)
+          .loadApprovalTaskDetail(widget.task);
+      if (!mounted) return;
+      setState(() {
+        _task = task;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _error = error.toString().replaceAll('Exception: ', '');
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleAction(ApproverAction action) async {
+    final result = await showModalBottomSheet<_ApprovalActionResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ApprovalActionSheet(task: _task, action: action),
+    );
+
+    if (result == null) return;
+
+    try {
+      final message = await ref
+          .read(staffRequestsViewModelProvider.notifier)
+          .performApprovalAction(
+            task: _task,
+            action: action,
+            comment: result.comment,
+            startDate: result.startDate,
+            endDate: result.endDate,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      Navigator.of(context).pop();
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final access = ref.watch(staffPortalAccessProvider);
+    final requestState = ref.watch(staffRequestsViewModelProvider);
+    final actions = _approvalActionsFor(access, _task);
+    final hasApprove = actions.contains(ApproverAction.approve);
+    final hasDeny = actions.contains(ApproverAction.deny);
+    final hasForward = actions.contains(ApproverAction.forward);
+
+    return Scaffold(
+      backgroundColor: _requestSurface,
+      appBar: AppBar(
+        backgroundColor: _requestSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          _task.type.label,
           style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
@@ -232,7 +951,7 @@ class RequestDetailScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  request.title,
+                  _task.subjectName.isEmpty ? _task.title : _task.subjectName,
                   style: _requestTextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -240,7 +959,7 @@ class RequestDetailScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  request.referenceNumber ?? 'Reference pending',
+                  _task.referenceNumber ?? 'Reference pending',
                   style: _requestTextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -248,18 +967,625 @@ class RequestDetailScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _StatusBadge(status: request.status),
+                _StatusBadge(status: _task.status),
+                if (_isLoading) ...[
+                  const SizedBox(height: 16),
+                  const LinearProgressIndicator(
+                    minHeight: 2,
+                    color: _requestBlue,
+                    backgroundColor: Color(0xFFEAF2FF),
+                  ),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 16),
+                  _InlineBanner(message: _error!, onClose: _loadDetail),
+                ],
                 const SizedBox(height: 18),
-                for (final field in request.detailFields) ...[
+                for (final field in _task.detailFields) ...[
                   _DetailRow(field: field),
                   const Divider(height: 24, color: _requestBorder),
                 ],
-                if (request.attachmentName != null &&
-                    request.attachmentName!.trim().isNotEmpty)
-                  _AttachmentCard(name: request.attachmentName!),
+                if (_task.attachmentName != null &&
+                    _task.attachmentName!.trim().isNotEmpty)
+                  _AttachmentCard(name: _task.attachmentName!),
               ],
             ),
           ),
+          if (_task.commentHistory.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Workflow Comments',
+              style: _requestTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ..._task.commentHistory.map(
+              (comment) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _ApprovalCommentCard(comment: comment),
+              ),
+            ),
+          ],
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: 18),
+            Text(
+              'Actions',
+              style: _requestTextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (hasApprove && hasDeny && !hasForward)
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: requestState.isSubmitting
+                          ? null
+                          : () => _handleAction(ApproverAction.deny),
+                      style: _outlinedDangerStyle(),
+                      child: Text(
+                        requestState.isSubmitting ? 'Submitting...' : 'Reject',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      style: _filledStyle(),
+                      onPressed: requestState.isSubmitting
+                          ? null
+                          : () => _handleAction(ApproverAction.approve),
+                      child: Text(
+                        requestState.isSubmitting ? 'Submitting...' : 'Approve',
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else
+              for (final action in actions) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: action == ApproverAction.deny
+                      ? OutlinedButton(
+                          onPressed: requestState.isSubmitting
+                              ? null
+                              : () => _handleAction(action),
+                          style: _outlinedDangerStyle(),
+                          child: Text(
+                            requestState.isSubmitting
+                                ? 'Submitting...'
+                                : action.label,
+                          ),
+                        )
+                      : FilledButton(
+                          style: _filledStyle(),
+                          onPressed: requestState.isSubmitting
+                              ? null
+                              : () => _handleAction(action),
+                          child: Text(
+                            requestState.isSubmitting
+                                ? 'Submitting...'
+                                : action.label,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 10),
+              ],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalCommentCard extends StatelessWidget {
+  const _ApprovalCommentCard({required this.comment});
+
+  final ApprovalCommentRecord comment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _requestBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            comment.stage,
+            style: _requestTextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            comment.comment,
+            style: _requestTextStyle(
+              fontSize: 12,
+              color: _requestMuted,
+              height: 1.45,
+            ),
+          ),
+          if ((comment.reason ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Reason: ${comment.reason}',
+              style: _requestTextStyle(fontSize: 12, color: _requestMuted),
+            ),
+          ],
+          if ((comment.additionalComment ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Additional note: ${comment.additionalComment}',
+              style: _requestTextStyle(fontSize: 12, color: _requestMuted),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ApprovalActionResult {
+  const _ApprovalActionResult({
+    required this.comment,
+    this.startDate,
+    this.endDate,
+  });
+
+  final String comment;
+  final DateTime? startDate;
+  final DateTime? endDate;
+}
+
+class _ApprovalActionSheet extends StatefulWidget {
+  const _ApprovalActionSheet({required this.task, required this.action});
+
+  final ApprovalTask task;
+  final ApproverAction action;
+
+  @override
+  State<_ApprovalActionSheet> createState() => _ApprovalActionSheetState();
+}
+
+class _ApprovalActionSheetState extends State<_ApprovalActionSheet> {
+  final _commentController = TextEditingController();
+  DateTime? _startDate;
+  DateTime? _endDate;
+
+  bool get _requiresDates =>
+      widget.task.type == ApproverRequestType.leave &&
+      widget.action == ApproverAction.approve;
+
+  @override
+  void initState() {
+    super.initState();
+    _startDate = widget.task.startDate ?? widget.task.proposedStartDate;
+    _endDate = widget.task.endDate ?? widget.task.proposedEndDate;
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final comment = _commentController.text.trim();
+    if (comment.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Comment is required.')));
+      return;
+    }
+    if (_requiresDates) {
+      if (_startDate == null || _endDate == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Choose approved start and end dates.')),
+        );
+        return;
+      }
+      if (_endDate!.isBefore(_startDate!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('End date cannot be earlier than start date.'),
+          ),
+        );
+        return;
+      }
+    }
+
+    Navigator.of(context).pop(
+      _ApprovalActionResult(
+        comment: comment,
+        startDate: _startDate,
+        endDate: _endDate,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 46,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD1D5DB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                '${widget.action.label} ${widget.task.type.label}',
+                style: _requestTextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                widget.task.subjectName,
+                style: _requestTextStyle(fontSize: 12, color: _requestMuted),
+              ),
+              const SizedBox(height: 16),
+              if (_requiresDates) ...[
+                _DateInputField(
+                  label: 'Approved Start Date',
+                  value: _startDate,
+                  onTap: () async {
+                    final picked = await _pickDate(
+                      context,
+                      initial: _startDate,
+                    );
+                    if (picked != null) {
+                      setState(() => _startDate = picked);
+                    }
+                  },
+                ),
+                _DateInputField(
+                  label: 'Approved End Date',
+                  value: _endDate,
+                  onTap: () async {
+                    final picked = await _pickDate(context, initial: _endDate);
+                    if (picked != null) {
+                      setState(() => _endDate = picked);
+                    }
+                  },
+                ),
+              ],
+              _AppTextField(
+                label: 'Comment',
+                controller: _commentController,
+                hintText: 'Enter comment',
+                maxLines: 4,
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: widget.action == ApproverAction.deny
+                    ? OutlinedButton(
+                        onPressed: _submit,
+                        style: _outlinedDangerStyle(),
+                        child: Text(widget.action.label),
+                      )
+                    : FilledButton(
+                        style: _filledStyle(),
+                        onPressed: _submit,
+                        child: Text(widget.action.label),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RequestCategoryListScreen extends ConsumerStatefulWidget {
+  const RequestCategoryListScreen({super.key, required this.type});
+
+  final StaffRequestType type;
+
+  @override
+  ConsumerState<RequestCategoryListScreen> createState() =>
+      _RequestCategoryListScreenState();
+}
+
+class _RequestCategoryListScreenState
+    extends ConsumerState<RequestCategoryListScreen> {
+  StaffRequestStatus? _filterStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(staffRequestsViewModelProvider);
+    final items = state.recordsFor(widget.type);
+    final filteredItems = _filterStatus == null
+        ? items
+        : items.where((item) => item.status == _filterStatus).toList();
+
+    return Scaffold(
+      backgroundColor: _requestSurface,
+      appBar: AppBar(
+        backgroundColor: _requestSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          widget.type.pluralLabel,
+          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      floatingActionButton: widget.type == StaffRequestType.sickLeave
+          ? null
+          : FloatingActionButton(
+              backgroundColor: _requestBlue,
+              mini: true,
+              onPressed: () => openRequestFormScreen(context, widget.type),
+              child: const Icon(Icons.add_rounded, color: Colors.white),
+            ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _ApprovalFilterChip(
+                  label: 'All',
+                  selected: _filterStatus == null,
+                  onTap: () => setState(() => _filterStatus = null),
+                ),
+                const SizedBox(width: 8),
+                _ApprovalFilterChip(
+                  label: 'Pending',
+                  selected: _filterStatus == StaffRequestStatus.pending,
+                  onTap: () => setState(
+                    () => _filterStatus = StaffRequestStatus.pending,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _ApprovalFilterChip(
+                  label: 'Approved',
+                  selected: _filterStatus == StaffRequestStatus.approved,
+                  onTap: () => setState(
+                    () => _filterStatus = StaffRequestStatus.approved,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _ApprovalFilterChip(
+                  label: 'Rejected',
+                  selected: _filterStatus == StaffRequestStatus.rejected,
+                  onTap: () => setState(
+                    () => _filterStatus = StaffRequestStatus.rejected,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (filteredItems.isEmpty)
+            const _ApprovalEmptyState(
+              message: 'No requests match this status filter.',
+            )
+          else
+            ...filteredItems.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _RequestListCard(
+                  request: item,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => RequestDetailScreen(request: item),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class RequestDetailScreen extends ConsumerWidget {
+  const RequestDetailScreen({super.key, required this.request});
+
+  final StaffRequestRecord request;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requestState = ref.watch(staffRequestsViewModelProvider);
+    final currentRequest =
+        requestState.records.firstWhereOrNull(
+          (item) => item.id == request.id,
+        ) ??
+        request;
+    final user = ref.watch(authViewModelProvider).user;
+    return Scaffold(
+      backgroundColor: _requestSurface,
+      appBar: AppBar(
+        backgroundColor: _requestSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          _detailTitle(currentRequest.type),
+          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        children: [
+          _DetailSectionCard(
+            title: _sectionTitleFor(currentRequest.type),
+            child: Column(
+              children: _detailRowsForRequest(currentRequest)
+                  .map(
+                    (field) => Column(
+                      children: [
+                        _DetailRow(field: field),
+                        const Divider(height: 24, color: _requestBorder),
+                      ],
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _DetailSectionCard(
+            title: _staffSectionTitleFor(currentRequest.type),
+            child: Column(
+              children: [
+                _DetailRow(
+                  field: RequestDetailField(
+                    label: 'Name',
+                    value: user?.fullName.trim().isNotEmpty == true
+                        ? user!.fullName.trim()
+                        : 'Staff member',
+                  ),
+                ),
+                const Divider(height: 24, color: _requestBorder),
+                _DetailRow(
+                  field: RequestDetailField(
+                    label: 'Employee ID',
+                    value: user?.userId.trim().isNotEmpty == true
+                        ? user!.userId.trim()
+                        : 'Pending',
+                  ),
+                ),
+                const Divider(height: 24, color: _requestBorder),
+                _DetailRow(
+                  field: RequestDetailField(
+                    label: 'Facility',
+                    value: user?.workingStationName.trim().isNotEmpty == true
+                        ? user!.workingStationName.trim()
+                        : 'Not available',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (currentRequest.attachmentName != null &&
+              currentRequest.attachmentName!.trim().isNotEmpty) ...[
+            const SizedBox(height: 14),
+            _DetailSectionCard(
+              title: 'Attachments',
+              child: _AttachmentCard(name: currentRequest.attachmentName!),
+            ),
+          ],
+          const SizedBox(height: 14),
+          _DetailSectionCard(
+            title: 'Approval Timeline',
+            child: Column(
+              children: _timelineItemsForRequest(currentRequest)
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _TimelineTile(item: item),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+          if (currentRequest.type == StaffRequestType.activity) ...[
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: _filledStyle(),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Activity report export is not available yet.',
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Download Activity Report'),
+              ),
+            ),
+          ] else if (_canWithdrawRequest(currentRequest)) ...[
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: _filledStyle(),
+                onPressed: requestState.isSubmitting
+                    ? null
+                    : () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: const Text('Withdraw request'),
+                            content: Text(
+                              _withdrawPromptFor(currentRequest.type),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text('Keep Request'),
+                              ),
+                              FilledButton(
+                                style: _filledStyle(),
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                child: const Text('Withdraw'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirmed != true || !context.mounted) return;
+
+                        final updated = await ref
+                            .read(staffRequestsViewModelProvider.notifier)
+                            .withdrawRequest(currentRequest);
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              '${updated.type.label} request marked as withdrawn.',
+                            ),
+                          ),
+                        );
+                      },
+                child: Text(
+                  requestState.isSubmitting
+                      ? 'Withdrawing...'
+                      : _detailActionLabel(currentRequest.type),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -931,7 +2257,12 @@ class _LoanRequestFormScreenState extends ConsumerState<LoanRequestFormScreen> {
     'Probation',
   ];
 
-  static const _repaymentOptions = ['6', '12', '18', '24'];
+  static const _repaymentOptions = [
+    '6 Months',
+    '12 Months',
+    '18 Months',
+    '24 Months',
+  ];
 
   @override
   void dispose() {
@@ -992,12 +2323,8 @@ class _LoanRequestFormScreenState extends ConsumerState<LoanRequestFormScreen> {
                   label: 'Repayment Period',
                   value: _repaymentPeriod,
                   hintText: 'Select',
-                  items: _repaymentOptions
-                      .map((item) => '$item Months')
-                      .toList(),
-                  onChanged: (value) => setState(() {
-                    _repaymentPeriod = value?.split(' ').first;
-                  }),
+                  items: _repaymentOptions,
+                  onChanged: (value) => setState(() => _repaymentPeriod = value),
                 ),
                 _AppTextField(
                   label: 'Purpose of Loan',
@@ -1130,22 +2457,24 @@ class _RequestOverviewSection extends StatelessWidget {
   const _RequestOverviewSection({
     required this.type,
     required this.count,
-    required this.preview,
+    required this.approvedCount,
+    required this.pendingCount,
     required this.onTap,
   });
 
   final StaffRequestType type;
   final int count;
-  final StaffRequestRecord preview;
+  final int approvedCount;
+  final int pendingCount;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _requestCard,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _requestBorder),
       ),
       child: Column(
@@ -1154,104 +2483,113 @@ class _RequestOverviewSection extends StatelessWidget {
           Row(
             children: [
               _SquareIcon(icon: _iconFor(type), background: _softFor(type)),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      type.pluralLabel,
-                      style: _requestTextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$count ${count == 1 ? 'record' : 'records'}',
-                      style: _requestTextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: _requestMuted,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  type.pluralLabel,
+                  style: _requestTextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
-              TextButton(
+              IconButton(
                 onPressed: onTap,
-                child: Text(
-                  'View Details',
-                  style: _requestTextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _requestBlue,
-                  ),
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: _requestMuted,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _RequestPreviewCard(request: preview, onTap: onTap),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _RequestStatTile(
+                  label: 'Total Requests',
+                  value: '$count',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _RequestStatTile(
+                  label: 'Approved',
+                  value: '$approvedCount',
+                  accent: const Color(0xFF12B76A),
+                  soft: const Color(0xFFEAFBF1),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _RequestStatTile(
+                  label: 'Pending',
+                  value: '$pendingCount',
+                  accent: const Color(0xFF3BA1FF),
+                  soft: const Color(0xFFEAF4FF),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: onTap,
+              child: Text(
+                _viewLabelFor(type),
+                style: _requestTextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: _requestBlue,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-class _RequestPreviewCard extends StatelessWidget {
-  const _RequestPreviewCard({required this.request, required this.onTap});
+class _RequestStatTile extends StatelessWidget {
+  const _RequestStatTile({
+    required this.label,
+    required this.value,
+    this.accent = _requestBlue,
+    this.soft = const Color(0xFFEAF2FF),
+  });
 
-  final StaffRequestRecord request;
-  final VoidCallback onTap;
+  final String label;
+  final String value;
+  final Color accent;
+  final Color soft;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: _requestBorder),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    request.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _requestTextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    request.summary.isEmpty
-                        ? 'No details yet'
-                        : request.summary,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: _requestTextStyle(
-                      fontSize: 12,
-                      color: _requestMuted,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: soft,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: _requestTextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: accent,
             ),
-            const SizedBox(width: 12),
-            _StatusBadge(status: request.status),
-          ],
-        ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: _requestTextStyle(fontSize: 10, color: _requestMuted),
+          ),
+        ],
       ),
     );
   }
@@ -1265,75 +2603,195 @@ class _RequestListCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: _requestCard,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _requestBorder),
-        ),
-        child: Row(
-          children: [
-            _SquareIcon(
-              icon: _iconFor(request.type),
-              background: _softFor(request.type),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    request.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: _requestTextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _requestCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _requestBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  request.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _requestTextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    request.referenceNumber ??
-                        _formatShortDate(request.submittedAt),
-                    style: _requestTextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _requestMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    request.summary,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: _requestTextStyle(
-                      fontSize: 12,
-                      color: _requestMuted,
-                    ),
-                  ),
-                ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              _StatusBadge(status: request.status),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 14,
+                color: _requestMuted,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                _requestDateRange(request),
+                style: _requestTextStyle(fontSize: 12, color: _requestMuted),
+              ),
+            ],
+          ),
+          if (request.summary.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              request.summary,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _requestTextStyle(
+                fontSize: 12,
+                color: _requestText,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _StatusBadge(status: request.status),
-                const SizedBox(height: 12),
-                Icon(
-                  Icons.arrow_forward_ios_rounded,
-                  size: 14,
-                  color: _requestMuted,
+          ],
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: 88,
+              child: OutlinedButton(
+                onPressed: onTap,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _requestMuted,
+                  side: const BorderSide(color: _requestBorder),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                child: Text(
+                  'View',
+                  style: _requestTextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: _requestMuted,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailSectionCard extends StatelessWidget {
+  const _DetailSectionCard({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _requestBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: _requestTextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF98A2B3),
+            ),
+          ),
+          const SizedBox(height: 14),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineItem {
+  const _TimelineItem({
+    required this.label,
+    required this.value,
+    required this.status,
+    this.subtitle,
+  });
+
+  final String label;
+  final String value;
+  final StaffRequestStatus status;
+  final String? subtitle;
+}
+
+class _TimelineTile extends StatelessWidget {
+  const _TimelineTile({required this.item});
+
+  final _TimelineItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          margin: const EdgeInsets.only(top: 4),
+          decoration: BoxDecoration(
+            color: _statusColor(item.status),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      style: _requestTextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  _StatusBadge(status: item.status),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                item.value,
+                style: _requestTextStyle(fontSize: 12, color: _requestMuted),
+              ),
+              if ((item.subtitle ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  item.subtitle!,
+                  style: _requestTextStyle(fontSize: 12, color: _requestMuted),
                 ),
               ],
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -1697,7 +3155,9 @@ class _AppDropdownField extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
+            key: ValueKey('$label::$value'),
             initialValue: value,
+            isExpanded: true,
             decoration: _inputDecoration(hintText),
             items: items
                 .map(
@@ -1750,7 +3210,9 @@ class _SimpleDropdownField extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
+            key: ValueKey('$label::$value'),
             initialValue: value,
+            isExpanded: true,
             decoration: _inputDecoration(hintText),
             items: items
                 .map(
@@ -1922,6 +3384,16 @@ ButtonStyle _filledStyle() {
   );
 }
 
+ButtonStyle _outlinedDangerStyle() {
+  return OutlinedButton.styleFrom(
+    foregroundColor: const Color(0xFFF04438),
+    side: const BorderSide(color: Color(0xFFFDA29B)),
+    minimumSize: const Size.fromHeight(50),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    textStyle: _requestTextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+  );
+}
+
 TextStyle _requestTextStyle({
   required double fontSize,
   FontWeight fontWeight = FontWeight.w600,
@@ -1970,6 +3442,224 @@ String _monthShort(int month) {
     'Dec',
   ];
   return months[month - 1];
+}
+
+String _viewLabelFor(StaffRequestType type) {
+  switch (type) {
+    case StaffRequestType.activity:
+      return 'View Activities';
+    case StaffRequestType.leave:
+      return 'View Leave';
+    case StaffRequestType.transfer:
+      return 'View Transfers';
+    case StaffRequestType.loan:
+      return 'View Loans';
+    case StaffRequestType.sickLeave:
+      return 'View Sick Leave';
+  }
+}
+
+String _requestDateRange(StaffRequestRecord request) {
+  if (request.startDate != null && request.endDate != null) {
+    return '${_formatShortDate(request.startDate!)} - ${_formatShortDate(request.endDate!)}';
+  }
+  if (request.startDate != null) {
+    return _formatShortDate(request.startDate!);
+  }
+  return _formatShortDate(request.submittedAt);
+}
+
+String _sectionTitleFor(StaffRequestType type) {
+  switch (type) {
+    case StaffRequestType.activity:
+      return 'Activity Information';
+    case StaffRequestType.leave:
+      return 'Request Information';
+    case StaffRequestType.transfer:
+      return 'Transfer Information';
+    case StaffRequestType.loan:
+      return 'Loan Information';
+    case StaffRequestType.sickLeave:
+      return 'Submission Information';
+  }
+}
+
+String _staffSectionTitleFor(StaffRequestType type) {
+  switch (type) {
+    case StaffRequestType.activity:
+      return 'Staff Information';
+    case StaffRequestType.leave:
+      return 'Staff Information';
+    case StaffRequestType.transfer:
+      return 'Staff Information';
+    case StaffRequestType.loan:
+      return 'Staff Information';
+    case StaffRequestType.sickLeave:
+      return 'Staff Information';
+  }
+}
+
+List<RequestDetailField> _detailRowsForRequest(StaffRequestRecord request) {
+  final fields = [...request.detailFields];
+  if (request.startDate != null &&
+      !fields.any((field) => field.label.toLowerCase().contains('start'))) {
+    fields.insert(
+      0,
+      RequestDetailField(
+        label: 'Start Date',
+        value: _formatShortDate(request.startDate!),
+      ),
+    );
+  }
+  if (request.endDate != null &&
+      !fields.any((field) => field.label.toLowerCase().contains('end'))) {
+    fields.insert(
+      fields.isEmpty ? 0 : 1,
+      RequestDetailField(
+        label: 'End Date',
+        value: _formatShortDate(request.endDate!),
+      ),
+    );
+  }
+  if (!fields.any((field) => field.label.toLowerCase() == 'status')) {
+    fields.add(
+      RequestDetailField(
+        label: 'Status',
+        value: request.status.label,
+        status: request.status,
+      ),
+    );
+  }
+  return fields;
+}
+
+List<_TimelineItem> _timelineItemsForRequest(StaffRequestRecord request) {
+  final items = <_TimelineItem>[
+    _TimelineItem(
+      label: 'Application Submitted',
+      value: _formatShortDate(request.submittedAt),
+      status: StaffRequestStatus.approved,
+      subtitle: request.referenceNumber ?? 'Reference pending',
+    ),
+  ];
+
+  items.add(
+    _TimelineItem(
+      label: request.stageLabel?.trim().isNotEmpty == true
+          ? request.stageLabel!
+          : 'Supervisor Review',
+      value: request.startDate != null
+          ? _formatShortDate(request.startDate!)
+          : _formatShortDate(request.submittedAt),
+      status: request.status == StaffRequestStatus.rejected
+          ? StaffRequestStatus.rejected
+          : StaffRequestStatus.pending,
+    ),
+  );
+
+  items.add(
+    _TimelineItem(
+      label: 'Final Decision',
+      value: request.endDate != null
+          ? _formatShortDate(request.endDate!)
+          : _formatShortDate(request.submittedAt),
+      status: request.status,
+    ),
+  );
+
+  return items;
+}
+
+String _initials(String value) {
+  final parts = value
+      .split(' ')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList();
+  if (parts.isEmpty) return 'S';
+  if (parts.length == 1) return parts.first.characters.first.toUpperCase();
+  return '${parts.first.characters.first}${parts.last.characters.first}'
+      .toUpperCase();
+}
+
+List<ApproverAction> _approvalActionsFor(
+  StaffPortalAccess access,
+  ApprovalTask task,
+) {
+  final isOpen = task.status.isOpen;
+  switch (task.type) {
+    case ApproverRequestType.leave:
+      return [
+        if (isOpen && access.canForwardLeave && !task.isFinalStage)
+          ApproverAction.forward,
+        if (isOpen && access.canApproveLeave && task.isFinalStage)
+          ApproverAction.approve,
+        if (isOpen && access.canDenyLeave && task.isFinalStage)
+          ApproverAction.deny,
+      ];
+    case ApproverRequestType.transfer:
+      return [
+        if (isOpen && access.canForwardTransfer && !task.isFinalStage)
+          ApproverAction.forward,
+        if (isOpen && access.canApproveTransfer && task.isFinalStage)
+          ApproverAction.approve,
+        if (isOpen && access.canDenyTransfer && task.isFinalStage)
+          ApproverAction.deny,
+      ];
+  }
+}
+
+IconData _approvalIconFor(ApproverRequestType type) {
+  switch (type) {
+    case ApproverRequestType.leave:
+      return Icons.event_available_rounded;
+    case ApproverRequestType.transfer:
+      return Icons.compare_arrows_rounded;
+  }
+}
+
+Color _approvalSoftFor(ApproverRequestType type) {
+  switch (type) {
+    case ApproverRequestType.leave:
+      return const Color(0xFFEAFBF1);
+    case ApproverRequestType.transfer:
+      return const Color(0xFFFFF2E8);
+  }
+}
+
+bool _canWithdrawRequest(StaffRequestRecord request) {
+  return request.status.isOpen &&
+      request.type != StaffRequestType.activity &&
+      request.type != StaffRequestType.sickLeave;
+}
+
+String _detailActionLabel(StaffRequestType type) {
+  switch (type) {
+    case StaffRequestType.leave:
+      return 'Withdraw Request and Re-submit Leave Request';
+    case StaffRequestType.transfer:
+      return 'Withdraw Request and Re-submit Transfer Request';
+    case StaffRequestType.loan:
+      return 'Withdraw Loan Application';
+    case StaffRequestType.activity:
+      return 'Download Activity Report';
+    case StaffRequestType.sickLeave:
+      return 'View Submission';
+  }
+}
+
+String _withdrawPromptFor(StaffRequestType type) {
+  switch (type) {
+    case StaffRequestType.leave:
+      return 'This will mark the leave request as withdrawn so you can submit a new leave request later.';
+    case StaffRequestType.transfer:
+      return 'This will mark the transfer request as withdrawn so you can submit a new transfer request later.';
+    case StaffRequestType.loan:
+      return 'This will mark the loan application as withdrawn.';
+    case StaffRequestType.activity:
+    case StaffRequestType.sickLeave:
+      return 'This request cannot be withdrawn.';
+  }
 }
 
 IconData _iconFor(StaffRequestType type) {

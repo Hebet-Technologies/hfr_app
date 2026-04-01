@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../model/staff_portal_access.dart';
 import '../model/training_models.dart';
 import '../model/user_model.dart';
 import '../repository/auth_repository.dart';
@@ -12,20 +13,28 @@ class TrainingState {
   const TrainingState({
     this.isLoading = false,
     this.isSubmitting = false,
+    this.isSubmittingApproval = false,
     this.errorMessage,
     this.latestTrainings = const [],
     this.myTrainings = const [],
     this.resources = const [],
     this.detailsById = const {},
+    this.trainingRequests = const [],
+    this.approvalQueue = const [],
+    this.approvalDetailsById = const {},
   });
 
   final bool isLoading;
   final bool isSubmitting;
+  final bool isSubmittingApproval;
   final String? errorMessage;
   final List<TrainingProgram> latestTrainings;
   final List<TrainingProgram> myTrainings;
   final List<TrainingResource> resources;
   final Map<String, TrainingProgram> detailsById;
+  final List<TrainingApprovalRecord> trainingRequests;
+  final List<TrainingApprovalRecord> approvalQueue;
+  final Map<String, TrainingApprovalRecord> approvalDetailsById;
 
   TrainingProgram resolveProgram(TrainingProgram training) {
     final directDetail = detailsById[training.id];
@@ -42,18 +51,38 @@ class TrainingState {
     return training;
   }
 
+  TrainingApprovalRecord resolveApproval(TrainingApprovalRecord record) {
+    final directDetail = approvalDetailsById[record.id];
+    if (directDetail != null) return directDetail;
+
+    for (final item in trainingRequests) {
+      if (_approvalsMatch(item, record)) return item;
+    }
+
+    for (final item in approvalQueue) {
+      if (_approvalsMatch(item, record)) return item;
+    }
+
+    return record;
+  }
+
   TrainingState copyWith({
     bool? isLoading,
     bool? isSubmitting,
+    bool? isSubmittingApproval,
     Object? errorMessage = _sentinel,
     List<TrainingProgram>? latestTrainings,
     List<TrainingProgram>? myTrainings,
     List<TrainingResource>? resources,
     Map<String, TrainingProgram>? detailsById,
+    List<TrainingApprovalRecord>? trainingRequests,
+    List<TrainingApprovalRecord>? approvalQueue,
+    Map<String, TrainingApprovalRecord>? approvalDetailsById,
   }) {
     return TrainingState(
       isLoading: isLoading ?? this.isLoading,
       isSubmitting: isSubmitting ?? this.isSubmitting,
+      isSubmittingApproval: isSubmittingApproval ?? this.isSubmittingApproval,
       errorMessage: errorMessage == _sentinel
           ? this.errorMessage
           : errorMessage as String?,
@@ -61,6 +90,9 @@ class TrainingState {
       myTrainings: myTrainings ?? this.myTrainings,
       resources: resources ?? this.resources,
       detailsById: detailsById ?? this.detailsById,
+      trainingRequests: trainingRequests ?? this.trainingRequests,
+      approvalQueue: approvalQueue ?? this.approvalQueue,
+      approvalDetailsById: approvalDetailsById ?? this.approvalDetailsById,
     );
   }
 }
@@ -68,6 +100,7 @@ class TrainingState {
 class TrainingViewModel extends Notifier<TrainingState> {
   late TrainingRepository _repository;
   late AuthRepository _authRepository;
+  late StaffPortalAccess _access;
   UserModel? _currentUser;
 
   @override
@@ -75,6 +108,7 @@ class TrainingViewModel extends Notifier<TrainingState> {
     _repository = ref.watch(trainingRepositoryProvider);
     _authRepository = ref.watch(authRepositoryProvider);
     final authState = ref.watch(authViewModelProvider);
+    _access = ref.watch(staffPortalAccessProvider);
     _currentUser = authState.user;
     Future<void>.microtask(load);
     return const TrainingState();
@@ -89,6 +123,8 @@ class TrainingViewModel extends Notifier<TrainingState> {
     List<TrainingProgram> latestTrainings = _repository
         .buildMockLatestTrainings(myTrainings: myTrainings);
     List<TrainingResource> resources = _repository.buildMockResources();
+    List<TrainingApprovalRecord> trainingRequests = const [];
+    List<TrainingApprovalRecord> approvalQueue = const [];
     String? errorMessage;
 
     if (user != null) {
@@ -111,6 +147,26 @@ class TrainingViewModel extends Notifier<TrainingState> {
       try {
         resources = await _repository.fetchResources(user);
       } catch (_) {}
+
+      if (_access.canViewTrainingRequests) {
+        try {
+          trainingRequests = await _repository.fetchTrainingRequests(
+            publishedTrainings: latestTrainings,
+          );
+        } catch (error) {
+          errorMessage ??= _cleanMessage(error);
+        }
+      }
+
+      if (_access.canReviewTrainingRequests) {
+        try {
+          approvalQueue = await _repository.fetchApprovalQueue(
+            publishedTrainings: latestTrainings,
+          );
+        } catch (error) {
+          errorMessage ??= _cleanMessage(error);
+        }
+      }
     }
 
     state = state.copyWith(
@@ -120,6 +176,9 @@ class TrainingViewModel extends Notifier<TrainingState> {
       myTrainings: myTrainings,
       resources: resources,
       detailsById: const {},
+      trainingRequests: trainingRequests,
+      approvalQueue: approvalQueue,
+      approvalDetailsById: const {},
     );
   }
 
@@ -170,6 +229,70 @@ class TrainingViewModel extends Notifier<TrainingState> {
     }
   }
 
+  Future<TrainingApprovalRecord> loadApprovalDetail(
+    TrainingApprovalRecord record,
+  ) async {
+    final current = state.resolveApproval(record);
+    final cached = state.approvalDetailsById[current.id];
+    if (cached != null) {
+      return cached;
+    }
+
+    try {
+      final detailed = await _repository.fetchApprovalDetails(
+        current,
+        fallbackProgram: _matchPublishedTraining(current),
+      );
+      _upsertApproval(detailed);
+      return detailed;
+    } catch (error) {
+      final message = _cleanMessage(error);
+      state = state.copyWith(errorMessage: message);
+      return current;
+    }
+  }
+
+  Future<String> submitApprovalAction({
+    required TrainingApprovalRecord record,
+    required String comment,
+  }) async {
+    final current = state.resolveApproval(record);
+
+    state = state.copyWith(isSubmittingApproval: true, errorMessage: null);
+    try {
+      final message = await _repository.submitApprovalAction(
+        record: current,
+        comment: comment,
+      );
+      final nextQueue = state.approvalQueue
+          .where((item) => !_approvalsMatch(item, current))
+          .toList();
+      final nextDetails = Map<String, TrainingApprovalRecord>.from(
+        state.approvalDetailsById,
+      )..removeWhere((_, value) => _approvalsMatch(value, current));
+      final nextRequests = state.trainingRequests.map((item) {
+        if (_approvalsMatch(item, current)) {
+          return item.copyWith(rawStatus: _nextApprovalStatus(current));
+        }
+        return item;
+      }).toList();
+      state = state.copyWith(
+        isSubmittingApproval: false,
+        trainingRequests: nextRequests,
+        approvalQueue: nextQueue,
+        approvalDetailsById: nextDetails,
+      );
+      return message;
+    } catch (error) {
+      final message = _cleanMessage(error);
+      state = state.copyWith(
+        isSubmittingApproval: false,
+        errorMessage: message,
+      );
+      rethrow;
+    }
+  }
+
   void _upsertTraining(
     TrainingProgram updated, {
     required bool addToMyTrainings,
@@ -191,6 +314,32 @@ class TrainingViewModel extends Notifier<TrainingState> {
       latestTrainings: nextLatest,
       myTrainings: nextMine,
       detailsById: nextDetails,
+    );
+  }
+
+  void _upsertApproval(TrainingApprovalRecord updated) {
+    var didUpdateRequests = false;
+    final nextRequests = state.trainingRequests.map((item) {
+      if (_approvalsMatch(item, updated)) {
+        didUpdateRequests = true;
+        return updated;
+      }
+      return item;
+    }).toList();
+    final nextQueue = state.approvalQueue.map((item) {
+      if (_approvalsMatch(item, updated)) {
+        return updated;
+      }
+      return item;
+    }).toList();
+    final nextDetails = Map<String, TrainingApprovalRecord>.from(
+      state.approvalDetailsById,
+    )..[updated.id] = updated;
+
+    state = state.copyWith(
+      trainingRequests: didUpdateRequests ? nextRequests : state.trainingRequests,
+      approvalQueue: nextQueue,
+      approvalDetailsById: nextDetails,
     );
   }
 
@@ -244,6 +393,19 @@ class TrainingViewModel extends Notifier<TrainingState> {
   String _cleanMessage(Object error) {
     return error.toString().replaceAll('Exception: ', '').trim();
   }
+
+  TrainingProgram? _matchPublishedTraining(TrainingApprovalRecord record) {
+    final recordTitle = record.title.trim().toLowerCase();
+    if (recordTitle.isEmpty) return null;
+
+    for (final item in state.latestTrainings) {
+      if (item.title.trim().toLowerCase() == recordTitle) {
+        return item;
+      }
+    }
+
+    return null;
+  }
 }
 
 bool _programsMatch(TrainingProgram first, TrainingProgram second) {
@@ -272,4 +434,21 @@ int _sortProgramsByDate(TrainingProgram first, TrainingProgram second) {
   final firstDate = first.startDate ?? first.endDate ?? DateTime(2100);
   final secondDate = second.startDate ?? second.endDate ?? DateTime(2100);
   return firstDate.compareTo(secondDate);
+}
+
+String _nextApprovalStatus(TrainingApprovalRecord record) {
+  final current = record.rawStatus.trim().toUpperCase();
+  if (current == 'FORWARDED') {
+    return 'AWAITING_TRAINING_CONTRACT';
+  }
+  return 'FORWARDED';
+}
+
+bool _approvalsMatch(
+  TrainingApprovalRecord first,
+  TrainingApprovalRecord second,
+) {
+  if (first.id == second.id) return true;
+  return first.trainingApplicationId.trim().isNotEmpty &&
+      first.trainingApplicationId.trim() == second.trainingApplicationId.trim();
 }

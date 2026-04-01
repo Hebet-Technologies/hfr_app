@@ -422,7 +422,9 @@ class _DropdownField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DropdownButtonFormField<String>(
+      key: ValueKey('$label::$value'),
       initialValue: value,
+      isExpanded: true,
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,

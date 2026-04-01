@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../model/profile_details.dart';
+import '../../model/staff_portal_access.dart';
 import '../../utils/routes/routes_name.dart';
 import '../../view_model/providers.dart';
 import 'edit_profile_screen.dart';
@@ -89,9 +90,18 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     Navigator.pushReplacementNamed(context, RoutesName.login);
   }
 
+  Future<void> _switchPortalMode(bool approverEnabled) async {
+    final mode = approverEnabled
+        ? StaffPortalMode.approver
+        : StaffPortalMode.employee;
+    await ref.read(authViewModelProvider.notifier).setActivePortalMode(mode);
+    await ref.read(staffRequestsViewModelProvider.notifier).refresh();
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authViewModelProvider).user;
+    final access = ref.watch(staffPortalAccessProvider);
     final profile =
         _profile ?? (user != null ? ProfileDetails.fromUser(user) : null);
     final roleLabel = profile?.cadre.trim().isNotEmpty == true
@@ -170,6 +180,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               else if (profile != null) ...[
                 _ProfileHeroCard(profile: profile, roleLabel: roleLabel),
                 const SizedBox(height: 14),
+                if (access.hasApproverMode) ...[
+                  _SectionLabel(title: 'WORKSPACE MODE'),
+                  const SizedBox(height: 8),
+                  _PortalModeCard(
+                    activeMode: access.activeMode,
+                    summary: access.modeSummary,
+                    onChanged: _switchPortalMode,
+                  ),
+                  const SizedBox(height: 14),
+                ],
                 _SectionLabel(title: 'PERSONAL DETAILS'),
                 const SizedBox(height: 8),
                 _ProfileInfoCard(
@@ -457,6 +477,77 @@ class _SectionLabel extends StatelessWidget {
         fontWeight: FontWeight.w600,
         color: Color(0xFF98A2B3),
         letterSpacing: 0.4,
+      ),
+    );
+  }
+}
+
+class _PortalModeCard extends StatelessWidget {
+  const _PortalModeCard({
+    required this.activeMode,
+    required this.summary,
+    required this.onChanged,
+  });
+
+  final StaffPortalMode activeMode;
+  final String summary;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final isApprover = activeMode == StaffPortalMode.approver;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFEAECEF)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isApprover
+                      ? 'Approver tools enabled'
+                      : 'Employee request mode',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF101828),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  summary,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: Color(0xFF667085),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            children: [
+              const Text(
+                'Approver Access',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF667085),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Switch.adaptive(value: isApprover, onChanged: onChanged),
+            ],
+          ),
+        ],
       ),
     );
   }

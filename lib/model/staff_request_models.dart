@@ -163,6 +163,158 @@ class StaffRequestRecord {
   }
 }
 
+enum ApproverRequestType { leave, transfer }
+
+extension ApproverRequestTypeX on ApproverRequestType {
+  String get label {
+    switch (this) {
+      case ApproverRequestType.leave:
+        return 'Leave Approval';
+      case ApproverRequestType.transfer:
+        return 'Transfer Approval';
+    }
+  }
+
+  String get pluralLabel {
+    switch (this) {
+      case ApproverRequestType.leave:
+        return 'Leave Approvals';
+      case ApproverRequestType.transfer:
+        return 'Transfer Approvals';
+    }
+  }
+}
+
+enum ApproverAction { forward, approve, deny }
+
+extension ApproverActionX on ApproverAction {
+  String get label {
+    switch (this) {
+      case ApproverAction.forward:
+        return 'Forward';
+      case ApproverAction.approve:
+        return 'Approve';
+      case ApproverAction.deny:
+        return 'Deny';
+    }
+  }
+}
+
+class ApprovalCommentRecord {
+  const ApprovalCommentRecord({
+    required this.stage,
+    required this.comment,
+    this.reason,
+    this.additionalComment,
+  });
+
+  final String stage;
+  final String comment;
+  final String? reason;
+  final String? additionalComment;
+}
+
+class ApprovalTask {
+  const ApprovalTask({
+    required this.id,
+    required this.requestId,
+    required this.type,
+    required this.title,
+    required this.subjectName,
+    required this.summary,
+    required this.status,
+    required this.submittedAt,
+    this.referenceNumber,
+    this.attachmentName,
+    this.personalInformationId,
+    this.employmentStatusId,
+    this.numberOfDays,
+    this.parentStageId,
+    this.rawStatus,
+    this.proposedStartDate,
+    this.proposedEndDate,
+    this.startDate,
+    this.endDate,
+    this.detailFields = const [],
+    this.commentHistory = const [],
+  });
+
+  final String id;
+  final String requestId;
+  final ApproverRequestType type;
+  final String title;
+  final String subjectName;
+  final String summary;
+  final StaffRequestStatus status;
+  final DateTime submittedAt;
+  final String? referenceNumber;
+  final String? attachmentName;
+  final String? personalInformationId;
+  final String? employmentStatusId;
+  final int? numberOfDays;
+  final String? parentStageId;
+  final String? rawStatus;
+  final DateTime? proposedStartDate;
+  final DateTime? proposedEndDate;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final List<RequestDetailField> detailFields;
+  final List<ApprovalCommentRecord> commentHistory;
+
+  bool get isFinalStage => (parentStageId ?? '').trim().isEmpty;
+
+  bool get isForwarded => (rawStatus ?? '').toUpperCase() == 'FORWARDED';
+
+  ApprovalTask copyWith({
+    String? id,
+    String? requestId,
+    ApproverRequestType? type,
+    String? title,
+    String? subjectName,
+    String? summary,
+    StaffRequestStatus? status,
+    DateTime? submittedAt,
+    String? referenceNumber,
+    String? attachmentName,
+    String? personalInformationId,
+    String? employmentStatusId,
+    int? numberOfDays,
+    String? parentStageId,
+    String? rawStatus,
+    DateTime? proposedStartDate,
+    DateTime? proposedEndDate,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<RequestDetailField>? detailFields,
+    List<ApprovalCommentRecord>? commentHistory,
+  }) {
+    return ApprovalTask(
+      id: id ?? this.id,
+      requestId: requestId ?? this.requestId,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      subjectName: subjectName ?? this.subjectName,
+      summary: summary ?? this.summary,
+      status: status ?? this.status,
+      submittedAt: submittedAt ?? this.submittedAt,
+      referenceNumber: referenceNumber ?? this.referenceNumber,
+      attachmentName: attachmentName ?? this.attachmentName,
+      personalInformationId:
+          personalInformationId ?? this.personalInformationId,
+      employmentStatusId: employmentStatusId ?? this.employmentStatusId,
+      numberOfDays: numberOfDays ?? this.numberOfDays,
+      parentStageId: parentStageId ?? this.parentStageId,
+      rawStatus: rawStatus ?? this.rawStatus,
+      proposedStartDate: proposedStartDate ?? this.proposedStartDate,
+      proposedEndDate: proposedEndDate ?? this.proposedEndDate,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      detailFields: detailFields ?? this.detailFields,
+      commentHistory: commentHistory ?? this.commentHistory,
+    );
+  }
+}
+
 class HomeAnnouncement {
   const HomeAnnouncement({
     required this.title,

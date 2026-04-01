@@ -148,6 +148,323 @@ class StaffRequestsRepository {
         .toList();
   }
 
+  Future<List<ApprovalTask>> fetchLeaveApprovalTasks() async {
+    final response = await _get('/viewLeaveToApprove');
+    final items = _extractList(response.data);
+
+    return items
+        .map(
+          (item) => ApprovalTask(
+            id: 'leave-approval-${_stringValue(item['leave_request_id'])}',
+            requestId: _stringValue(item['leave_request_id']),
+            type: ApproverRequestType.leave,
+            title:
+                '${_stringValue(item['leave_type'], fallback: 'Leave')} Approval',
+            subjectName: _buildFullName(
+              firstName: item['first_name'],
+              middleName: item['middle_name'],
+              lastName: item['last_name'],
+              surName: item['sur_name'],
+            ),
+            summary: [
+              _stringValue(item['working_station_name']),
+              _stringValue(item['department_name']),
+            ].where((value) => value.isNotEmpty).join(' • '),
+            status: StaffRequestStatus.pending,
+            submittedAt:
+                _dateValue(
+                  item['requested_date'],
+                  fallback: _dateValue(item['proposed_start_date']),
+                ) ??
+                DateTime.now(),
+            referenceNumber:
+                'LV-${_stringValue(item['leave_request_id']).padLeft(5, '0')}',
+            attachmentName: _stringValue(item['upload_file_name']),
+            personalInformationId: _stringValue(
+              item['personal_information_id'],
+            ),
+            proposedStartDate: _dateValue(item['proposed_start_date']),
+            proposedEndDate: _dateValue(item['proposed_end_date']),
+            detailFields: [
+              RequestDetailField(
+                label: 'Leave Type',
+                value: _stringValue(item['leave_type'], fallback: 'Leave'),
+              ),
+              RequestDetailField(
+                label: 'Facility',
+                value: _stringValue(
+                  item['working_station_name'],
+                  fallback: 'N/A',
+                ),
+              ),
+              RequestDetailField(
+                label: 'Department',
+                value: _stringValue(item['department_name'], fallback: 'N/A'),
+              ),
+              RequestDetailField(
+                label: 'Position',
+                value: _stringValue(
+                  item['post_category_name'],
+                  fallback: 'N/A',
+                ),
+              ),
+              RequestDetailField(
+                label: 'Phone',
+                value: _stringValue(item['phone_number'], fallback: 'N/A'),
+              ),
+            ],
+          ),
+        )
+        .toList();
+  }
+
+  Future<ApprovalTask> fetchLeaveApprovalDetail(
+    String personalInformationId,
+  ) async {
+    final response = await _get('/viewLeaveHistory/$personalInformationId');
+    final current = _extractMap(response.data, 'current');
+    if (current.isEmpty) {
+      throw Exception('Leave approval details are unavailable.');
+    }
+
+    final comments = _extractListByKey(response.data, 'comments')
+        .map(
+          (item) => ApprovalCommentRecord(
+            stage: _stringValue(item['leave_path_name'], fallback: 'Workflow'),
+            comment: _stringValue(item['comment'], fallback: 'No comment'),
+            reason: _stringValue(item['leave_reason_name']),
+            additionalComment: _stringValue(item['additional_comment']),
+          ),
+        )
+        .toList();
+
+    return ApprovalTask(
+      id: 'leave-approval-${_stringValue(current['leave_request_id'])}',
+      requestId: _stringValue(current['leave_request_id']),
+      type: ApproverRequestType.leave,
+      title:
+          '${_stringValue(current['leave_type'], fallback: 'Leave')} Approval',
+      subjectName: _buildFullName(
+        firstName: current['first_name'],
+        middleName: current['middle_name'],
+        lastName: current['last_name'],
+        surName: current['sur_name'],
+      ),
+      summary: [
+        _stringValue(current['working_station_name']),
+        _stringValue(current['department_name']),
+      ].where((value) => value.isNotEmpty).join(' • '),
+      status: _statusFromApi(current['status']),
+      submittedAt:
+          _dateValue(
+            current['proposed_start_date'],
+            fallback: _dateValue(current['start_date']),
+          ) ??
+          DateTime.now(),
+      referenceNumber:
+          'LV-${_stringValue(current['leave_request_id']).padLeft(5, '0')}',
+      attachmentName: _stringValue(current['upload_file_name']),
+      personalInformationId: _stringValue(current['personal_information_id']),
+      employmentStatusId: _stringValue(current['employement_status_id']),
+      numberOfDays: _intValue(current['number_of_days']),
+      parentStageId: _stringValue(current['parent_id']),
+      rawStatus: _stringValue(current['status']),
+      proposedStartDate: _dateValue(current['proposed_start_date']),
+      proposedEndDate: _dateValue(current['proposed_end_date']),
+      startDate: _dateValue(current['start_date']),
+      endDate: _dateValue(current['end_date']),
+      detailFields: [
+        RequestDetailField(
+          label: 'Leave Type',
+          value: _stringValue(current['leave_type'], fallback: 'Leave'),
+        ),
+        RequestDetailField(
+          label: 'Facility',
+          value: _stringValue(current['working_station_name'], fallback: 'N/A'),
+        ),
+        RequestDetailField(
+          label: 'Department',
+          value: _stringValue(current['department_name'], fallback: 'N/A'),
+        ),
+        RequestDetailField(
+          label: 'Position',
+          value: _stringValue(current['post_category_name'], fallback: 'N/A'),
+        ),
+        RequestDetailField(
+          label: 'Phone',
+          value: _stringValue(current['phone_no'], fallback: 'N/A'),
+        ),
+        RequestDetailField(
+          label: 'Requested Start',
+          value: _displayOptionalDate(
+            _dateValue(current['proposed_start_date']),
+          ),
+        ),
+        RequestDetailField(
+          label: 'Requested End',
+          value: _displayOptionalDate(_dateValue(current['proposed_end_date'])),
+        ),
+        RequestDetailField(
+          label: 'Workflow Status',
+          value: _stringValue(current['status'], fallback: 'Requested'),
+        ),
+      ],
+      commentHistory: comments,
+    );
+  }
+
+  Future<String> handleLeaveApproval({
+    required ApprovalTask task,
+    required ApproverAction action,
+    required String comment,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    late Response<dynamic> response;
+
+    switch (action) {
+      case ApproverAction.forward:
+        response = await _postJson(
+          '/leaveForward',
+          data: {'leave_request_id': task.requestId, 'comment': comment},
+        );
+      case ApproverAction.deny:
+        response = await _postJson(
+          '/denyLeave',
+          data: {'leave_request_id': task.requestId, 'comment': comment},
+        );
+      case ApproverAction.approve:
+        final resolvedStartDate =
+            startDate ?? task.startDate ?? task.proposedStartDate;
+        final resolvedEndDate = endDate ?? task.endDate ?? task.proposedEndDate;
+        if (resolvedStartDate == null || resolvedEndDate == null) {
+          throw Exception('Choose approved leave dates before continuing.');
+        }
+
+        final personalInformationId = task.personalInformationId?.trim() ?? '';
+        final employmentStatusId = task.employmentStatusId?.trim() ?? '';
+        if (personalInformationId.isEmpty || employmentStatusId.isEmpty) {
+          throw Exception('Leave approval details are incomplete.');
+        }
+
+        final days =
+            task.numberOfDays ??
+            resolvedEndDate.difference(resolvedStartDate).inDays + 1;
+
+        response = await _postJson(
+          '/approveLeave',
+          data: {
+            'leave_request_id': task.requestId,
+            'personal_information_id': personalInformationId,
+            'employement_status_id': employmentStatusId,
+            'number_of_days': '$days',
+            'comment': comment,
+            'start_date': _toSlashDate(resolvedStartDate),
+            'end_date': _toSlashDate(resolvedEndDate),
+          },
+        );
+    }
+
+    return _extractMessage(
+      response.data,
+      fallback: '${action.label} action completed.',
+    );
+  }
+
+  Future<List<ApprovalTask>> fetchTransferApprovalTasks() async {
+    final response = await _get('/viewStaffTransferToApprove');
+    final items = _extractList(response.data);
+
+    return items
+        .map(
+          (item) => ApprovalTask(
+            id: 'transfer-approval-${_stringValue(item['transfer_request_id'])}',
+            requestId: _stringValue(item['transfer_request_id']),
+            type: ApproverRequestType.transfer,
+            title: 'Transfer Approval',
+            subjectName: _buildFullName(
+              firstName: item['staff_first_name'],
+              middleName: item['staff_middle_name'],
+              lastName: item['staff_last_name'],
+              surName: item['staff_sur_name'],
+            ),
+            summary: [
+              _stringValue(item['transfer_from']),
+              _stringValue(item['transfer_to']),
+            ].where((value) => value.isNotEmpty).join(' → '),
+            status: _statusFromApi(item['status']),
+            submittedAt: DateTime.now(),
+            referenceNumber:
+                'TR-${_stringValue(item['transfer_request_id']).padLeft(5, '0')}',
+            attachmentName: _stringValue(item['upload_file_name']),
+            parentStageId: _stringValue(item['parent_id']),
+            rawStatus: _stringValue(item['status']),
+            detailFields: [
+              RequestDetailField(
+                label: 'Reason',
+                value: _stringValue(
+                  item['transfer_reason_name'],
+                  fallback: 'Transfer request',
+                ),
+              ),
+              RequestDetailField(
+                label: 'From',
+                value: _stringValue(item['transfer_from'], fallback: 'N/A'),
+              ),
+              RequestDetailField(
+                label: 'Department',
+                value: _stringValue(item['from_department'], fallback: 'N/A'),
+              ),
+              RequestDetailField(
+                label: 'To',
+                value: _stringValue(item['transfer_to'], fallback: 'N/A'),
+              ),
+              RequestDetailField(
+                label: 'Position',
+                value: _stringValue(
+                  item['post_category_name'],
+                  fallback: 'N/A',
+                ),
+              ),
+              RequestDetailField(
+                label: 'Requester Role',
+                value: _stringValue(item['requester_role'], fallback: 'N/A'),
+              ),
+              RequestDetailField(
+                label: 'Phone',
+                value: _stringValue(
+                  item['staff_phone_number'],
+                  fallback: 'N/A',
+                ),
+              ),
+            ],
+          ),
+        )
+        .toList();
+  }
+
+  Future<String> handleTransferApproval({
+    required ApprovalTask task,
+    required ApproverAction action,
+    required String comment,
+  }) async {
+    final path = switch (action) {
+      ApproverAction.forward => '/transferForwaed',
+      ApproverAction.approve => '/approveStaffTransfer',
+      ApproverAction.deny => '/denyStaffTransfer',
+    };
+
+    final response = await _postJson(
+      path,
+      data: {'transfer_request_id': task.requestId, 'comment': comment},
+    );
+
+    return _extractMessage(
+      response.data,
+      fallback: '${action.label} action completed.',
+    );
+  }
+
   Future<List<HomeTrainingItem>> fetchUpcomingTraining(UserModel user) async {
     if (user.personalInformationId.trim().isEmpty) {
       return buildMockTraining();
@@ -703,6 +1020,43 @@ class StaffRequestsRepository {
     return const [];
   }
 
+  List<Map<String, dynamic>> _extractListByKey(
+    dynamic responseData,
+    String key,
+  ) {
+    if (responseData is Map<String, dynamic>) {
+      return _extractList(responseData[key]);
+    }
+    if (responseData is Map) {
+      return _extractListByKey(
+        responseData.map((mapKey, value) => MapEntry(mapKey.toString(), value)),
+        key,
+      );
+    }
+    return const [];
+  }
+
+  Map<String, dynamic> _extractMap(dynamic responseData, String key) {
+    if (responseData is Map<String, dynamic>) {
+      final value = responseData[key];
+      if (value is Map<String, dynamic>) {
+        return value;
+      }
+      if (value is Map) {
+        return value.map((mapKey, mapValue) {
+          return MapEntry(mapKey.toString(), mapValue);
+        });
+      }
+    }
+    if (responseData is Map) {
+      return _extractMap(
+        responseData.map((mapKey, value) => MapEntry(mapKey.toString(), value)),
+        key,
+      );
+    }
+    return const {};
+  }
+
   StaffRequestStatus _statusFromApi(dynamic rawStatus) {
     final value = _stringValue(rawStatus).toUpperCase();
     switch (value) {
@@ -727,6 +1081,11 @@ class StaffRequestsRepository {
     return normalized.isEmpty ? fallback : normalized;
   }
 
+  int? _intValue(dynamic value) {
+    if (value == null) return null;
+    return int.tryParse(value.toString().trim());
+  }
+
   DateTime? _dateValue(dynamic value, {DateTime? fallback}) {
     if (value == null) return fallback;
     if (value is DateTime) return value;
@@ -746,6 +1105,10 @@ class StaffRequestsRepository {
 
   String _toApiDate(DateTime value) {
     return '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
+  }
+
+  String _toSlashDate(DateTime value) {
+    return '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year.toString().padLeft(4, '0')}';
   }
 
   String _displayDate(DateTime value) {
@@ -772,5 +1135,46 @@ class StaffRequestsRepository {
       return '${_displayDate(start)} - ${_displayDate(end)}';
     }
     return _displayDate(start ?? end!);
+  }
+
+  String _displayOptionalDate(DateTime? value) {
+    if (value == null) return 'Not scheduled';
+    return _displayDate(value);
+  }
+
+  String _buildFullName({
+    dynamic firstName,
+    dynamic middleName,
+    dynamic lastName,
+    dynamic surName,
+  }) {
+    return [
+      _stringValue(firstName),
+      _stringValue(middleName),
+      _stringValue(lastName),
+      _stringValue(surName),
+    ].where((value) => value.isNotEmpty).join(' ');
+  }
+
+  String _extractMessage(dynamic responseData, {required String fallback}) {
+    if (responseData is Map<String, dynamic>) {
+      final message = responseData['message'];
+      if (message is List && message.isNotEmpty) {
+        return message.first.toString();
+      }
+      if (message != null && message.toString().trim().isNotEmpty) {
+        return message.toString().trim();
+      }
+    }
+    if (responseData is Map) {
+      return _extractMessage(
+        responseData.map((key, value) => MapEntry(key.toString(), value)),
+        fallback: fallback,
+      );
+    }
+    if (responseData is String && responseData.trim().isNotEmpty) {
+      return responseData.trim();
+    }
+    return fallback;
   }
 }

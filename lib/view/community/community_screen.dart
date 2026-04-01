@@ -19,6 +19,7 @@ const _peerMuted = Color(0xFF667085);
 const _peerSoftBlue = Color(0xFFEAF2FF);
 const _peerSoftGreen = Color(0xFFE8FFF1);
 const _peerSoftOrange = Color(0xFFFFF1E6);
+const _qaToolbarHeight = 40.0;
 
 enum _CommunitySection {
   overview('Community'),
@@ -80,7 +81,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     final currentUser = ref.watch(
       authViewModelProvider.select((authState) => authState.user),
     );
-    final access = PeerExchangeAccess.fromUser(currentUser);
+    final portalAccess = ref.watch(staffPortalAccessProvider);
+    final access = PeerExchangeAccess.fromUser(
+      currentUser,
+      isApproverOverride: portalAccess.hasApproverMode,
+    );
     final currentUserName = currentUser?.fullName.trim() ?? '';
     final directConversations = state.conversations
         .where((conversation) => !conversation.isGroup)
@@ -196,29 +201,20 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
     if (isQuestionSection) {
       return SizedBox(
-        height: 46,
+        height: 44,
         child: Stack(
           alignment: Alignment.center,
           children: [
             Align(
               alignment: Alignment.centerLeft,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
+              child: _QuestionHeaderIconButton(
                 onTap: () =>
                     setState(() => _section = _CommunitySection.overview),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 2, vertical: 8),
-                  child: Icon(
-                    Icons.chevron_left_rounded,
-                    color: _peerText,
-                    size: 28,
-                  ),
-                ),
               ),
             ),
             Text(
               title,
-              style: _textStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              style: _textStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
             Align(
               alignment: Alignment.centerRight,
@@ -263,7 +259,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     final isQuestionSection = _section == _CommunitySection.questions;
     final searchField = Expanded(
       child: Container(
-        height: isQuestionSection ? 44 : 46,
+        height: isQuestionSection ? _qaToolbarHeight : 46,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(isQuestionSection ? 12 : 14),
@@ -335,6 +331,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
               size: 18,
             ),
             onTap: () => _showQuestionFiltersSheet(state),
+            size: _qaToolbarHeight,
           ),
           const SizedBox(width: 8),
           _SquareIconButton(
@@ -345,6 +342,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
               size: 18,
             ),
             onTap: _pickQuestionDate,
+            size: _qaToolbarHeight,
           ),
         ],
       );
@@ -432,7 +430,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
           child: state.groups.isEmpty
               ? _EmptyStateCard(
                   title: 'No groups available',
-                  subtitle: access.canCreateGroups
+                  subtitle: _canCreateGroups(access)
                       ? 'Create a group.'
                       : 'No groups yet.',
                 )
@@ -465,7 +463,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
           child: state.topics.isEmpty
               ? _EmptyStateCard(
                   title: 'No topics published',
-                  subtitle: access.canCreateTopics
+                  subtitle: _canCreateTopics(access)
                       ? 'Create a topic.'
                       : 'No topics yet.',
                 )
@@ -763,7 +761,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     if (state.topics.isEmpty) {
       return _EmptyStateCard(
         title: 'No topics yet',
-        subtitle: access.canCreateTopics
+        subtitle: _canCreateTopics(access)
             ? 'Create the first topic.'
             : 'Topics will show here when shared.',
       );
@@ -788,7 +786,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     if (groups.isEmpty) {
       return _EmptyStateCard(
         title: 'No groups yet',
-        subtitle: access.canCreateGroups
+        subtitle: _canCreateGroups(access)
             ? 'Create the first group.'
             : 'Groups will appear here when shared with you.',
       );
@@ -937,7 +935,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         borderRadius: BorderRadius.circular(16),
         onTap: () => _openQuestion(question),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
@@ -945,8 +943,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             boxShadow: [
               BoxShadow(
                 color: const Color(0xFF101828).withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
+                blurRadius: 8,
+                offset: const Offset(0, 1),
               ),
             ],
           ),
@@ -975,12 +973,12 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                   Expanded(
                     child: Text(
                       question.content,
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: _textStyle(
-                        fontSize: 15,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w800,
-                        height: 1.35,
+                        height: 1.4,
                       ),
                     ),
                   ),
@@ -999,9 +997,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                     ),
                 ],
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
               const Divider(height: 1, color: _peerBorder),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1038,26 +1036,27 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                       ),
                     ),
                   ),
-                  Expanded(
-                    child: _QuestionInfoColumn(
-                      label: 'Replies',
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 18,
-                            color: _peerMuted,
+                  const SizedBox(width: 16),
+                  _QuestionInfoColumn(
+                    label: 'Replies',
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.chat_bubble_outline_rounded,
+                          size: 18,
+                          color: _peerMuted,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${question.commentsCount}',
+                          style: _textStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
                           ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${question.commentsCount}',
-                            style: _textStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -1249,7 +1248,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   PeerExchangeAccess _currentAccess() {
     final user = ref.read(authViewModelProvider).user;
-    return PeerExchangeAccess.fromUser(user);
+    final portalAccess = ref.read(staffPortalAccessProvider);
+    return PeerExchangeAccess.fromUser(
+      user,
+      isApproverOverride: portalAccess.hasApproverMode,
+    );
   }
 
   bool _canPerformPrimaryAction(PeerExchangeAccess access) {
@@ -1259,12 +1262,20 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
       case _CommunitySection.inbox:
         return access.canStartDirectChats;
       case _CommunitySection.groups:
-        return access.canCreateGroups;
+        return _canCreateGroups(access);
       case _CommunitySection.questions:
         return access.canAskQuestions;
       case _CommunitySection.topics:
-        return access.canCreateTopics;
+        return _canCreateTopics(access);
     }
+  }
+
+  bool _canCreateGroups(PeerExchangeAccess access) {
+    return access.isPrivileged && access.canCreateGroups;
+  }
+
+  bool _canCreateTopics(PeerExchangeAccess access) {
+    return access.isPrivileged && access.canCreateTopics;
   }
 
   bool _canManageGroup(PeerExchangeAccess access, PeerConversation group) {
@@ -1462,7 +1473,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         await _showCreateConversationSheet();
         return;
       case _CommunitySection.groups:
-        if (!access.canCreateGroups) {
+        if (!_canCreateGroups(access)) {
           _showMessage(
             'Only approvers, moderators, and HR admins can create closed groups.',
             error: true,
@@ -1482,7 +1493,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         await _showCreateQuestionSheet(state);
         return;
       case _CommunitySection.topics:
-        if (!access.canCreateTopics) {
+        if (!_canCreateTopics(access)) {
           _showMessage(
             'Only approvers, moderators, and HR admins can create moderated topics.',
             error: true,
@@ -1527,7 +1538,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             _showCreateQuestionSheet(ref.read(peerExchangeViewModelProvider));
           },
         ),
-      if (access.canCreateTopics)
+      if (_canCreateTopics(access))
         _ActionTile(
           title: 'Create a topic',
           subtitle: 'Open a structured discussion for your team.',
@@ -1536,7 +1547,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             _showCreateTopicSheet();
           },
         ),
-      if (access.canCreateGroups)
+      if (_canCreateGroups(access))
         _ActionTile(
           title: 'Create a group',
           subtitle: 'Set up a shared room for a team or activity.',
@@ -2242,7 +2253,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   Future<void> _showCreateTopicSheet() async {
     final access = _currentAccess();
-    if (!access.canCreateTopics) {
+    if (!_canCreateTopics(access)) {
       _showMessage(
         'Only approvers, moderators, and HR admins can create topics.',
         error: true,
@@ -2334,7 +2345,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   Future<void> _showCreateGroupSheet() async {
     final access = _currentAccess();
-    if (!access.canCreateGroups) {
+    if (!_canCreateGroups(access)) {
       _showMessage(
         'Only approvers, moderators, and HR admins can create groups.',
         error: true,
@@ -3583,6 +3594,19 @@ class _ConversationDetailScreenState
     super.dispose();
   }
 
+  PeerExchangeAccess _currentAccess() {
+    final user = ref.read(authViewModelProvider).user;
+    final portalAccess = ref.read(staffPortalAccessProvider);
+    return PeerExchangeAccess.fromUser(
+      user,
+      isApproverOverride: portalAccess.hasApproverMode,
+    );
+  }
+
+  bool _canManageGroupMembers(PeerExchangeAccess access, int? createdBy) {
+    return access.isPrivileged && access.canManageGroupMembers(createdBy);
+  }
+
   Future<void> _loadConversation() async {
     setState(() {
       _isLoading = true;
@@ -3851,10 +3875,9 @@ class _ConversationDetailScreenState
   }
 
   Future<void> _showMembersSheet() async {
-    final access = PeerExchangeAccess.fromUser(
-      ref.read(authViewModelProvider).user,
-    );
-    final canManageMembers = access.canManageGroupMembers(
+    final access = _currentAccess();
+    final canManageMembers = _canManageGroupMembers(
+      access,
       _conversation?.createdBy,
     );
 
@@ -4022,13 +4045,11 @@ class _ConversationDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    final currentUser = ref.watch(
-      authViewModelProvider.select((state) => state.user),
-    );
     final currentUserId = ref.watch(
       authViewModelProvider.select((state) => state.user?.userId ?? ''),
     );
-    final access = PeerExchangeAccess.fromUser(currentUser);
+    ref.watch(staffPortalAccessProvider);
+    final access = _currentAccess();
 
     return Scaffold(
       backgroundColor: _peerBackground,
@@ -4055,7 +4076,7 @@ class _ConversationDetailScreenState
             TextButton(
               onPressed: _showMembersSheet,
               child: Text(
-                access.canManageGroupMembers(_conversation?.createdBy)
+                _canManageGroupMembers(access, _conversation?.createdBy)
                     ? 'Members'
                     : 'Info',
                 style: _textStyle(
@@ -4182,23 +4203,25 @@ class _SquareIconButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     this.isActive = false,
+    this.size = 46,
   });
 
   final Widget icon;
   final VoidCallback onTap;
   final bool isActive;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        height: 46,
-        width: 46,
+        height: size,
+        width: size,
         decoration: BoxDecoration(
           color: isActive ? _peerPrimary.withValues(alpha: 0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isActive
                 ? _peerPrimary.withValues(alpha: 0.24)
@@ -4207,6 +4230,25 @@ class _SquareIconButton extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: icon,
+      ),
+    );
+  }
+}
+
+class _QuestionHeaderIconButton extends StatelessWidget {
+  const _QuestionHeaderIconButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: const SizedBox(
+        width: 38,
+        height: 38,
+        child: Icon(Icons.chevron_left_rounded, color: _peerText, size: 28),
       ),
     );
   }
@@ -4221,22 +4263,23 @@ class _HeaderActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 42,
+      height: 36,
       child: ElevatedButton(
         onPressed: onTap,
         style: ElevatedButton.styleFrom(
           backgroundColor: _peerPrimary,
           foregroundColor: Colors.white,
           elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 13),
+          minimumSize: const Size(88, 36),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
         ),
         child: Text(
           label,
           style: _textStyle(
-            fontSize: 13,
+            fontSize: 12,
             fontWeight: FontWeight.w700,
             color: Colors.white,
           ),
@@ -4255,7 +4298,7 @@ class _QuestionSearchSuffix extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(right: 10),
+      padding: const EdgeInsets.only(right: 8),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -4271,7 +4314,7 @@ class _QuestionSearchSuffix extends StatelessWidget {
             const SizedBox(width: 8),
           ],
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
             decoration: BoxDecoration(
               color: const Color(0xFFF2F4F7),
               borderRadius: BorderRadius.circular(6),
@@ -4451,18 +4494,23 @@ class _InfoColumn extends StatelessWidget {
 }
 
 class _QuestionInfoColumn extends StatelessWidget {
-  const _QuestionInfoColumn({required this.label, required this.child});
+  const _QuestionInfoColumn({
+    required this.label,
+    required this.child,
+    this.crossAxisAlignment = CrossAxisAlignment.start,
+  });
 
   final String label;
   final Widget child;
+  final CrossAxisAlignment crossAxisAlignment;
 
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: crossAxisAlignment,
       children: [
         Text(label, style: _textStyle(fontSize: 12, color: _peerMuted)),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         child,
       ],
     );
@@ -4822,7 +4870,9 @@ class _DropdownField<T> extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<T>(
+          key: ValueKey('$label::$value'),
           initialValue: value,
+          isExpanded: true,
           items: items,
           onChanged: onChanged,
           decoration: InputDecoration(

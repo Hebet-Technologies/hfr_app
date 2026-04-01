@@ -101,6 +101,7 @@ class PeerExchangeRepository {
         'description': description,
         'member_ids': memberIds.isEmpty ? null : memberIds,
       }),
+      listFormat: ListFormat.multiCompatible,
     );
 
     return PeerConversation.fromJson(
@@ -347,6 +348,7 @@ class PeerExchangeRepository {
     final workingStationId = prefs.getString('working_station_id') ?? '';
     final currentUserId = prefs.getString('user_id') ?? '';
     final paths = <String>[
+      '/userAccounts',
       '/getAllSectionStaff',
       if (workingStationId.trim().isNotEmpty)
         '/getAllEmployee/$workingStationId',
@@ -423,11 +425,12 @@ class PeerExchangeRepository {
   Future<Response<dynamic>> _postForm(
     String path, {
     required Map<String, dynamic> data,
+    ListFormat listFormat = ListFormat.multi,
   }) async {
     try {
       return await _dio.post(
         path,
-        data: FormData.fromMap(data),
+        data: FormData.fromMap(data, listFormat),
         options: await _authorizedOptions(
           extraHeaders: const {'Content-Type': 'multipart/form-data'},
         ),

@@ -331,7 +331,9 @@ class _VerifyPersonalInfoScreenState
                     label: 'Approval Path',
                     margin: EdgeInsets.zero,
                     child: DropdownButtonFormField<String>(
+                      key: ValueKey('approval-path::$_selectedPathId'),
                       initialValue: _selectedPathId,
+                      isExpanded: true,
                       style: authTextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'home/home_tab.dart';
 import 'requests/requests_screen.dart';
@@ -7,14 +8,14 @@ import 'community/community_screen.dart';
 import 'profile/profile_screen.dart';
 import '../widget/app_svg_icon.dart';
 
-class MainNavigation extends StatefulWidget {
+class MainNavigation extends ConsumerStatefulWidget {
   const MainNavigation({super.key});
 
   @override
-  State<MainNavigation> createState() => _MainNavigationState();
+  ConsumerState<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends State<MainNavigation> {
+class _MainNavigationState extends ConsumerState<MainNavigation> {
   static const _accentColor = Color(0xFF1F6BFF);
   static const _mutedColor = Color(0xFF98A2B3);
 

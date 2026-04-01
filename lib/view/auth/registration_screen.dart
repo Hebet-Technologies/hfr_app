@@ -494,7 +494,9 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen> {
                         authLabeledField(
                           label: 'Reporting Chain Starting Point',
                           child: DropdownButtonFormField<String>(
+                            key: ValueKey('reporting-path::$_selectedPathId'),
                             initialValue: _selectedPathId,
+                            isExpanded: true,
                             style: authTextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.w700,

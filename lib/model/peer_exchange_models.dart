@@ -84,13 +84,15 @@ class PeerDirectoryPerson {
         json['designation'] ??
             json['job_title'] ??
             json['cadre_name'] ??
+            json['role_name'] ??
             json['role'] ??
             json['position'],
       ),
       workingStationName: _asString(
         json['working_station_name'] ??
             json['facility_name'] ??
-            json['department_name'],
+            json['department_name'] ??
+            json['address'],
       ),
     );
   }

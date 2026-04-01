@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../model/staff_portal_access.dart';
 import '../model/staff_request_models.dart';
 import '../model/user_model.dart';
 import '../repository/auth_repository.dart';
@@ -21,6 +22,8 @@ class StaffRequestsState {
     this.transferReasons = const [],
     this.facilities = const [],
     this.departmentsByFacilityId = const {},
+    this.leaveApprovalTasks = const [],
+    this.transferApprovalTasks = const [],
     this.leaveBalanceDays = 18,
   });
 
@@ -35,6 +38,8 @@ class StaffRequestsState {
   final List<RequestLookupOption> transferReasons;
   final List<RequestLookupOption> facilities;
   final Map<String, List<RequestLookupOption>> departmentsByFacilityId;
+  final List<ApprovalTask> leaveApprovalTasks;
+  final List<ApprovalTask> transferApprovalTasks;
   final int leaveBalanceDays;
 
   List<StaffRequestRecord> recordsFor(StaffRequestType type) {
@@ -45,6 +50,17 @@ class StaffRequestsState {
 
   int get pendingCount =>
       records.where((record) => record.status.isOpen).length;
+
+  int get totalApprovalCount =>
+      leaveApprovalTasks.length + transferApprovalTasks.length;
+
+  List<ApprovalTask> get recentApprovalTasks {
+    final sorted = [
+      ...leaveApprovalTasks,
+      ...transferApprovalTasks,
+    ]..sort((first, second) => second.submittedAt.compareTo(first.submittedAt));
+    return sorted.take(4).toList();
+  }
 
   int get activityCountThisMonth {
     final now = DateTime.now();
@@ -77,6 +93,8 @@ class StaffRequestsState {
     List<RequestLookupOption>? transferReasons,
     List<RequestLookupOption>? facilities,
     Map<String, List<RequestLookupOption>>? departmentsByFacilityId,
+    List<ApprovalTask>? leaveApprovalTasks,
+    List<ApprovalTask>? transferApprovalTasks,
     int? leaveBalanceDays,
   }) {
     return StaffRequestsState(
@@ -94,6 +112,9 @@ class StaffRequestsState {
       facilities: facilities ?? this.facilities,
       departmentsByFacilityId:
           departmentsByFacilityId ?? this.departmentsByFacilityId,
+      leaveApprovalTasks: leaveApprovalTasks ?? this.leaveApprovalTasks,
+      transferApprovalTasks:
+          transferApprovalTasks ?? this.transferApprovalTasks,
       leaveBalanceDays: leaveBalanceDays ?? this.leaveBalanceDays,
     );
   }
@@ -103,6 +124,7 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
   late StaffRequestsRepository _repository;
   late AuthRepository _authRepository;
   UserModel? _currentUser;
+  late StaffPortalAccess _currentAccess;
 
   @override
   StaffRequestsState build() {
@@ -110,6 +132,10 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     _authRepository = ref.watch(authRepositoryProvider);
     final authState = ref.watch(authViewModelProvider);
     _currentUser = authState.user;
+    _currentAccess = StaffPortalAccess.fromUser(
+      authState.user,
+      preferredMode: authState.activePortalMode,
+    );
     Future<void>.microtask(load);
     return const StaffRequestsState();
   }
@@ -138,6 +164,8 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     List<RequestLookupOption> facilities = mockDirectory.facilities;
     Map<String, List<RequestLookupOption>> departmentsByFacilityId =
         mockDirectory.departmentsByFacilityId;
+    List<ApprovalTask> leaveApprovalTasks = const [];
+    List<ApprovalTask> transferApprovalTasks = const [];
     String? errorMessage;
 
     if (user != null) {
@@ -172,6 +200,17 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
         facilities = directory.facilities;
         departmentsByFacilityId = directory.departmentsByFacilityId;
       } catch (_) {}
+
+      if (_currentAccess.hasApproverMode) {
+        try {
+          leaveApprovalTasks = await _repository.fetchLeaveApprovalTasks();
+        } catch (_) {}
+
+        try {
+          transferApprovalTasks = await _repository
+              .fetchTransferApprovalTasks();
+        } catch (_) {}
+      }
     }
 
     final records = <StaffRequestRecord>[
@@ -203,6 +242,8 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
       transferReasons: transferReasons,
       facilities: facilities,
       departmentsByFacilityId: departmentsByFacilityId,
+      leaveApprovalTasks: leaveApprovalTasks,
+      transferApprovalTasks: transferApprovalTasks,
     );
   }
 
@@ -268,12 +309,111 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     return record;
   }
 
+  Future<StaffRequestRecord> withdrawRequest(StaffRequestRecord request) async {
+    if (!request.status.isOpen) return request;
+
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+
+    final updated = request.copyWith(
+      status: StaffRequestStatus.withdrawn,
+      stageLabel: 'Withdrawn',
+      detailFields: _replaceStatusField(
+        request.detailFields,
+        StaffRequestStatus.withdrawn,
+      ),
+    );
+
+    _replaceRecord(updated);
+    state = state.copyWith(isSubmitting: false);
+    return updated;
+  }
+
+  Future<ApprovalTask> loadApprovalTaskDetail(ApprovalTask task) async {
+    if (task.type == ApproverRequestType.leave) {
+      final personalInformationId = task.personalInformationId?.trim() ?? '';
+      if (personalInformationId.isEmpty) {
+        throw Exception('Leave approval details are unavailable.');
+      }
+      return _repository.fetchLeaveApprovalDetail(personalInformationId);
+    }
+    return task;
+  }
+
+  Future<String> performApprovalAction({
+    required ApprovalTask task,
+    required ApproverAction action,
+    required String comment,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+
+    try {
+      final message = switch (task.type) {
+        ApproverRequestType.leave => await _repository.handleLeaveApproval(
+          task: task,
+          action: action,
+          comment: comment,
+          startDate: startDate,
+          endDate: endDate,
+        ),
+        ApproverRequestType.transfer =>
+          await _repository.handleTransferApproval(
+            task: task,
+            action: action,
+            comment: comment,
+          ),
+      };
+
+      await load();
+      state = state.copyWith(isSubmitting: false);
+      return message;
+    } catch (error) {
+      final message = error.toString().replaceAll('Exception: ', '');
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
   void _prependRecord(StaffRequestRecord record) {
     final updated = [
       record,
       ...state.records,
     ]..sort((first, second) => second.submittedAt.compareTo(first.submittedAt));
     state = state.copyWith(records: updated);
+  }
+
+  void _replaceRecord(StaffRequestRecord record) {
+    final updated =
+        state.records
+            .map((item) => item.id == record.id ? record : item)
+            .toList()
+          ..sort(
+            (first, second) => second.submittedAt.compareTo(first.submittedAt),
+          );
+    state = state.copyWith(records: updated);
+  }
+
+  List<RequestDetailField> _replaceStatusField(
+    List<RequestDetailField> fields,
+    StaffRequestStatus status,
+  ) {
+    final statusField = RequestDetailField(
+      label: 'Status',
+      value: status.label,
+      status: status,
+    );
+
+    if (fields.any((field) => field.label.toLowerCase() == 'status')) {
+      return fields
+          .map(
+            (field) =>
+                field.label.toLowerCase() == 'status' ? statusField : field,
+          )
+          .toList();
+    }
+
+    return [...fields, statusField];
   }
 
   StaffRequestRecord _mockLeaveRecord(LeaveRequestDraft draft) {

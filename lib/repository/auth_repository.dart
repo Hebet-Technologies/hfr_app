@@ -6,11 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../data/network/api_service.dart';
 import '../data/network/network_api_service.dart';
 import '../model/profile_details.dart';
+import '../model/staff_portal_access.dart';
 import '../model/user_model.dart';
 import '../model/registration_model.dart';
 import '../utils/api_call.dart';
 
 class AuthRepository {
+  static const _activePortalModeKey = 'active_portal_mode';
+
   final ApiService _apiService;
   final Dio _authorizedDio = Dio(
     BaseOptions(
@@ -130,6 +133,20 @@ class AuthRepository {
 
   Future<void> persistUser(UserModel user) async {
     await _saveUserData(user);
+  }
+
+  Future<void> persistActivePortalMode(StaffPortalMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_activePortalModeKey, mode.storageValue);
+  }
+
+  Future<StaffPortalMode> getSavedActivePortalMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final value = prefs.getString(_activePortalModeKey)?.trim();
+    if (value == StaffPortalMode.approver.storageValue) {
+      return StaffPortalMode.approver;
+    }
+    return StaffPortalMode.employee;
   }
 
   Future<UserModel?> getSavedUser() async {

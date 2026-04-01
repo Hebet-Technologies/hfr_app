@@ -197,3 +197,120 @@ class TrainingProgram {
     );
   }
 }
+
+class TrainingApprovalRecord {
+  const TrainingApprovalRecord({
+    required this.id,
+    required this.trainingApplicationId,
+    required this.trainingAppStatusId,
+    required this.title,
+    required this.applicantName,
+    required this.applicantPhone,
+    required this.applicantEmail,
+    required this.applicantGender,
+    required this.vendorName,
+    required this.cadreName,
+    required this.instituteName,
+    required this.educationLevelName,
+    required this.batchYear,
+    required this.workingStationName,
+    required this.rawStatus,
+    this.startDate,
+    this.endDate,
+    this.resources = const [],
+    this.isLive = false,
+  });
+
+  final String id;
+  final String trainingApplicationId;
+  final String trainingAppStatusId;
+  final String title;
+  final String applicantName;
+  final String applicantPhone;
+  final String applicantEmail;
+  final String applicantGender;
+  final String vendorName;
+  final String cadreName;
+  final String instituteName;
+  final String educationLevelName;
+  final String batchYear;
+  final String workingStationName;
+  final String rawStatus;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final List<TrainingResource> resources;
+  final bool isLive;
+
+  TrainingParticipationStatus get status =>
+      TrainingParticipationStatusX.fromRaw(rawStatus);
+
+  String get workflowLabel {
+    switch (rawStatus.trim().toUpperCase()) {
+      case 'REQUESTED':
+        return 'Pending Review';
+      case 'FORWARDED':
+        return 'Forwarded for Approval';
+      case 'AWAITING_TRAINING_CONTRACT':
+        return 'Approved for Contract';
+      case 'AWAITING_TRAINING_CONTRACT_APPROVAL':
+        return 'Awaiting Contract Approval';
+      case 'TRAINING_CONTRACT_APPROVED':
+        return 'Contract Approved';
+      default:
+        final normalized = rawStatus.trim();
+        if (normalized.isEmpty) return 'Pending Review';
+        return normalized
+            .split('_')
+            .map((part) {
+              if (part.isEmpty) return part;
+              return '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}';
+            })
+            .join(' ');
+    }
+  }
+
+  TrainingApprovalRecord copyWith({
+    String? id,
+    String? trainingApplicationId,
+    String? trainingAppStatusId,
+    String? title,
+    String? applicantName,
+    String? applicantPhone,
+    String? applicantEmail,
+    String? applicantGender,
+    String? vendorName,
+    String? cadreName,
+    String? instituteName,
+    String? educationLevelName,
+    String? batchYear,
+    String? workingStationName,
+    String? rawStatus,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<TrainingResource>? resources,
+    bool? isLive,
+  }) {
+    return TrainingApprovalRecord(
+      id: id ?? this.id,
+      trainingApplicationId:
+          trainingApplicationId ?? this.trainingApplicationId,
+      trainingAppStatusId: trainingAppStatusId ?? this.trainingAppStatusId,
+      title: title ?? this.title,
+      applicantName: applicantName ?? this.applicantName,
+      applicantPhone: applicantPhone ?? this.applicantPhone,
+      applicantEmail: applicantEmail ?? this.applicantEmail,
+      applicantGender: applicantGender ?? this.applicantGender,
+      vendorName: vendorName ?? this.vendorName,
+      cadreName: cadreName ?? this.cadreName,
+      instituteName: instituteName ?? this.instituteName,
+      educationLevelName: educationLevelName ?? this.educationLevelName,
+      batchYear: batchYear ?? this.batchYear,
+      workingStationName: workingStationName ?? this.workingStationName,
+      rawStatus: rawStatus ?? this.rawStatus,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      resources: resources ?? this.resources,
+      isLive: isLive ?? this.isLive,
+    );
+  }
+}
