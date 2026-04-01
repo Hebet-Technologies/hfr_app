@@ -50,6 +50,27 @@ class Validators {
     return null;
   }
 
+  static String? validateStrongPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Password is required';
+    }
+
+    if (value.length < 8) {
+      return 'Password must be at least 8 characters';
+    }
+
+    final hasUpperCase = RegExp(r'[A-Z]').hasMatch(value);
+    final hasLowerCase = RegExp(r'[a-z]').hasMatch(value);
+    final hasNumber = RegExp(r'\d').hasMatch(value);
+    final hasSpecialCharacter = RegExp(r'[^\w\s]').hasMatch(value);
+
+    if (!hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecialCharacter) {
+      return 'Use uppercase, lowercase, number, and special character';
+    }
+
+    return null;
+  }
+
   static String? validateRequired(String? value) {
     if (value == null || value.isEmpty) {
       return 'This field is required';

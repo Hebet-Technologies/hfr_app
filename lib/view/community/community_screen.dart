@@ -4636,14 +4636,22 @@ class _BottomSheetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.all(Radius.circular(28)),
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.86;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.all(Radius.circular(28)),
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+          child: child,
+        ),
       ),
-      child: child,
     );
   }
 }

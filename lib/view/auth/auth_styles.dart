@@ -7,7 +7,6 @@ const authTextSecondary = Color(0xFF7C7C7C);
 const authBorder = Color(0xFFE7E7E7);
 const authDivider = Color(0xFFF1F1F1);
 const authIconColor = Color(0xFFB3B3B3);
-const authBadgeBackground = Color(0xFFF8F8F8);
 
 TextStyle authTextStyle({
   required double fontSize,
@@ -23,24 +22,11 @@ TextStyle authTextStyle({
   );
 }
 
-Widget authBrandBadge({double size = 96}) {
-  return Container(
-    width: size,
-    height: size,
-    padding: const EdgeInsets.all(10),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(28),
-      border: Border.all(color: authDivider),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x14000000),
-          blurRadius: 18,
-          offset: Offset(0, 8),
-        ),
-      ],
-    ),
-    child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
+Widget authBrandImage({double width = 112}) {
+  return Image.asset(
+    'assets/images/logo.png',
+    width: width,
+    fit: BoxFit.contain,
   );
 }
 
@@ -51,7 +37,7 @@ Widget authHeaderSection({
 }) {
   return Column(
     children: [
-      Center(child: authBrandBadge()),
+      Center(child: authBrandImage()),
       const SizedBox(height: 22),
       Text(
         title,

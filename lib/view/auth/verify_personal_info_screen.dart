@@ -213,7 +213,6 @@ class _VerifyPersonalInfoScreenState
               children: [
                 const SizedBox(height: 20),
                 authHeaderSection(
-                  icon: Icons.verified_user_outlined,
                   title: 'Verify your identity',
                   subtitle:
                       'Enter your payroll number and date of birth to verify.',
