@@ -87,82 +87,100 @@ class StaffRequestsRepository {
 
   Future<List<StaffRequestRecord>> fetchTransferRequests(UserModel user) async {
     final response = await _get('/viewStaffTransferSequence');
-    final items = _extractList(response.data);
+    final items = _extractTransferSequenceList(response.data);
 
-    return items
-        .map(
-          (item) => StaffRequestRecord(
-            id: 'transfer-${_stringValue(item['transfer_request_id'])}',
-            type: StaffRequestType.transfer,
-            title:
-                '${_stringValue(item['transfer_reason_name'], fallback: 'Transfer')} Request',
-            summary: [
-              _stringValue(item['transfer_from']),
-              _stringValue(item['transfer_to']),
-            ].where((value) => value.isNotEmpty).join(' → '),
-            status: _statusFromApi(item['status']),
-            submittedAt: _dateValue(item['created_at']) ?? DateTime.now(),
-            referenceNumber:
-                'TR-${_stringValue(item['transfer_request_id']).padLeft(5, '0')}',
-            location: _stringValue(item['transfer_to']),
-            attachmentName: _stringValue(item['upload_file_name']),
-            isLive: true,
-            detailFields: [
-              RequestDetailField(
-                label: 'Reason',
-                value: _stringValue(
-                  item['transfer_reason_name'],
-                  fallback: 'Transfer request',
-                ),
-              ),
-              RequestDetailField(
-                label: 'From',
-                value: _stringValue(
-                  item['transfer_from'],
-                  fallback: user.workingStationName,
-                ),
-              ),
-              RequestDetailField(
-                label: 'From Department',
-                value: _stringValue(item['from_department'], fallback: 'N/A'),
-              ),
-              RequestDetailField(
-                label: 'To',
-                value: _stringValue(item['transfer_to'], fallback: 'N/A'),
-              ),
-              RequestDetailField(
-                label: 'To Department',
-                value: _stringValue(item['to_department'], fallback: 'N/A'),
-              ),
-              RequestDetailField(
-                label: 'Cadre',
-                value: _stringValue(
-                  item['post_category_name'],
-                  fallback: 'General',
-                ),
-              ),
-              RequestDetailField(
-                label: 'Transfer Notes',
-                value: _stringValue(
-                  item['request_from'],
-                  fallback: 'Not provided',
-                ),
-              ),
-              RequestDetailField(
-                label: 'Preferred Transfer Date',
-                value: _displayOptionalDate(
-                  _dateValue(item['preferred_transfer_date']),
-                ),
-              ),
-              RequestDetailField(
-                label: 'Status',
-                value: _statusFromApi(item['status']).label,
-                status: _statusFromApi(item['status']),
-              ),
-            ],
+    return items.map((item) {
+      final transferFrom = _stringValue(
+        item['transfer_from'],
+        fallback: user.workingStationName,
+      );
+      final transferTo = _stringValue(
+        item['transfer_to'],
+        fallback: _stringValue(item['working_station_name']),
+      );
+      final fromDepartment = _stringValue(item['from_department']);
+      final toDepartment = _stringValue(
+        item['to_department'],
+        fallback: _stringValue(item['department_name']),
+      );
+      final summary = [
+        transferFrom,
+        transferTo,
+      ].where((value) => value.isNotEmpty).join(' → ');
+
+      return StaffRequestRecord(
+        id: 'transfer-${_stringValue(item['transfer_request_id'])}',
+        type: StaffRequestType.transfer,
+        title:
+            '${_stringValue(item['transfer_reason_name'], fallback: 'Transfer')} Request',
+        summary: summary.isEmpty
+            ? _stringValue(
+                item['transfer_reason_name'],
+                fallback: 'Transfer request',
+              )
+            : summary,
+        status: _statusFromApi(item['status']),
+        submittedAt:
+            _dateValue(
+              item['created_at'],
+              fallback: _dateValue(item['preferred_transfer_date']),
+            ) ??
+            DateTime.now(),
+        referenceNumber:
+            'TR-${_stringValue(item['transfer_request_id']).padLeft(5, '0')}',
+        location: transferTo,
+        attachmentName: _stringValue(item['upload_file_name']),
+        stageLabel: _stringValue(item['transfer_path_name']),
+        isLive: true,
+        detailFields: [
+          RequestDetailField(
+            label: 'Reason',
+            value: _stringValue(
+              item['transfer_reason_name'],
+              fallback: 'Transfer request',
+            ),
           ),
-        )
-        .toList();
+          RequestDetailField(
+            label: 'From',
+            value: transferFrom.isEmpty ? 'N/A' : transferFrom,
+          ),
+          RequestDetailField(
+            label: 'From Department',
+            value: fromDepartment.isEmpty ? 'N/A' : fromDepartment,
+          ),
+          RequestDetailField(
+            label: 'To',
+            value: transferTo.isEmpty ? 'N/A' : transferTo,
+          ),
+          RequestDetailField(
+            label: 'To Department',
+            value: toDepartment.isEmpty ? 'N/A' : toDepartment,
+          ),
+          RequestDetailField(
+            label: 'Cadre',
+            value: _stringValue(
+              item['post_category_name'],
+              fallback: 'General',
+            ),
+          ),
+          RequestDetailField(
+            label: 'Transfer Notes',
+            value: _stringValue(item['request_from'], fallback: 'Not provided'),
+          ),
+          RequestDetailField(
+            label: 'Preferred Transfer Date',
+            value: _displayOptionalDate(
+              _dateValue(item['preferred_transfer_date']),
+            ),
+          ),
+          RequestDetailField(
+            label: 'Status',
+            value: _statusFromApi(item['status']).label,
+            status: _statusFromApi(item['status']),
+          ),
+        ],
+      );
+    }).toList();
   }
 
   Future<List<ApprovalTask>> fetchLeaveApprovalTasks() async {
@@ -1055,6 +1073,22 @@ class StaffRequestsRepository {
           .toList();
     }
     return const [];
+  }
+
+  List<Map<String, dynamic>> _extractTransferSequenceList(
+    dynamic responseData,
+  ) {
+    final data = _extractList(responseData);
+    if (data.isNotEmpty) {
+      return data;
+    }
+
+    final request = _extractListByKey(responseData, 'request');
+    if (request.isNotEmpty) {
+      return request;
+    }
+
+    return _extractListByKey(responseData, 'transfer');
   }
 
   List<Map<String, dynamic>> _extractListByKey(
