@@ -400,6 +400,11 @@ class StaffRequestsRepository {
         );
     }
 
+    _ensureSuccessfulStatus(
+      response.data,
+      fallback: 'Leave approval action failed.',
+    );
+
     return _extractMessage(
       response.data,
       fallback: '${action.label} action completed.',
@@ -511,6 +516,11 @@ class StaffRequestsRepository {
       data: {'transfer_request_id': task.requestId, 'comment': comment},
     );
 
+    _ensureSuccessfulStatus(
+      response.data,
+      fallback: 'Transfer approval action failed.',
+    );
+
     return _extractMessage(
       response.data,
       fallback: '${action.label} action completed.',
@@ -575,6 +585,8 @@ class StaffRequestsRepository {
               item['employement_status_name'],
               fallback: 'Leave',
             ),
+            requiresAttachment: _boolValue(item['need_upload']),
+            requiresDayCount: _boolValue(item['need_end_date']),
           ),
         )
         .toList();
@@ -673,24 +685,23 @@ class StaffRequestsRepository {
     required UserModel user,
     required LeaveRequestDraft draft,
   }) async {
-    final days = draft.endDate.difference(draft.startDate).inDays + 1;
-
     final payload = <String, dynamic>{
       'personal_information_id': user.personalInformationId,
       'employement_status_id': draft.leaveTypeId,
       'proposed_start_date': _toApiDate(draft.startDate),
-      'proposed_end_date': _toApiDate(draft.endDate),
       'contact_on_leave': draft.contactOnLeave,
-      'number_of_days': '$days',
-      if (draft.reason.trim().isNotEmpty) 'reason': draft.reason,
-      if (draft.reason.trim().isNotEmpty) 'leave_reason': draft.reason,
+      'number_of_days': draft.numberOfDays?.toString() ?? 'null',
       if ((draft.representativeId ?? '').trim().isNotEmpty)
         'representative_id': draft.representativeId,
       if ((draft.placeToTravel ?? '').trim().isNotEmpty)
         'place_to_travel': draft.placeToTravel,
     };
 
-    await _postForm('/leaveRequests', data: payload);
+    final response = await _postForm('/leaveRequests', data: payload);
+    _ensureSuccessfulStatus(
+      response.data,
+      fallback: 'Leave request was not submitted.',
+    );
 
     final reference = _reference(prefix: 'LV');
     return StaffRequestRecord(
@@ -711,14 +722,20 @@ class StaffRequestsRepository {
           label: 'Start Date',
           value: _displayDate(draft.startDate),
         ),
-        RequestDetailField(
-          label: 'End Date',
-          value: _displayDate(draft.endDate),
-        ),
+        if (draft.endDate != null)
+          RequestDetailField(
+            label: 'End Date',
+            value: _displayDate(draft.endDate!),
+          ),
         RequestDetailField(
           label: 'Contact on Leave',
           value: draft.contactOnLeave,
         ),
+        if (draft.numberOfDays != null)
+          RequestDetailField(
+            label: 'Number of Days',
+            value: '${draft.numberOfDays}',
+          ),
         RequestDetailField(
           label: 'Representative',
           value: draft.representativeLabel ?? 'Not selected',
@@ -755,7 +772,11 @@ class StaffRequestsRepository {
       if (draft.reasonText.trim().isNotEmpty) 'reason_text': draft.reasonText,
     };
 
-    await _postForm('/staffTransferRequests', data: payload);
+    final response = await _postForm('/staffTransferRequests', data: payload);
+    _ensureSuccessfulStatus(
+      response.data,
+      fallback: 'Transfer request was not submitted.',
+    );
 
     final reference = _reference(prefix: 'TR');
     return StaffRequestRecord(
@@ -1157,6 +1178,17 @@ class StaffRequestsRepository {
     return int.tryParse(value.toString().trim());
   }
 
+  bool _boolValue(dynamic value, {bool fallback = false}) {
+    if (value == null) return fallback;
+    if (value is bool) return value;
+
+    final normalized = value.toString().trim().toLowerCase();
+    if (normalized.isEmpty) return fallback;
+    if (normalized == 'true' || normalized == '1') return true;
+    if (normalized == 'false' || normalized == '0') return false;
+    return fallback;
+  }
+
   DateTime? _dateValue(dynamic value, {DateTime? fallback}) {
     if (value == null) return fallback;
     if (value is DateTime) return value;
@@ -1247,5 +1279,33 @@ class StaffRequestsRepository {
       return responseData.trim();
     }
     return fallback;
+  }
+
+  void _ensureSuccessfulStatus(
+    dynamic responseData, {
+    required String fallback,
+  }) {
+    final statusCode = _extractStatusCode(responseData);
+    if (statusCode == null || statusCode == 200 || statusCode == 201) {
+      return;
+    }
+
+    throw Exception(_extractMessage(responseData, fallback: fallback));
+  }
+
+  int? _extractStatusCode(dynamic responseData) {
+    if (responseData is Map<String, dynamic>) {
+      final value = responseData['statusCode'];
+      if (value is int) {
+        return value;
+      }
+      return int.tryParse(value?.toString().trim() ?? '');
+    }
+    if (responseData is Map) {
+      return _extractStatusCode(
+        responseData.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }
+    return null;
   }
 }

@@ -2261,80 +2261,336 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
       return;
     }
 
+    final audienceOptions = await _loadTopicAudienceOptions();
+    if (audienceOptions == null || !mounted) return;
+
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
+    final selectedCadreIds = <int>{};
+    final selectedDepartmentIds = <int>{};
+    final selectedLocationIds = <int>{};
 
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetContext) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final isSubmitting = ref.watch(
-              peerExchangeViewModelProvider.select(
-                (state) => state.isSubmitting,
-              ),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Consumer(
+              builder: (context, ref, _) {
+                final isSubmitting = ref.watch(
+                  peerExchangeViewModelProvider.select(
+                    (state) => state.isSubmitting,
+                  ),
+                );
+
+                return _BottomSheetCard(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _BottomSheetTitle(
+                          title: 'Create a topic',
+                          subtitle:
+                              'Open a guided discussion for a team or practice area.',
+                        ),
+                        _FormField(
+                          controller: titleController,
+                          label: 'Topic name',
+                          hintText: 'Example: Safe referral workflow',
+                        ),
+                        const SizedBox(height: 14),
+                        _FormField(
+                          controller: descriptionController,
+                          label: 'Description',
+                          hintText: 'Add the purpose or focus of this topic',
+                          maxLines: 4,
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'Audience filters',
+                          style: _textStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Leave all filters empty to publish the topic to everyone, or narrow it by cadre, department, or location.',
+                          style: _textStyle(
+                            fontSize: 12,
+                            color: _peerMuted,
+                            height: 1.45,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _AudiencePickerField(
+                          label: 'Cadres',
+                          selectedLabels: _selectedAudienceLabels(
+                            selectedCadreIds,
+                            audienceOptions.cadres,
+                          ),
+                          onTap: () async {
+                            final selected = await _pickTopicAudienceIds(
+                              title: 'Select cadres',
+                              options: audienceOptions.cadres,
+                              initialSelectedIds: selectedCadreIds,
+                            );
+                            if (selected == null || !sheetContext.mounted) {
+                              return;
+                            }
+                            setModalState(() {
+                              selectedCadreIds
+                                ..clear()
+                                ..addAll(selected);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _AudiencePickerField(
+                          label: 'Departments',
+                          selectedLabels: _selectedAudienceLabels(
+                            selectedDepartmentIds,
+                            audienceOptions.departments,
+                          ),
+                          onTap: () async {
+                            final selected = await _pickTopicAudienceIds(
+                              title: 'Select departments',
+                              options: audienceOptions.departments,
+                              initialSelectedIds: selectedDepartmentIds,
+                            );
+                            if (selected == null || !sheetContext.mounted) {
+                              return;
+                            }
+                            setModalState(() {
+                              selectedDepartmentIds
+                                ..clear()
+                                ..addAll(selected);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _AudiencePickerField(
+                          label: 'Locations',
+                          selectedLabels: _selectedAudienceLabels(
+                            selectedLocationIds,
+                            audienceOptions.locations,
+                          ),
+                          onTap: () async {
+                            final selected = await _pickTopicAudienceIds(
+                              title: 'Select locations',
+                              options: audienceOptions.locations,
+                              initialSelectedIds: selectedLocationIds,
+                            );
+                            if (selected == null || !sheetContext.mounted) {
+                              return;
+                            }
+                            setModalState(() {
+                              selectedLocationIds
+                                ..clear()
+                                ..addAll(selected);
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 18),
+                        _PrimaryButton(
+                          label: isSubmitting ? 'Creating...' : 'Create topic',
+                          isBusy: isSubmitting,
+                          onTap: isSubmitting
+                              ? null
+                              : () async {
+                                  final name = titleController.text.trim();
+                                  final description = descriptionController.text
+                                      .trim();
+                                  if (name.isEmpty) {
+                                    _showMessage(
+                                      'Enter a topic name.',
+                                      error: true,
+                                    );
+                                    return;
+                                  }
+
+                                  final created = await ref
+                                      .read(
+                                        peerExchangeViewModelProvider.notifier,
+                                      )
+                                      .createTopic(
+                                        name: name,
+                                        description: description,
+                                        audiences: PeerTopicAudienceSelection(
+                                          caderIds: selectedCadreIds.toList(),
+                                          departmentIds: selectedDepartmentIds
+                                              .toList(),
+                                          locationIds: selectedLocationIds
+                                              .toList(),
+                                        ),
+                                      );
+                                  if (created == null || !mounted) return;
+                                  if (!sheetContext.mounted) return;
+                                  Navigator.pop(sheetContext);
+                                  _showMessage('Topic created successfully.');
+                                },
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             );
+          },
+        );
+      },
+    );
+  }
 
+  Future<PeerTopicAudienceOptions?> _loadTopicAudienceOptions() async {
+    final navigator = Navigator.of(context, rootNavigator: true);
+
+    unawaited(
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return const Material(
+            type: MaterialType.transparency,
+            child: Center(
+              child: CircularProgressIndicator(color: _peerPrimary),
+            ),
+          );
+        },
+      ),
+    );
+
+    try {
+      return await ref
+          .read(peerExchangeRepositoryProvider)
+          .fetchTopicAudienceOptions();
+    } catch (error) {
+      if (mounted) {
+        _showMessage(
+          error.toString().replaceFirst('Exception: ', ''),
+          error: true,
+        );
+      }
+      return null;
+    } finally {
+      if (mounted && navigator.canPop()) {
+        navigator.pop();
+      }
+    }
+  }
+
+  List<String> _selectedAudienceLabels(
+    Set<int> selectedIds,
+    List<PeerAudienceOption> options,
+  ) {
+    if (selectedIds.isEmpty) return const [];
+
+    final labels = options
+        .where((option) => selectedIds.contains(option.id))
+        .map((option) => option.label)
+        .toList();
+    labels.sort();
+    return labels;
+  }
+
+  Future<Set<int>?> _pickTopicAudienceIds({
+    required String title,
+    required List<PeerAudienceOption> options,
+    required Set<int> initialSelectedIds,
+  }) async {
+    final selectedIds = {...initialSelectedIds};
+
+    return showModalBottomSheet<Set<int>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
             return _BottomSheetCard(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _BottomSheetTitle(
-                      title: 'Create a topic',
-                      subtitle:
-                          'Open a guided discussion for a team or practice area.',
-                    ),
-                    _FormField(
-                      controller: titleController,
-                      label: 'Topic name',
-                      hintText: 'Example: Safe referral workflow',
-                    ),
-                    const SizedBox(height: 14),
-                    _FormField(
-                      controller: descriptionController,
-                      label: 'Description',
-                      hintText: 'Add the purpose or focus of this topic',
-                      maxLines: 4,
-                    ),
-                    const SizedBox(height: 18),
-                    _PrimaryButton(
-                      label: isSubmitting ? 'Creating...' : 'Create topic',
-                      isBusy: isSubmitting,
-                      onTap: isSubmitting
-                          ? null
-                          : () async {
-                              final name = titleController.text.trim();
-                              final description = descriptionController.text
-                                  .trim();
-                              if (name.isEmpty) {
-                                _showMessage(
-                                  'Enter a topic name.',
-                                  error: true,
-                                );
-                                return;
-                              }
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _BottomSheetTitle(
+                    title: title,
+                    subtitle:
+                        'Choose one or more options, or leave empty for everyone.',
+                  ),
+                  if (options.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 18),
+                      child: Text('No options are available right now.'),
+                    )
+                  else
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(context).height * 0.46,
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: options.length,
+                        separatorBuilder: (_, _) =>
+                            const Divider(color: _peerBorder, height: 1),
+                        itemBuilder: (context, index) {
+                          final option = options[index];
+                          final selected = selectedIds.contains(option.id);
 
-                              final created = await ref
-                                  .read(peerExchangeViewModelProvider.notifier)
-                                  .createTopic(
-                                    name: name,
-                                    description: description,
-                                  );
-                              if (created == null || !mounted) return;
-                              if (!sheetContext.mounted) return;
-                              Navigator.pop(sheetContext);
-                              _showMessage('Topic created successfully.');
+                          return CheckboxListTile(
+                            value: selected,
+                            contentPadding: EdgeInsets.zero,
+                            activeColor: _peerPrimary,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: Text(
+                              option.label,
+                              style: _textStyle(fontSize: 13),
+                            ),
+                            onChanged: (value) {
+                              setModalState(() {
+                                if (value == true) {
+                                  selectedIds.add(option.id);
+                                } else {
+                                  selectedIds.remove(option.id);
+                                }
+                              });
                             },
+                          );
+                        },
+                      ),
                     ),
-                  ],
-                ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => setModalState(selectedIds.clear),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _peerMuted,
+                            side: const BorderSide(color: _peerBorder),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text('Clear'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _PrimaryButton(
+                          label: 'Apply',
+                          onTap: () => Navigator.pop(sheetContext, selectedIds),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             );
           },
@@ -4841,6 +5097,91 @@ class _FormField extends StatelessWidget {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _AudiencePickerField extends StatelessWidget {
+  const _AudiencePickerField({
+    required this.label,
+    required this.selectedLabels,
+    required this.onTap,
+  });
+
+  final String label;
+  final List<String> selectedLabels;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewLabels = selectedLabels.take(3).toList();
+    final extraCount = selectedLabels.length - previewLabels.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: _textStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _peerBorder),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    selectedLabels.isEmpty
+                        ? 'All staff'
+                        : '${selectedLabels.length} selected',
+                    style: _textStyle(
+                      fontSize: 13,
+                      color: selectedLabels.isEmpty ? _peerMuted : _peerText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 14,
+                  color: _peerMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (previewLabels.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ...previewLabels.map(
+                (label) => _MetaChip(
+                  label: label,
+                  color: _peerSoftBlue,
+                  textColor: _peerPrimary,
+                ),
+              ),
+              if (extraCount > 0)
+                _MetaChip(
+                  label: '+$extraCount more',
+                  color: const Color(0xFFF3F4F6),
+                  textColor: _peerMuted,
+                ),
+            ],
+          ),
+        ],
       ],
     );
   }

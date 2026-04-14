@@ -47,6 +47,10 @@ class RequestsScreen extends ConsumerStatefulWidget {
 
 class _RequestsScreenState extends ConsumerState<RequestsScreen> {
   bool _showApprovals = false;
+  StaffRequestType? _requestFilterType;
+  StaffRequestStatus? _requestFilterStatus;
+  ApproverRequestType? _approvalFilterType;
+  StaffRequestStatus? _approvalFilterStatus;
 
   @override
   void initState() {
@@ -54,11 +58,118 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     _showApprovals = widget.initialShowApprovals;
   }
 
+  bool get _hasRequestFilters =>
+      _requestFilterType != null || _requestFilterStatus != null;
+
+  bool get _hasApprovalFilters =>
+      _approvalFilterType != null || _approvalFilterStatus != null;
+
+  int _activeFilterCount(bool showApprovals) {
+    if (showApprovals) {
+      var count = 0;
+      if (_approvalFilterType != null) count++;
+      if (_approvalFilterStatus != null) count++;
+      return count;
+    }
+
+    var count = 0;
+    if (_requestFilterType != null) count++;
+    if (_requestFilterStatus != null) count++;
+    return count;
+  }
+
+  Future<void> _openFilterSheet(bool showApprovals) async {
+    final selection = await showModalBottomSheet<_RequestFilterSelection>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _RequestFilterSheet(
+        showApprovals: showApprovals,
+        requestType: _requestFilterType,
+        requestStatus: _requestFilterStatus,
+        approvalType: _approvalFilterType,
+        approvalStatus: _approvalFilterStatus,
+      ),
+    );
+
+    if (selection == null || !mounted) return;
+
+    setState(() {
+      _requestFilterType = selection.requestType;
+      _requestFilterStatus = selection.requestStatus;
+      _approvalFilterType = selection.approvalType;
+      _approvalFilterStatus = selection.approvalStatus;
+    });
+  }
+
+  void _clearRequestFilters() {
+    setState(() {
+      _requestFilterType = null;
+      _requestFilterStatus = null;
+    });
+  }
+
+  void _clearApprovalFilters() {
+    setState(() {
+      _approvalFilterType = null;
+      _approvalFilterStatus = null;
+    });
+  }
+
+  Iterable<StaffRequestRecord> _filteredRecordsForType(
+    StaffRequestsState state,
+    StaffRequestType type,
+  ) {
+    return state
+        .recordsFor(type)
+        .where(
+          (record) =>
+              _requestFilterStatus == null ||
+              record.status == _requestFilterStatus,
+        );
+  }
+
+  List<StaffRequestType> _visibleRequestTypes(StaffRequestsState state) {
+    const ordered = [
+      StaffRequestType.activity,
+      StaffRequestType.leave,
+      StaffRequestType.transfer,
+      StaffRequestType.loan,
+      StaffRequestType.sickLeave,
+    ];
+
+    if (!_hasRequestFilters) return ordered;
+
+    return ordered.where((type) {
+      if (_requestFilterType != null && type != _requestFilterType) {
+        return false;
+      }
+      return _filteredRecordsForType(state, type).isNotEmpty;
+    }).toList();
+  }
+
+  List<String> _activeFilterLabels(bool showApprovals) {
+    if (showApprovals) {
+      return [
+        if (_approvalFilterType != null) _approvalFilterType!.label,
+        if (_approvalFilterStatus != null) _approvalFilterStatus!.label,
+      ];
+    }
+
+    return [
+      if (_requestFilterType != null) _requestFilterType!.label,
+      if (_requestFilterStatus != null) _requestFilterStatus!.label,
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(staffRequestsViewModelProvider);
     final access = ref.watch(staffPortalAccessProvider);
     final showApprovals = access.isApproverMode && _showApprovals;
+    final visibleRequestTypes = _visibleRequestTypes(state);
+    final activeFilterLabels = _activeFilterLabels(showApprovals);
+    final activeFilterCount = _activeFilterCount(showApprovals);
 
     return Scaffold(
       backgroundColor: _requestSurface,
@@ -90,15 +201,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                     ),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Use the status filters inside each request board.',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: () => _openFilterSheet(showApprovals),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _requestMuted,
                       side: const BorderSide(color: _requestBorder),
@@ -108,7 +211,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                     ),
                     icon: const Icon(Icons.filter_list_rounded, size: 16),
                     label: Text(
-                      'Filter',
+                      activeFilterCount > 0
+                          ? 'Filter ($activeFilterCount)'
+                          : 'Filter',
                       style: _requestTextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
@@ -118,6 +223,15 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                   ),
                 ],
               ),
+              if (activeFilterLabels.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                _InlineBanner(
+                  message: 'Filters: ${activeFilterLabels.join(' • ')}',
+                  onClose: showApprovals
+                      ? _clearApprovalFilters
+                      : _clearRequestFilters,
+                ),
+              ],
               if (access.isApproverMode) ...[
                 const SizedBox(height: 14),
                 _RequestBoardToggle(
@@ -147,68 +261,16 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                   child: Center(child: CircularProgressIndicator()),
                 )
               else ...[
-                _RequestOverviewSection(
-                  type: StaffRequestType.activity,
-                  count: state.countFor(StaffRequestType.activity),
-                  approvedCount: _countForStatus(
+                if (visibleRequestTypes.isEmpty)
+                  const _ApprovalEmptyState(
+                    message: 'No requests match the selected filters.',
+                  )
+                else
+                  ..._buildRequestOverviewSections(
+                    context,
                     state,
-                    StaffRequestType.activity,
-                    StaffRequestStatus.approved,
+                    visibleRequestTypes,
                   ),
-                  pendingCount: _countOpenFor(state, StaffRequestType.activity),
-                  onTap: () => _openList(context, StaffRequestType.activity),
-                ),
-                const SizedBox(height: 14),
-                _RequestOverviewSection(
-                  type: StaffRequestType.leave,
-                  count: state.countFor(StaffRequestType.leave),
-                  approvedCount: _countForStatus(
-                    state,
-                    StaffRequestType.leave,
-                    StaffRequestStatus.approved,
-                  ),
-                  pendingCount: _countOpenFor(state, StaffRequestType.leave),
-                  onTap: () => _openList(context, StaffRequestType.leave),
-                ),
-                const SizedBox(height: 14),
-                _RequestOverviewSection(
-                  type: StaffRequestType.transfer,
-                  count: state.countFor(StaffRequestType.transfer),
-                  approvedCount: _countForStatus(
-                    state,
-                    StaffRequestType.transfer,
-                    StaffRequestStatus.approved,
-                  ),
-                  pendingCount: _countOpenFor(state, StaffRequestType.transfer),
-                  onTap: () => _openList(context, StaffRequestType.transfer),
-                ),
-                const SizedBox(height: 14),
-                _RequestOverviewSection(
-                  type: StaffRequestType.loan,
-                  count: state.countFor(StaffRequestType.loan),
-                  approvedCount: _countForStatus(
-                    state,
-                    StaffRequestType.loan,
-                    StaffRequestStatus.approved,
-                  ),
-                  pendingCount: _countOpenFor(state, StaffRequestType.loan),
-                  onTap: () => _openList(context, StaffRequestType.loan),
-                ),
-                const SizedBox(height: 14),
-                _RequestOverviewSection(
-                  type: StaffRequestType.sickLeave,
-                  count: state.countFor(StaffRequestType.sickLeave),
-                  approvedCount: _countForStatus(
-                    state,
-                    StaffRequestType.sickLeave,
-                    StaffRequestStatus.approved,
-                  ),
-                  pendingCount: _countOpenFor(
-                    state,
-                    StaffRequestType.sickLeave,
-                  ),
-                  onTap: () => _openList(context, StaffRequestType.sickLeave),
-                ),
               ],
             ],
           ),
@@ -221,10 +283,21 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     BuildContext context,
     StaffRequestsState state,
   ) {
-    final items = [
-      ...state.leaveApprovalTasks,
-      ...state.transferApprovalTasks,
-    ]..sort((first, second) => second.submittedAt.compareTo(first.submittedAt));
+    final items =
+        [...state.leaveApprovalTasks, ...state.transferApprovalTasks].where((
+          task,
+        ) {
+          if (_approvalFilterType != null && task.type != _approvalFilterType) {
+            return false;
+          }
+          if (_approvalFilterStatus != null &&
+              task.status != _approvalFilterStatus) {
+            return false;
+          }
+          return true;
+        }).toList()..sort(
+          (first, second) => second.submittedAt.compareTo(first.submittedAt),
+        );
 
     if (state.isLoading &&
         state.leaveApprovalTasks.isEmpty &&
@@ -239,8 +312,10 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
 
     return [
       if (items.isEmpty)
-        const _ApprovalEmptyState(
-          message: 'No pending leave or transfer approvals right now.',
+        _ApprovalEmptyState(
+          message: _hasApprovalFilters
+              ? 'No approval items match the selected filters.'
+              : 'No pending leave or transfer approvals right now.',
         )
       else
         ...items.map(
@@ -252,28 +327,44 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     ];
   }
 
-  static int _countForStatus(
+  List<Widget> _buildRequestOverviewSections(
+    BuildContext context,
     StaffRequestsState state,
-    StaffRequestType type,
-    StaffRequestStatus status,
+    List<StaffRequestType> visibleTypes,
   ) {
-    return state
-        .recordsFor(type)
-        .where((record) => record.status == status)
-        .length;
+    final widgets = <Widget>[];
+
+    for (var index = 0; index < visibleTypes.length; index++) {
+      final type = visibleTypes[index];
+      final items = _filteredRecordsForType(state, type).toList();
+
+      widgets.add(
+        _RequestOverviewSection(
+          type: type,
+          count: items.length,
+          approvedCount: items
+              .where((record) => record.status == StaffRequestStatus.approved)
+              .length,
+          pendingCount: items.where((record) => record.status.isOpen).length,
+          onTap: () => _openList(context, type),
+        ),
+      );
+
+      if (index < visibleTypes.length - 1) {
+        widgets.add(const SizedBox(height: 14));
+      }
+    }
+
+    return widgets;
   }
 
-  static int _countOpenFor(StaffRequestsState state, StaffRequestType type) {
-    return state
-        .recordsFor(type)
-        .where((record) => record.status.isOpen)
-        .length;
-  }
-
-  static void _openList(BuildContext context, StaffRequestType type) {
+  void _openList(BuildContext context, StaffRequestType type) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => RequestCategoryListScreen(type: type),
+        builder: (_) => RequestCategoryListScreen(
+          type: type,
+          initialStatusFilter: _requestFilterStatus,
+        ),
       ),
     );
   }
@@ -385,6 +476,262 @@ class _RequestBoardToggleChip extends StatelessWidget {
   }
 }
 
+class _RequestFilterSelection {
+  const _RequestFilterSelection({
+    this.requestType,
+    this.requestStatus,
+    this.approvalType,
+    this.approvalStatus,
+  });
+
+  final StaffRequestType? requestType;
+  final StaffRequestStatus? requestStatus;
+  final ApproverRequestType? approvalType;
+  final StaffRequestStatus? approvalStatus;
+}
+
+class _RequestFilterSheet extends StatefulWidget {
+  const _RequestFilterSheet({
+    required this.showApprovals,
+    this.requestType,
+    this.requestStatus,
+    this.approvalType,
+    this.approvalStatus,
+  });
+
+  final bool showApprovals;
+  final StaffRequestType? requestType;
+  final StaffRequestStatus? requestStatus;
+  final ApproverRequestType? approvalType;
+  final StaffRequestStatus? approvalStatus;
+
+  @override
+  State<_RequestFilterSheet> createState() => _RequestFilterSheetState();
+}
+
+class _RequestFilterSheetState extends State<_RequestFilterSheet> {
+  late StaffRequestType? _requestType;
+  late StaffRequestStatus? _requestStatus;
+  late ApproverRequestType? _approvalType;
+  late StaffRequestStatus? _approvalStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestType = widget.requestType;
+    _requestStatus = widget.requestStatus;
+    _approvalType = widget.approvalType;
+    _approvalStatus = widget.approvalStatus;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final statusOptions = StaffRequestStatus.values;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD7DEE8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Filter Requests',
+              style: _requestTextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              widget.showApprovals ? 'Approval Type' : 'Request Type',
+              style: _requestTextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _requestMuted,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _FilterChip(
+                  label: 'All',
+                  selected: widget.showApprovals
+                      ? _approvalType == null
+                      : _requestType == null,
+                  onTap: () => setState(() {
+                    if (widget.showApprovals) {
+                      _approvalType = null;
+                    } else {
+                      _requestType = null;
+                    }
+                  }),
+                ),
+                if (widget.showApprovals)
+                  ...ApproverRequestType.values.map(
+                    (type) => _FilterChip(
+                      label: type.label,
+                      selected: _approvalType == type,
+                      onTap: () => setState(() => _approvalType = type),
+                    ),
+                  )
+                else
+                  ...StaffRequestType.values.map(
+                    (type) => _FilterChip(
+                      label: type.label,
+                      selected: _requestType == type,
+                      onTap: () => setState(() => _requestType = type),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Status',
+              style: _requestTextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _requestMuted,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _FilterChip(
+                  label: 'All',
+                  selected: widget.showApprovals
+                      ? _approvalStatus == null
+                      : _requestStatus == null,
+                  onTap: () => setState(() {
+                    if (widget.showApprovals) {
+                      _approvalStatus = null;
+                    } else {
+                      _requestStatus = null;
+                    }
+                  }),
+                ),
+                ...statusOptions.map(
+                  (status) => _FilterChip(
+                    label: status.label,
+                    selected: widget.showApprovals
+                        ? _approvalStatus == status
+                        : _requestStatus == status,
+                    onTap: () => setState(() {
+                      if (widget.showApprovals) {
+                        _approvalStatus = status;
+                      } else {
+                        _requestStatus = status;
+                      }
+                    }),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => setState(() {
+                      _requestType = null;
+                      _requestStatus = null;
+                      _approvalType = null;
+                      _approvalStatus = null;
+                    }),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _requestMuted,
+                      side: const BorderSide(color: _requestBorder),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text('Clear'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    style: _filledStyle(),
+                    onPressed: () {
+                      Navigator.of(context).pop(
+                        _RequestFilterSelection(
+                          requestType: _requestType,
+                          requestStatus: _requestStatus,
+                          approvalType: _approvalType,
+                          approvalStatus: _approvalStatus,
+                        ),
+                      );
+                    },
+                    child: const Text('Apply'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ChoiceChip(
+      label: Text(
+        label,
+        style: _requestTextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: selected ? _requestBlue : _requestMuted,
+        ),
+      ),
+      selected: selected,
+      onSelected: (_) => onTap(),
+      selectedColor: const Color(0xFFEAF2FF),
+      backgroundColor: const Color(0xFFF8FAFC),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: selected ? const Color(0xFFB7D3FF) : _requestBorder,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      showCheckmark: false,
+    );
+  }
+}
+
 class _ApproverInboxCard extends ConsumerWidget {
   const _ApproverInboxCard({required this.task});
 
@@ -437,7 +784,12 @@ class _ApproverInboxCard extends ConsumerWidget {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
-    } catch (_) {}
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+      );
+    }
   }
 
   @override
@@ -941,14 +1293,23 @@ class _ApprovalTaskDetailScreenState
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
       Navigator.of(context).pop();
-    } catch (_) {}
+    } catch (error) {
+      if (!mounted) return;
+      final message = error.toString().replaceAll('Exception: ', '');
+      setState(() {
+        _error = message;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final access = ref.watch(staffPortalAccessProvider);
     final requestState = ref.watch(staffRequestsViewModelProvider);
-    final actions = _approvalActionsFor(access, _task);
+    final actions = _approvalDetailActionsFor(access, _task);
     final hasApprove = actions.contains(ApproverAction.approve);
     final hasDeny = actions.contains(ApproverAction.deny);
     final hasForward = actions.contains(ApproverAction.forward);
@@ -1335,9 +1696,14 @@ class _ApprovalActionSheetState extends State<_ApprovalActionSheet> {
 }
 
 class RequestCategoryListScreen extends ConsumerStatefulWidget {
-  const RequestCategoryListScreen({super.key, required this.type});
+  const RequestCategoryListScreen({
+    super.key,
+    required this.type,
+    this.initialStatusFilter,
+  });
 
   final StaffRequestType type;
+  final StaffRequestStatus? initialStatusFilter;
 
   @override
   ConsumerState<RequestCategoryListScreen> createState() =>
@@ -1347,6 +1713,12 @@ class RequestCategoryListScreen extends ConsumerStatefulWidget {
 class _RequestCategoryListScreenState
     extends ConsumerState<RequestCategoryListScreen> {
   StaffRequestStatus? _filterStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _filterStatus = widget.initialStatusFilter;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1690,16 +2062,17 @@ class _LeaveRequestFormScreenState
     extends ConsumerState<LeaveRequestFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _contactController = TextEditingController();
+  final _numberOfDaysController = TextEditingController();
   final _placeToTravelController = TextEditingController();
   final _reasonController = TextEditingController();
   DateTime? _startDate;
-  DateTime? _endDate;
   String? _leaveTypeId;
   String? _representativeId;
 
   @override
   void dispose() {
     _contactController.dispose();
+    _numberOfDaysController.dispose();
     _placeToTravelController.dispose();
     _reasonController.dispose();
     super.dispose();
@@ -1708,6 +2081,9 @@ class _LeaveRequestFormScreenState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(staffRequestsViewModelProvider);
+    final selectedLeaveType = state.leaveTypes.firstWhereOrNull(
+      (item) => item.id == _leaveTypeId,
+    );
 
     return Scaffold(
       backgroundColor: _requestSurface,
@@ -1732,7 +2108,17 @@ class _LeaveRequestFormScreenState
                   value: _leaveTypeId,
                   hintText: 'Select',
                   items: state.leaveTypes,
-                  onChanged: (value) => setState(() => _leaveTypeId = value),
+                  onChanged: (value) {
+                    setState(() {
+                      _leaveTypeId = value;
+                      final nextType = state.leaveTypes.firstWhereOrNull(
+                        (item) => item.id == value,
+                      );
+                      if (nextType?.requiresDayCount != true) {
+                        _numberOfDaysController.clear();
+                      }
+                    });
+                  },
                   validator: (value) =>
                       value == null ? 'Select a leave type' : null,
                 ),
@@ -1749,25 +2135,38 @@ class _LeaveRequestFormScreenState
                     }
                   },
                 ),
-                _DateInputField(
-                  label: 'End Date',
-                  value: _endDate,
-                  onTap: () async {
-                    final picked = await _pickDate(
-                      context,
-                      initial: _endDate ?? _startDate,
-                    );
-                    if (picked != null) {
-                      setState(() => _endDate = picked);
-                    }
-                  },
-                ),
+                if (selectedLeaveType?.requiresDayCount == true)
+                  _AppTextField(
+                    label: 'Number of Days',
+                    controller: _numberOfDaysController,
+                    hintText: 'Input Number of Days',
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      final normalized = (value ?? '').trim();
+                      if (normalized.isEmpty) {
+                        return 'This field is required';
+                      }
+                      final days = int.tryParse(normalized);
+                      if (days == null || days <= 0) {
+                        return 'Enter a valid number of days';
+                      }
+                      return null;
+                    },
+                  ),
                 _AppTextField(
                   label: 'Contact on Leave',
                   controller: _contactController,
                   hintText: 'Input Number',
                   keyboardType: TextInputType.phone,
                 ),
+                if (selectedLeaveType?.requiresAttachment == true)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 14),
+                    child: _InlineErrorText(
+                      message:
+                          'This leave type requires a PDF attachment. Submit it from the web portal for now.',
+                    ),
+                  ),
                 _AppDropdownField(
                   label: 'Representative',
                   value: _representativeId,
@@ -1785,8 +2184,9 @@ class _LeaveRequestFormScreenState
                 _AppTextField(
                   label: 'Reason for Leave',
                   controller: _reasonController,
-                  hintText: 'Input',
+                  hintText: 'Optional',
                   maxLines: 5,
+                  validator: (_) => null,
                 ),
                 if (state.errorMessage != null) ...[
                   const SizedBox(height: 12),
@@ -1815,12 +2215,8 @@ class _LeaveRequestFormScreenState
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_startDate == null || _endDate == null) {
-      _showError('Choose both start and end dates.');
-      return;
-    }
-    if (_endDate!.isBefore(_startDate!)) {
-      _showError('End date cannot be earlier than start date.');
+    if (_startDate == null) {
+      _showError('Choose a start date.');
       return;
     }
 
@@ -1832,6 +2228,22 @@ class _LeaveRequestFormScreenState
       _showError('Leave types are unavailable. Refresh and try again.');
       return;
     }
+    if (leaveType.requiresAttachment) {
+      _showError(
+        'This leave type requires a PDF attachment. Submit it from the web portal for now.',
+      );
+      return;
+    }
+
+    int? numberOfDays;
+    if (leaveType.requiresDayCount) {
+      numberOfDays = int.tryParse(_numberOfDaysController.text.trim());
+      if (numberOfDays == null || numberOfDays <= 0) {
+        _showError('Enter a valid number of days.');
+        return;
+      }
+    }
+
     final representative = state.representatives.firstWhereOrNull(
       (item) => item.id == _representativeId,
     );
@@ -1845,9 +2257,9 @@ class _LeaveRequestFormScreenState
               leaveTypeId: leaveType.id,
               leaveTypeLabel: leaveType.label,
               startDate: _startDate!,
-              endDate: _endDate!,
               contactOnLeave: _contactController.text.trim(),
               reason: _reasonController.text.trim(),
+              numberOfDays: numberOfDays,
               representativeId: representative?.id,
               representativeLabel: representative?.label,
               placeToTravel: placeToTravel.isEmpty ? null : placeToTravel,
@@ -1860,7 +2272,10 @@ class _LeaveRequestFormScreenState
           builder: (_) => RequestSubmissionSuccessScreen(request: record),
         ),
       );
-    } catch (_) {}
+    } catch (error) {
+      if (!mounted) return;
+      _showError(error.toString().replaceAll('Exception: ', ''));
+    }
   }
 
   void _showError(String message) {
@@ -2043,7 +2458,12 @@ class _TransferRequestFormScreenState
           builder: (_) => RequestSubmissionSuccessScreen(request: record),
         ),
       );
-    } catch (_) {}
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+      );
+    }
   }
 }
 
@@ -3602,6 +4022,24 @@ List<ApproverAction> _approvalActionsFor(
         if (isOpen && access.canDenyTransfer && task.isFinalStage)
           ApproverAction.deny,
       ];
+  }
+}
+
+List<ApproverAction> _approvalDetailActionsFor(
+  StaffPortalAccess access,
+  ApprovalTask task,
+) {
+  final isOpen = task.status.isOpen;
+  switch (task.type) {
+    case ApproverRequestType.leave:
+      final canApprove = access.canApproveLeave || access.canForwardLeave;
+      final canDeny = access.canDenyLeave || access.canForwardLeave;
+      return [
+        if (isOpen && canDeny) ApproverAction.deny,
+        if (isOpen && canApprove) ApproverAction.approve,
+      ];
+    case ApproverRequestType.transfer:
+      return _approvalActionsFor(access, task);
   }
 }
 

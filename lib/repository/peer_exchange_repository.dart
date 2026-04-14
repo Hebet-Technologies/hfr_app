@@ -289,13 +289,41 @@ class PeerExchangeRepository {
   Future<PeerTopic> createTopic({
     required String name,
     String? description,
+    PeerTopicAudienceSelection? audiences,
   }) async {
-    final response = await _postJson(
-      '/topics',
-      data: _cleanMap({'name': name, 'description': description}),
-    );
+    final payload = _cleanMap({'name': name, 'description': description});
+    payload['audiences'] = (audiences ?? const PeerTopicAudienceSelection())
+        .toPayload();
+
+    final response = await _postJson('/topics', data: payload);
 
     return PeerTopic.fromJson(_requireMap(response.data['topic'], 'topic'));
+  }
+
+  Future<PeerTopicAudienceOptions> fetchTopicAudienceOptions() async {
+    final responses = await Future.wait<Response<dynamic>>([
+      _get('/caders'),
+      _get('/departments'),
+      _get('/locations'),
+    ]);
+
+    return PeerTopicAudienceOptions(
+      cadres: _lookupOptionsFromResponse(
+        responses[0].data,
+        idKeys: const ['cader_id', 'cadre_id', 'id'],
+        labelKeys: const ['cader_name', 'cadre_name', 'name'],
+      ),
+      departments: _lookupOptionsFromResponse(
+        responses[1].data,
+        idKeys: const ['department_id', 'id'],
+        labelKeys: const ['department_name', 'name'],
+      ),
+      locations: _lookupOptionsFromResponse(
+        responses[2].data,
+        idKeys: const ['location_id', 'id'],
+        labelKeys: const ['label', 'location_name', 'name'],
+      ),
+    );
   }
 
   Future<PeerTopic> updateTopic({
@@ -525,6 +553,83 @@ class PeerExchangeRepository {
       result[entry.key] = value;
     }
     return result;
+  }
+
+  List<PeerAudienceOption> _lookupOptionsFromResponse(
+    dynamic source, {
+    required List<String> idKeys,
+    required List<String> labelKeys,
+  }) {
+    final items = _extractLookupList(source);
+    final options = <PeerAudienceOption>[];
+    final seenIds = <int>{};
+
+    for (final item in items) {
+      if (item['deleted_at'] != null) continue;
+
+      final id = _firstInt(item, idKeys);
+      final label = _firstString(item, labelKeys);
+      if (id == null || id <= 0 || label.isEmpty || !seenIds.add(id)) {
+        continue;
+      }
+
+      options.add(PeerAudienceOption(id: id, label: label));
+    }
+
+    options.sort(
+      (left, right) =>
+          left.label.toLowerCase().compareTo(right.label.toLowerCase()),
+    );
+    return options;
+  }
+
+  List<Map<String, dynamic>> _extractLookupList(dynamic source) {
+    if (source is List) {
+      return source
+          .whereType<Map>()
+          .map(
+            (item) => item.map((key, value) => MapEntry(key.toString(), value)),
+          )
+          .toList();
+    }
+    if (source is Map<String, dynamic>) {
+      for (final key in const [
+        'data',
+        'caders',
+        'cadres',
+        'departments',
+        'locations',
+        'items',
+      ]) {
+        final value = source[key];
+        if (value is List) {
+          return _extractLookupList(value);
+        }
+      }
+      return const [];
+    }
+    if (source is Map) {
+      return _extractLookupList(
+        source.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }
+    return const [];
+  }
+
+  int? _firstInt(Map<String, dynamic> source, List<String> keys) {
+    for (final key in keys) {
+      final value = int.tryParse(source[key]?.toString() ?? '');
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  String _firstString(Map<String, dynamic> source, List<String> keys) {
+    for (final key in keys) {
+      final value = source[key]?.toString().trim() ?? '';
+      if (value.isNotEmpty) return value;
+    }
+    return '';
   }
 
   List<PeerDirectoryPerson> _directoryPeopleFromResponse(dynamic source) {

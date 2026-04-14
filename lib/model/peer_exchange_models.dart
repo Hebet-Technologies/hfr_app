@@ -603,6 +603,48 @@ class PeerTopicAudience {
   }
 }
 
+class PeerAudienceOption {
+  final int id;
+  final String label;
+
+  const PeerAudienceOption({required this.id, required this.label});
+}
+
+class PeerTopicAudienceSelection {
+  final List<int> caderIds;
+  final List<int> departmentIds;
+  final List<int> locationIds;
+
+  const PeerTopicAudienceSelection({
+    this.caderIds = const [],
+    this.departmentIds = const [],
+    this.locationIds = const [],
+  });
+
+  bool get isEmpty =>
+      caderIds.isEmpty && departmentIds.isEmpty && locationIds.isEmpty;
+
+  Map<String, dynamic> toPayload() {
+    return {
+      'cader_ids': caderIds.isEmpty ? null : caderIds,
+      'department_ids': departmentIds.isEmpty ? null : departmentIds,
+      'location_ids': locationIds.isEmpty ? null : locationIds,
+    };
+  }
+}
+
+class PeerTopicAudienceOptions {
+  final List<PeerAudienceOption> cadres;
+  final List<PeerAudienceOption> departments;
+  final List<PeerAudienceOption> locations;
+
+  const PeerTopicAudienceOptions({
+    this.cadres = const [],
+    this.departments = const [],
+    this.locations = const [],
+  });
+}
+
 class PeerTopic {
   final String uuid;
   final String name;

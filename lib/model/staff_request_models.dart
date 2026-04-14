@@ -76,11 +76,15 @@ class RequestLookupOption {
     required this.id,
     required this.label,
     this.subtitle,
+    this.requiresAttachment = false,
+    this.requiresDayCount = false,
   });
 
   final String id;
   final String label;
   final String? subtitle;
+  final bool requiresAttachment;
+  final bool requiresDayCount;
 }
 
 class RequestDetailField {
@@ -356,9 +360,10 @@ class LeaveRequestDraft {
     required this.leaveTypeId,
     required this.leaveTypeLabel,
     required this.startDate,
-    required this.endDate,
     required this.contactOnLeave,
     required this.reason,
+    this.endDate,
+    this.numberOfDays,
     this.representativeId,
     this.representativeLabel,
     this.placeToTravel,
@@ -367,9 +372,10 @@ class LeaveRequestDraft {
   final String leaveTypeId;
   final String leaveTypeLabel;
   final DateTime startDate;
-  final DateTime endDate;
+  final DateTime? endDate;
   final String contactOnLeave;
   final String reason;
+  final int? numberOfDays;
   final String? representativeId;
   final String? representativeLabel;
   final String? placeToTravel;

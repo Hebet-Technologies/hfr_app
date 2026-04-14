@@ -435,14 +435,20 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
           label: 'Start Date',
           value: _displayDate(draft.startDate),
         ),
-        RequestDetailField(
-          label: 'End Date',
-          value: _displayDate(draft.endDate),
-        ),
+        if (draft.endDate != null)
+          RequestDetailField(
+            label: 'End Date',
+            value: _displayDate(draft.endDate!),
+          ),
         RequestDetailField(
           label: 'Contact on Leave',
           value: draft.contactOnLeave,
         ),
+        if (draft.numberOfDays != null)
+          RequestDetailField(
+            label: 'Number of Days',
+            value: '${draft.numberOfDays}',
+          ),
         RequestDetailField(
           label: 'Representative',
           value: draft.representativeLabel ?? 'Not selected',

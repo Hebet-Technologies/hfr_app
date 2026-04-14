@@ -159,12 +159,14 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
   Future<PeerTopic?> createTopic({
     required String name,
     String? description,
+    PeerTopicAudienceSelection? audiences,
   }) async {
     state = state.copyWith(isSubmitting: true, errorMessage: null);
     try {
       final topic = await _repository.createTopic(
         name: name,
         description: description,
+        audiences: audiences,
       );
       await loadAll();
       state = state.copyWith(isSubmitting: false);
