@@ -24,6 +24,8 @@ dependencies:
   auto_size_text: ^3.0.0
   google_fonts: ^8.0.2
   flutter_svg: ^2.0.10+1
+  file_picker: ^10.3.3
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
@@ -42,3 +44,4 @@ flutter:
     - assets/languages/en.json
     - assets/languages/sw.json
     - AI-assests/
+    - shorebird.yaml

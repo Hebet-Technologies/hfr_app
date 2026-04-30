@@ -273,16 +273,10 @@ class HomeTab extends ConsumerWidget {
                 onTap: () => openTrainingHubScreen(context),
               ),
               const SizedBox(height: 12),
-              _TrainingCard(
-                item:
-                    training ??
-                    const HomeTrainingItem(
-                      title: 'Maternal Health Capacity Training',
-                      location: 'Zanzibar Health Training Institute',
-                      dateLabel: '12/03/2026',
-                      tag: 'Internal',
-                    ),
-              ),
+              if (training != null)
+                _TrainingCard(item: training)
+              else
+                const _EmptyActivityCard(message: 'No upcoming training found'),
               const SizedBox(height: 22),
               _SectionHeader(
                 title: 'Recent Activities',
@@ -522,33 +516,27 @@ class _AnnouncementCarouselState extends State<_AnnouncementCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final items = widget.items.isEmpty
-        ? const [
-            HomeAnnouncement(
-              title: 'New Training Opportunity',
-              subtitle:
-                  'Public Health Surveillance training deadline is approaching.',
-              caption: 'Deadline: 15 Mar 2026',
-            ),
-          ]
-        : widget.items;
+    final items = widget.items;
 
     return Column(
       children: [
-        SizedBox(
-          height: 140,
-          child: PageView.builder(
-            controller: _controller,
-            itemCount: items.length,
-            onPageChanged: (value) => setState(() => _page = value),
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _CarouselAnnouncementCard(item: items[index]),
-              );
-            },
+        if (items.isEmpty)
+          const _EmptyActivityCard(message: 'No announcements found')
+        else
+          SizedBox(
+            height: 140,
+            child: PageView.builder(
+              controller: _controller,
+              itemCount: items.length,
+              onPageChanged: (value) => setState(() => _page = value),
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _CarouselAnnouncementCard(item: items[index]),
+                );
+              },
+            ),
           ),
-        ),
         if (items.length > 1) ...[
           const SizedBox(height: 10),
           Row(

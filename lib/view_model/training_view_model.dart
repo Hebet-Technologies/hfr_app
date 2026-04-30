@@ -119,34 +119,33 @@ class TrainingViewModel extends Notifier<TrainingState> {
 
     state = state.copyWith(isLoading: true, errorMessage: null);
 
-    List<TrainingProgram> myTrainings = _repository.buildMockMyTrainings(user);
-    List<TrainingProgram> latestTrainings = _repository
-        .buildMockLatestTrainings(myTrainings: myTrainings);
-    List<TrainingResource> resources = _repository.buildMockResources();
+    List<TrainingProgram> myTrainings = const [];
+    List<TrainingProgram> latestTrainings = const [];
+    List<TrainingResource> resources = const [];
     List<TrainingApprovalRecord> trainingRequests = const [];
     List<TrainingApprovalRecord> approvalQueue = const [];
     String? errorMessage;
 
     if (user != null) {
-      try {
-        myTrainings = await _repository.fetchMyTrainings(user);
-      } catch (error) {
-        errorMessage ??= _cleanMessage(error);
+      if (_access.hasEmployeeProfile) {
+        try {
+          myTrainings = await _repository.fetchMyTrainings(user);
+        } catch (error) {
+          errorMessage ??= _cleanMessage(error);
+        }
       }
 
       try {
         latestTrainings = await _repository.fetchLatestTrainings(
           myTrainings: myTrainings,
         );
-      } catch (_) {
-        latestTrainings = _repository.buildMockLatestTrainings(
-          myTrainings: myTrainings,
-        );
-      }
-
-      try {
-        resources = await _repository.fetchResources(user);
       } catch (_) {}
+
+      if (_access.hasEmployeeProfile) {
+        try {
+          resources = await _repository.fetchResources(user);
+        } catch (_) {}
+      }
 
       if (_access.canViewTrainingRequests) {
         try {
@@ -337,7 +336,9 @@ class TrainingViewModel extends Notifier<TrainingState> {
     )..[updated.id] = updated;
 
     state = state.copyWith(
-      trainingRequests: didUpdateRequests ? nextRequests : state.trainingRequests,
+      trainingRequests: didUpdateRequests
+          ? nextRequests
+          : state.trainingRequests,
       approvalQueue: nextQueue,
       approvalDetailsById: nextDetails,
     );
@@ -369,6 +370,8 @@ class TrainingViewModel extends Notifier<TrainingState> {
           endDate: updated.endDate,
           trainingApplicationId: updated.trainingApplicationId,
           developmentPlanVendorId: updated.developmentPlanVendorId,
+          shortCourseDescriptionId: updated.shortCourseDescriptionId,
+          programId: updated.programId,
           instituteId: updated.instituteId,
           educationLevelId: updated.educationLevelId,
           educationLevelName: updated.educationLevelName,
@@ -424,6 +427,14 @@ bool _programsMatch(TrainingProgram first, TrainingProgram second) {
   if (firstDevelopmentPlanId.isNotEmpty &&
       secondDevelopmentPlanId.isNotEmpty &&
       firstDevelopmentPlanId == secondDevelopmentPlanId) {
+    return true;
+  }
+
+  final firstShortCourseId = (first.shortCourseDescriptionId ?? '').trim();
+  final secondShortCourseId = (second.shortCourseDescriptionId ?? '').trim();
+  if (firstShortCourseId.isNotEmpty &&
+      secondShortCourseId.isNotEmpty &&
+      firstShortCourseId == secondShortCourseId) {
     return true;
   }
 

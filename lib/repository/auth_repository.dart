@@ -13,6 +13,25 @@ import '../utils/api_call.dart';
 
 class AuthRepository {
   static const _activePortalModeKey = 'active_portal_mode';
+  static const _authStorageKeys = <String>[
+    'token',
+    'user_id',
+    'email',
+    'full_name',
+    'login_status',
+    'working_station_id',
+    'working_station_name',
+    'working_station_type',
+    'personal_information_id',
+    'employment_information_id',
+    'payroll',
+    'roles',
+    'role_ids',
+    'permissions',
+    'permission_ids',
+    'is_logged_in',
+    _activePortalModeKey,
+  ];
 
   final ApiService _apiService;
   final Dio _authorizedDio = Dio(
@@ -110,6 +129,7 @@ class AuthRepository {
 
   Future<void> _saveUserData(UserModel user) async {
     final prefs = await SharedPreferences.getInstance();
+    await _clearAuthStorage(prefs);
     await prefs.setString('token', user.token);
     await prefs.setString('user_id', user.userId);
     await prefs.setString('email', user.email);
@@ -126,8 +146,15 @@ class AuthRepository {
       'personal_information_id',
       user.personalInformationId,
     );
+    await prefs.setString(
+      'employment_information_id',
+      user.employmentInformationId,
+    );
+    await prefs.setString('payroll', user.payroll);
     await prefs.setStringList('roles', user.roles);
+    await prefs.setStringList('role_ids', user.roleIds);
     await prefs.setStringList('permissions', user.permissions);
+    await prefs.setStringList('permission_ids', user.permissionIds);
     await prefs.setBool('is_logged_in', true);
   }
 
@@ -167,10 +194,37 @@ class AuthRepository {
       workingStationName: prefs.getString('working_station_name') ?? '',
       workingStationType: prefs.getString('working_station_type'),
       personalInformationId: prefs.getString('personal_information_id') ?? '',
+      employmentInformationId:
+          prefs.getString('employment_information_id') ?? '',
+      payroll: prefs.getString('payroll') ?? '',
       token: token,
       roles: prefs.getStringList('roles') ?? const <String>[],
+      roleIds: prefs.getStringList('role_ids') ?? const <String>[],
       permissions: prefs.getStringList('permissions') ?? const <String>[],
+      permissionIds: prefs.getStringList('permission_ids') ?? const <String>[],
     );
+  }
+
+  Future<UserModel?> resolveEmployeeUser(UserModel? user) async {
+    if (user == null || user.personalInformationId.trim().isNotEmpty) {
+      return user;
+    }
+
+    try {
+      final profile = await fetchProfileDetails(user);
+      final personalInformationId = profile.personalInformationId.trim();
+      if (personalInformationId.isEmpty) {
+        return user;
+      }
+
+      final updated = profile.applyToUser(
+        user.copyWith(personalInformationId: personalInformationId),
+      );
+      await persistUser(updated);
+      return updated;
+    } catch (_) {
+      return user;
+    }
   }
 
   Future<ProfileDetails> fetchProfileDetails(UserModel user) async {
@@ -220,7 +274,13 @@ class AuthRepository {
 
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await _clearAuthStorage(prefs);
+  }
+
+  Future<void> _clearAuthStorage(SharedPreferences prefs) async {
+    for (final key in _authStorageKeys) {
+      await prefs.remove(key);
+    }
   }
 
   Future<bool> isLoggedIn() async {

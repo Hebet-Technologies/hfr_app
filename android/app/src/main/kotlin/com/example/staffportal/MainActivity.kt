@@ -1,4 +1,4 @@
-package com.example.staffportal
+package com.hrhs.mhz
 
 import io.flutter.embedding.android.FlutterActivity
 

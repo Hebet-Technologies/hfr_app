@@ -103,6 +103,8 @@ class TrainingProgram {
     this.endDate,
     this.trainingApplicationId,
     this.developmentPlanVendorId,
+    this.shortCourseDescriptionId,
+    this.programId,
     this.instituteId,
     this.educationLevelId,
     this.educationLevelName,
@@ -129,6 +131,8 @@ class TrainingProgram {
   final DateTime? endDate;
   final String? trainingApplicationId;
   final String? developmentPlanVendorId;
+  final String? shortCourseDescriptionId;
+  final String? programId;
   final String? instituteId;
   final String? educationLevelId;
   final String? educationLevelName;
@@ -157,6 +161,8 @@ class TrainingProgram {
     DateTime? endDate,
     String? trainingApplicationId,
     String? developmentPlanVendorId,
+    String? shortCourseDescriptionId,
+    String? programId,
     String? instituteId,
     String? educationLevelId,
     String? educationLevelName,
@@ -185,6 +191,9 @@ class TrainingProgram {
           trainingApplicationId ?? this.trainingApplicationId,
       developmentPlanVendorId:
           developmentPlanVendorId ?? this.developmentPlanVendorId,
+      shortCourseDescriptionId:
+          shortCourseDescriptionId ?? this.shortCourseDescriptionId,
+      programId: programId ?? this.programId,
       instituteId: instituteId ?? this.instituteId,
       educationLevelId: educationLevelId ?? this.educationLevelId,
       educationLevelName: educationLevelName ?? this.educationLevelName,

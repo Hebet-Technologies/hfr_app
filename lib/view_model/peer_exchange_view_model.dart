@@ -79,24 +79,21 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
       final searchQuery = state.searchQuery.trim();
       final categoryUuid = state.selectedCategoryUuid;
 
+      final conversations = await _loadConversations(searchQuery);
       final results = await Future.wait<dynamic>([
-        _repository.fetchConversations(search: searchQuery),
-        _repository.fetchGroups(search: searchQuery),
-        _repository.fetchTopics(search: searchQuery),
-        _repository.fetchQuestions(
-          search: searchQuery,
-          categoryUuid: categoryUuid,
-        ),
-        _repository.fetchQuestionCategories(),
+        _loadGroups(searchQuery),
+        _loadTopics(searchQuery),
+        _loadQuestions(searchQuery, categoryUuid),
+        _loadCategories(),
       ]);
 
       state = state.copyWith(
         isLoading: false,
-        conversations: results[0] as List<PeerConversation>,
-        groups: results[1] as List<PeerConversation>,
-        topics: results[2] as List<PeerTopic>,
-        questions: results[3] as List<PeerQuestion>,
-        categories: results[4] as List<PeerQuestionCategory>,
+        conversations: conversations,
+        groups: results[0] as List<PeerConversation>,
+        topics: results[1] as List<PeerTopic>,
+        questions: results[2] as List<PeerQuestion>,
+        categories: results[3] as List<PeerQuestionCategory>,
       );
     } catch (error) {
       state = state.copyWith(
@@ -228,5 +225,52 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
 
   void clearError() {
     state = state.copyWith(errorMessage: null);
+  }
+
+  Future<List<PeerConversation>> _loadConversations(String searchQuery) async {
+    try {
+      return await _repository.fetchConversations(search: searchQuery);
+    } catch (error) {
+      return [];
+      throw Exception(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<List<PeerConversation>> _loadGroups(String searchQuery) async {
+    try {
+      return await _repository.fetchGroups(search: searchQuery);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<PeerTopic>> _loadTopics(String searchQuery) async {
+    try {
+      return await _repository.fetchTopics(search: searchQuery);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<PeerQuestion>> _loadQuestions(
+    String searchQuery,
+    String? categoryUuid,
+  ) async {
+    try {
+      return await _repository.fetchQuestions(
+        search: searchQuery,
+        categoryUuid: categoryUuid,
+      );
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  Future<List<PeerQuestionCategory>> _loadCategories() async {
+    try {
+      return await _repository.fetchQuestionCategories();
+    } catch (_) {
+      return const [];
+    }
   }
 }

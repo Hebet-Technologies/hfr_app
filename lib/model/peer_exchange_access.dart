@@ -80,12 +80,11 @@ class PeerExchangeAccess {
   bool get canReplyToTopics => isAuthenticated;
   bool get canViewGroupMembers => isAuthenticated;
 
-  bool get canCreateGroups =>
-      isPrivileged ||
-      _hasScopedPermission(
-        verbs: const ['create', 'store', 'manage', 'update'],
-        nouns: const ['group', 'groups', 'conversation', 'conversations'],
-      );
+  bool get canCreateGroups => _hasPermission('Create Program Group');
+
+  bool get canUpdateGroups => _hasPermission('Update Program Group');
+
+  bool get canDeleteGroups => _hasPermission('Delete Program Group');
 
   bool get canCreateTopics =>
       isPrivileged ||
@@ -114,13 +113,14 @@ class PeerExchangeAccess {
         nouns: const ['report', 'reports', 'abuse', 'content', 'community'],
       );
 
+  bool canEditGroup(int? createdBy) =>
+      canUpdateGroups || _owns(createdBy);
+
+  bool canDeleteGroup(int? createdBy) =>
+      canDeleteGroups || _owns(createdBy);
+
   bool canManageGroup(int? createdBy) =>
-      canCreateGroups ||
-      _hasScopedPermission(
-        verbs: const ['delete', 'edit', 'update', 'manage'],
-        nouns: const ['group', 'groups'],
-      ) ||
-      _owns(createdBy);
+      canEditGroup(createdBy) || canDeleteGroup(createdBy);
 
   bool canManageGroupMembers(int? createdBy) =>
       canManageGroup(createdBy) ||
@@ -198,6 +198,13 @@ class PeerExchangeAccess {
   bool _owns(int? createdBy) {
     final currentId = int.tryParse(userId);
     return currentId != null && createdBy != null && createdBy == currentId;
+  }
+
+  bool _hasPermission(String permissionName) {
+    final normalizedTarget = _normalize(permissionName);
+    return permissions.any(
+      (permission) => _normalize(permission) == normalizedTarget,
+    );
   }
 
   bool _hasScopedPermission({

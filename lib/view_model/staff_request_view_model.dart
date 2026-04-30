@@ -20,6 +20,8 @@ class StaffRequestsState {
     this.leaveTypes = const [],
     this.representatives = const [],
     this.transferReasons = const [],
+    this.activityOptions = const [],
+    this.loanBanks = const [],
     this.facilities = const [],
     this.departmentsByFacilityId = const {},
     this.leaveApprovalTasks = const [],
@@ -36,6 +38,8 @@ class StaffRequestsState {
   final List<RequestLookupOption> leaveTypes;
   final List<RequestLookupOption> representatives;
   final List<RequestLookupOption> transferReasons;
+  final List<RequestLookupOption> activityOptions;
+  final List<RequestLookupOption> loanBanks;
   final List<RequestLookupOption> facilities;
   final Map<String, List<RequestLookupOption>> departmentsByFacilityId;
   final List<ApprovalTask> leaveApprovalTasks;
@@ -91,6 +95,8 @@ class StaffRequestsState {
     List<RequestLookupOption>? leaveTypes,
     List<RequestLookupOption>? representatives,
     List<RequestLookupOption>? transferReasons,
+    List<RequestLookupOption>? activityOptions,
+    List<RequestLookupOption>? loanBanks,
     List<RequestLookupOption>? facilities,
     Map<String, List<RequestLookupOption>>? departmentsByFacilityId,
     List<ApprovalTask>? leaveApprovalTasks,
@@ -109,6 +115,8 @@ class StaffRequestsState {
       leaveTypes: leaveTypes ?? this.leaveTypes,
       representatives: representatives ?? this.representatives,
       transferReasons: transferReasons ?? this.transferReasons,
+      activityOptions: activityOptions ?? this.activityOptions,
+      loanBanks: loanBanks ?? this.loanBanks,
       facilities: facilities ?? this.facilities,
       departmentsByFacilityId:
           departmentsByFacilityId ?? this.departmentsByFacilityId,
@@ -141,10 +149,8 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
   }
 
   Future<void> load() async {
-    final user = _currentUser ?? await _authRepository.getSavedUser();
-    final mockRecords = _repository.buildMockRequests(user);
-    final fallbackTraining = _repository.buildMockTraining();
-    final announcements = _repository.buildAnnouncements(user);
+    final user = await _resolveCurrentUser();
+    var announcements = _repository.buildAnnouncements(user);
 
     state = state.copyWith(
       isLoading: true,
@@ -154,12 +160,14 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
 
     List<StaffRequestRecord> leaveRecords = [];
     List<StaffRequestRecord> transferRecords = [];
-    List<HomeTrainingItem> trainings = fallbackTraining;
+    List<HomeTrainingItem> trainings = const [];
     List<RequestLookupOption> leaveTypes = _repository.buildMockLeaveTypes();
     List<RequestLookupOption> representatives = _repository
         .buildMockRepresentatives();
     List<RequestLookupOption> transferReasons = _repository
         .buildMockTransferReasons();
+    List<RequestLookupOption> activityOptions = const [];
+    List<RequestLookupOption> loanBanks = const [];
     final mockDirectory = _repository.buildMockFacilityDirectory();
     List<RequestLookupOption> facilities = mockDirectory.facilities;
     Map<String, List<RequestLookupOption>> departmentsByFacilityId =
@@ -169,37 +177,61 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     String? errorMessage;
 
     if (user != null) {
+      final canLoadSelfServiceRequests = _currentAccess.hasEmployeeProfile;
+
       try {
-        leaveRecords = await _repository.fetchLeaveRequests(user);
-      } catch (error) {
-        errorMessage ??= error.toString().replaceAll('Exception: ', '');
+        announcements = await _repository.fetchAnnouncements();
+      } catch (_) {}
+
+      if (canLoadSelfServiceRequests) {
+        try {
+          leaveRecords = await _repository.fetchLeaveRequests(user);
+        } catch (error) {
+          errorMessage ??= error.toString().replaceAll('Exception: ', '');
+        }
+
+        try {
+          transferRecords = await _repository.fetchTransferRequests(user);
+        } catch (_) {}
+
+        try {
+          trainings = await _repository.fetchUpcomingTraining(user);
+        } catch (_) {}
+
+        try {
+          leaveTypes = await _repository.fetchLeaveTypes(user);
+        } catch (_) {}
+
+        try {
+          representatives = await _repository.fetchRepresentatives();
+        } catch (_) {}
+
+        try {
+          transferReasons = await _repository.fetchTransferReasons();
+        } catch (_) {}
+
+        // try {
+        //   activityOptions = await _repository.fetchActivityOptions();
+        // } catch (_) {}
+
+        try {
+          loanBanks = await _repository.fetchLoanBanks();
+        } catch (_) {}
+
+        try {
+          final directory = await _repository.fetchFacilityDirectory();
+          facilities = directory.facilities;
+          departmentsByFacilityId = directory.departmentsByFacilityId;
+        } catch (_) {}
+
+        try {
+          leaveRecords.addAll(await _repository.fetchSickSheets(user));
+        } catch (_) {}
+
+        try {
+          transferRecords.addAll(await _repository.fetchLoanRequests(user));
+        } catch (_) {}
       }
-
-      try {
-        transferRecords = await _repository.fetchTransferRequests(user);
-      } catch (_) {}
-
-      try {
-        trainings = await _repository.fetchUpcomingTraining(user);
-      } catch (_) {}
-
-      try {
-        leaveTypes = await _repository.fetchLeaveTypes(user);
-      } catch (_) {}
-
-      try {
-        representatives = await _repository.fetchRepresentatives();
-      } catch (_) {}
-
-      try {
-        transferReasons = await _repository.fetchTransferReasons();
-      } catch (_) {}
-
-      try {
-        final directory = await _repository.fetchFacilityDirectory();
-        facilities = directory.facilities;
-        departmentsByFacilityId = directory.departmentsByFacilityId;
-      } catch (_) {}
 
       if (_currentAccess.hasApproverMode) {
         try {
@@ -214,21 +246,8 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     }
 
     final records = <StaffRequestRecord>[
-      ...mockRecords.where(
-        (record) => record.type == StaffRequestType.activity,
-      ),
-      ...(leaveRecords.isEmpty
-          ? mockRecords.where((record) => record.type == StaffRequestType.leave)
-          : leaveRecords),
-      ...(transferRecords.isEmpty
-          ? mockRecords.where(
-              (record) => record.type == StaffRequestType.transfer,
-            )
-          : transferRecords),
-      ...mockRecords.where((record) => record.type == StaffRequestType.loan),
-      ...mockRecords.where(
-        (record) => record.type == StaffRequestType.sickLeave,
-      ),
+      ...leaveRecords,
+      ...transferRecords,
     ]..sort((first, second) => second.submittedAt.compareTo(first.submittedAt));
 
     state = state.copyWith(
@@ -240,6 +259,8 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
       leaveTypes: leaveTypes,
       representatives: representatives,
       transferReasons: transferReasons,
+      activityOptions: activityOptions,
+      loanBanks: loanBanks,
       facilities: facilities,
       departmentsByFacilityId: departmentsByFacilityId,
       leaveApprovalTasks: leaveApprovalTasks,
@@ -253,14 +274,36 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     state = state.copyWith(errorMessage: null);
   }
 
-  Future<StaffRequestRecord> submitLeaveRequest(LeaveRequestDraft draft) async {
+  Future<UserModel?> _resolveCurrentUser() async {
     final user = _currentUser ?? await _authRepository.getSavedUser();
+    final resolved = await _authRepository.resolveEmployeeUser(user);
+    _currentUser = resolved;
+    _currentAccess = StaffPortalAccess.fromUser(
+      resolved,
+      preferredMode: _currentAccess.activeMode,
+    );
+    return resolved;
+  }
+
+  String _missingEmployeeInformationMessage() {
+    if (_currentAccess.hasApproverMode) {
+      return 'This admin account is not linked to an employee profile, so it cannot submit employee leave requests. Switch to a staff account or use the approver workspace.';
+    }
+    return 'Your account is missing employee information. Please sign in again or contact support.';
+  }
+
+  Future<StaffRequestRecord> submitLeaveRequest(LeaveRequestDraft draft) async {
+    final user = await _resolveCurrentUser();
     state = state.copyWith(isSubmitting: true, errorMessage: null);
 
     try {
-      final record = user == null || user.personalInformationId.trim().isEmpty
-          ? _mockLeaveRecord(draft)
-          : await _repository.submitLeaveRequest(user: user, draft: draft);
+      // if (user == null || user.personalInformationId.trim().isEmpty) {
+      //   throw Exception(_missingEmployeeInformationMessage());
+      // }
+      final record = await _repository.submitLeaveRequest(
+        user: user!,
+        draft: draft,
+      );
       _prependRecord(record);
       state = state.copyWith(isSubmitting: false);
       return record;
@@ -274,13 +317,17 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
   Future<StaffRequestRecord> submitTransferRequest(
     TransferRequestDraft draft,
   ) async {
-    final user = _currentUser ?? await _authRepository.getSavedUser();
+    final user = await _resolveCurrentUser();
     state = state.copyWith(isSubmitting: true, errorMessage: null);
 
     try {
-      final record = user == null || user.personalInformationId.trim().isEmpty
-          ? _mockTransferRecord(draft)
-          : await _repository.submitTransferRequest(user: user, draft: draft);
+      if (user == null || user.personalInformationId.trim().isEmpty) {
+        throw Exception(_missingEmployeeInformationMessage());
+      }
+      final record = await _repository.submitTransferRequest(
+        user: user,
+        draft: draft,
+      );
       _prependRecord(record);
       state = state.copyWith(isSubmitting: false);
       return record;
@@ -294,19 +341,62 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
   Future<StaffRequestRecord> submitActivityRequest(
     ActivityRequestDraft draft,
   ) async {
+    final user = await _resolveCurrentUser();
     state = state.copyWith(isSubmitting: true, errorMessage: null);
-    final record = _mockActivityRecord(draft);
-    _prependRecord(record);
-    state = state.copyWith(isSubmitting: false);
-    return record;
+
+    try {
+      // if (user == null || user.payroll.trim().isEmpty) {
+      //   throw Exception(_missingEmployeeInformationMessage());
+      // }
+      final record = await _repository.submitActivityRequest(
+        user: user!,
+        draft: draft,
+      );
+      _prependRecord(record);
+      state = state.copyWith(isSubmitting: false);
+      return record;
+    } catch (error) {
+      final message = error.toString().replaceAll('Exception: ', '');
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
   }
 
   Future<StaffRequestRecord> submitLoanRequest(LoanRequestDraft draft) async {
     state = state.copyWith(isSubmitting: true, errorMessage: null);
-    final record = _mockLoanRecord(draft);
-    _prependRecord(record);
-    state = state.copyWith(isSubmitting: false);
-    return record;
+
+    try {
+      final record = await _repository.submitLoanRequest(draft: draft);
+      _prependRecord(record);
+      state = state.copyWith(isSubmitting: false);
+      return record;
+    } catch (error) {
+      final message = error.toString().replaceAll('Exception: ', '');
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
+  Future<StaffRequestRecord> submitSickSheet(SickSheetDraft draft) async {
+    final user = await _resolveCurrentUser();
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+
+    try {
+      // if (user == null || user.personalInformationId.trim().isEmpty) {
+      //   throw Exception(_missingEmployeeInformationMessage());
+      // }
+      final record = await _repository.submitSickSheet(
+        user: user!,
+        draft: draft,
+      );
+      _prependRecord(record);
+      state = state.copyWith(isSubmitting: false);
+      return record;
+    } catch (error) {
+      final message = error.toString().replaceAll('Exception: ', '');
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
   }
 
   Future<StaffRequestRecord> withdrawRequest(StaffRequestRecord request) async {
@@ -414,180 +504,5 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     }
 
     return [...fields, statusField];
-  }
-
-  StaffRequestRecord _mockLeaveRecord(LeaveRequestDraft draft) {
-    final now = DateTime.now();
-    return StaffRequestRecord(
-      id: 'leave-local-${now.microsecondsSinceEpoch}',
-      type: StaffRequestType.leave,
-      title: '${draft.leaveTypeLabel} Request',
-      summary: draft.reason,
-      status: StaffRequestStatus.submitted,
-      submittedAt: now,
-      referenceNumber:
-          'LV-${now.year}-${(now.millisecondsSinceEpoch % 100000).toString().padLeft(5, '0')}',
-      startDate: draft.startDate,
-      endDate: draft.endDate,
-      detailFields: [
-        RequestDetailField(label: 'Leave Type', value: draft.leaveTypeLabel),
-        RequestDetailField(
-          label: 'Start Date',
-          value: _displayDate(draft.startDate),
-        ),
-        if (draft.endDate != null)
-          RequestDetailField(
-            label: 'End Date',
-            value: _displayDate(draft.endDate!),
-          ),
-        RequestDetailField(
-          label: 'Contact on Leave',
-          value: draft.contactOnLeave,
-        ),
-        if (draft.numberOfDays != null)
-          RequestDetailField(
-            label: 'Number of Days',
-            value: '${draft.numberOfDays}',
-          ),
-        RequestDetailField(
-          label: 'Representative',
-          value: draft.representativeLabel ?? 'Not selected',
-        ),
-        if ((draft.placeToTravel ?? '').trim().isNotEmpty)
-          RequestDetailField(
-            label: 'Place To Travel',
-            value: draft.placeToTravel!,
-          ),
-        RequestDetailField(label: 'Reason', value: draft.reason),
-        const RequestDetailField(
-          label: 'Status',
-          value: 'Submitted',
-          status: StaffRequestStatus.submitted,
-        ),
-      ],
-    );
-  }
-
-  StaffRequestRecord _mockTransferRecord(TransferRequestDraft draft) {
-    final now = DateTime.now();
-    return StaffRequestRecord(
-      id: 'transfer-local-${now.microsecondsSinceEpoch}',
-      type: StaffRequestType.transfer,
-      title: 'Transfer Request',
-      summary: draft.reasonText,
-      status: StaffRequestStatus.submitted,
-      submittedAt: now,
-      referenceNumber:
-          'TR-${now.year}-${(now.millisecondsSinceEpoch % 100000).toString().padLeft(5, '0')}',
-      location: draft.facilityLabel,
-      detailFields: [
-        RequestDetailField(
-          label: 'Preferred Facility',
-          value: draft.facilityLabel,
-        ),
-        RequestDetailField(
-          label: 'Preferred Department',
-          value: draft.departmentLabel ?? 'Not selected',
-        ),
-        RequestDetailField(label: 'Reason', value: draft.reasonLabel),
-        RequestDetailField(
-          label: 'Transfer Notes',
-          value: draft.reasonText.isEmpty ? 'Not provided' : draft.reasonText,
-        ),
-        RequestDetailField(
-          label: 'Preferred Transfer Date',
-          value: _displayDate(draft.preferredTransferDate),
-        ),
-        const RequestDetailField(
-          label: 'Status',
-          value: 'Submitted',
-          status: StaffRequestStatus.submitted,
-        ),
-      ],
-    );
-  }
-
-  StaffRequestRecord _mockActivityRecord(ActivityRequestDraft draft) {
-    final now = DateTime.now();
-    return StaffRequestRecord(
-      id: 'activity-local-${now.microsecondsSinceEpoch}',
-      type: StaffRequestType.activity,
-      title: draft.activityTitle,
-      summary: draft.description,
-      status: StaffRequestStatus.submitted,
-      submittedAt: now,
-      referenceNumber:
-          'AC-${now.year}-${(now.millisecondsSinceEpoch % 100000).toString().padLeft(5, '0')}',
-      startDate: draft.startDate,
-      endDate: draft.endDate,
-      location: draft.location,
-      detailFields: [
-        RequestDetailField(label: 'Activity', value: draft.activityTitle),
-        RequestDetailField(label: 'Category', value: draft.category),
-        RequestDetailField(label: 'Scope', value: draft.scope),
-        RequestDetailField(label: 'Location', value: draft.location),
-        RequestDetailField(label: 'Participants', value: draft.participants),
-        RequestDetailField(label: 'Description', value: draft.description),
-        const RequestDetailField(
-          label: 'Status',
-          value: 'Submitted',
-          status: StaffRequestStatus.submitted,
-        ),
-      ],
-    );
-  }
-
-  StaffRequestRecord _mockLoanRecord(LoanRequestDraft draft) {
-    final now = DateTime.now();
-    return StaffRequestRecord(
-      id: 'loan-local-${now.microsecondsSinceEpoch}',
-      type: StaffRequestType.loan,
-      title: '${draft.loanType} Application',
-      summary: draft.purpose,
-      status: StaffRequestStatus.submitted,
-      submittedAt: now,
-      referenceNumber:
-          'LN-${now.year}-${(now.millisecondsSinceEpoch % 100000).toString().padLeft(5, '0')}',
-      detailFields: [
-        RequestDetailField(label: 'Loan Type', value: draft.loanType),
-        RequestDetailField(
-          label: 'Requested Amount',
-          value: draft.requestedAmount,
-        ),
-        RequestDetailField(
-          label: 'Employer Status',
-          value: draft.employerStatus,
-        ),
-        RequestDetailField(label: 'Monthly Salary', value: draft.monthlySalary),
-        RequestDetailField(
-          label: 'Repayment Period',
-          value: '${draft.repaymentMonths} Months',
-        ),
-        RequestDetailField(label: 'Purpose', value: draft.purpose),
-        const RequestDetailField(
-          label: 'Status',
-          value: 'Submitted',
-          status: StaffRequestStatus.submitted,
-        ),
-      ],
-    );
-  }
-
-  String _displayDate(DateTime value) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${value.day.toString().padLeft(2, '0')} ${months[value.month - 1]} ${value.year}';
   }
 }

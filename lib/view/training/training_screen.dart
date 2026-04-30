@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../model/staff_portal_access.dart';
 import '../../model/training_models.dart';
@@ -51,7 +52,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   @override
   Widget build(BuildContext context) {
     final access = ref.watch(staffPortalAccessProvider);
-    if (access.isApproverMode && access.canReviewTrainingRequests) {
+    if (access.canReviewTrainingRequests) {
       return _ApproverTrainingHub(standalone: widget.standalone);
     }
 
@@ -215,7 +216,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                         padding: const EdgeInsets.only(bottom: 12),
                         child: _ResourceTile(
                           resource: item,
-                          onTap: () => _showResourceHint(context, item),
+                          onTap: () => _openResource(context, item),
                         ),
                       ),
                     ),
@@ -254,7 +255,8 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
     final approvals = _filterApprovalRecords(requestRecords, _query);
     final actionableCount = approvals
         .where(
-          (record) => _findActionableApproval(state.approvalQueue, record) != null,
+          (record) =>
+              _findActionableApproval(state.approvalQueue, record) != null,
         )
         .length;
     final resources = _filterResources(state.resources, _query);
@@ -346,35 +348,33 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
                     message: 'No training applications are waiting for review.',
                   )
                 else
-                  ...approvals.map(
-                    (record) {
-                      final actionableRecord = _findActionableApproval(
-                        state.approvalQueue,
-                        record,
-                      );
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _TrainingApprovalCard(
-                          record: record,
-                          actionLabel: actionLabel,
-                          isSubmitting: state.isSubmittingApproval,
-                          onOpen: () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  _TrainingApprovalDetailsScreen(record: record),
-                            ),
+                  ...approvals.map((record) {
+                    final actionableRecord = _findActionableApproval(
+                      state.approvalQueue,
+                      record,
+                    );
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _TrainingApprovalCard(
+                        record: record,
+                        actionLabel: actionLabel,
+                        isSubmitting: state.isSubmittingApproval,
+                        onOpen: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                _TrainingApprovalDetailsScreen(record: record),
                           ),
-                          onPrimaryAction:
-                              actionLabel != null && actionableRecord != null
-                              ? () => _submitAction(
-                                  actionableRecord,
-                                  resolvedActionLabel,
-                                )
-                              : null,
                         ),
-                      );
-                    },
-                  ),
+                        onPrimaryAction:
+                            actionLabel != null && actionableRecord != null
+                            ? () => _submitAction(
+                                actionableRecord,
+                                resolvedActionLabel,
+                              )
+                            : null,
+                      ),
+                    );
+                  }),
               ] else ...[
                 if (resources.isEmpty)
                   const _EmptyCard(message: 'No resources found')
@@ -384,7 +384,7 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _ResourceTile(
                         resource: item,
-                        onTap: () => _showResourceHint(context, item),
+                        onTap: () => _openResource(context, item),
                       ),
                     ),
                   ),
@@ -448,7 +448,10 @@ class _TrainingApprovalDetailsScreenState
     final access = ref.watch(staffPortalAccessProvider);
     final state = ref.watch(trainingViewModelProvider);
     final record = state.resolveApproval(widget.record);
-    final actionableRecord = _findActionableApproval(state.approvalQueue, record);
+    final actionableRecord = _findActionableApproval(
+      state.approvalQueue,
+      record,
+    );
     final actionLabel = _trainingApprovalActionLabel(access);
     final resolvedActionLabel = actionLabel ?? 'Approve';
     final canSubmitAction = actionLabel != null && actionableRecord != null;
@@ -608,7 +611,7 @@ class _TrainingApprovalDetailsScreenState
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _ResourceTile(
                       resource: resource,
-                      onTap: () => _showResourceHint(context, resource),
+                      onTap: () => _openResource(context, resource),
                     ),
                   ),
                 ),
@@ -636,10 +639,7 @@ class _TrainingApprovalDetailsScreenState
                   ),
                   onPressed: state.isSubmittingApproval
                       ? null
-                      : () => _handleAction(
-                          reviewRecord,
-                          resolvedActionLabel,
-                        ),
+                      : () => _handleAction(reviewRecord, resolvedActionLabel),
                   child: state.isSubmittingApproval
                       ? const SizedBox(
                           width: 20,
@@ -890,7 +890,7 @@ class _TrainingResourcesScreenState
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _ResourceTile(
                   resource: item,
-                  onTap: () => _showResourceHint(context, item),
+                  onTap: () => _openResource(context, item),
                 ),
               ),
             ),
@@ -1108,7 +1108,7 @@ class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _ResourceTile(
                     resource: resource,
-                    onTap: () => _showResourceHint(context, resource),
+                    onTap: () => _openResource(context, resource),
                   ),
                 ),
               ),
@@ -1335,7 +1335,9 @@ class _LatestTrainingCard extends StatelessWidget {
           return Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
-              mainAxisSize: hasBoundedHeight ? MainAxisSize.max : MainAxisSize.min,
+              mainAxisSize: hasBoundedHeight
+                  ? MainAxisSize.max
+                  : MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _TrainingArtwork(seed: program.id.hashCode, height: 104),
@@ -1393,7 +1395,10 @@ class _LatestTrainingCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (hasBoundedHeight) const Spacer() else const SizedBox(height: 12),
+                if (hasBoundedHeight)
+                  const Spacer()
+                else
+                  const SizedBox(height: 12),
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
@@ -1988,10 +1993,7 @@ class _ApproverTabButton extends StatelessWidget {
 }
 
 class _QueueSummaryCard extends StatelessWidget {
-  const _QueueSummaryCard({
-    required this.count,
-    required this.actionableCount,
-  });
+  const _QueueSummaryCard({required this.count, required this.actionableCount});
 
   final int count;
   final int actionableCount;
@@ -2436,11 +2438,34 @@ void _openTrainingDetails(BuildContext context, TrainingProgram program) {
   );
 }
 
-void _showResourceHint(BuildContext context, TrainingResource resource) {
-  final message = (resource.filePath.trim().isNotEmpty || resource.isLive)
-      ? '${resource.title} is available, but file preview is not wired in this build yet.'
-      : 'This resource is a design mock and does not have a linked file yet.';
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+Future<void> _openResource(
+  BuildContext context,
+  TrainingResource resource,
+) async {
+  final resourceUrl = resource.filePath.trim();
+  if (resourceUrl.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('This resource does not have a linked file.'),
+      ),
+    );
+    return;
+  }
+
+  final uri = Uri.tryParse(resourceUrl);
+  if (uri == null || !uri.hasScheme) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('This resource link is not valid.')),
+    );
+    return;
+  }
+
+  final didLaunch = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  if (!didLaunch && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Could not open this resource.')),
+    );
+  }
 }
 
 List<TrainingProgram> _filterPrograms(

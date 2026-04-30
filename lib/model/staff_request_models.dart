@@ -321,14 +321,26 @@ class ApprovalTask {
 
 class HomeAnnouncement {
   const HomeAnnouncement({
+    this.id,
     required this.title,
     required this.subtitle,
     required this.caption,
+    this.type = 'General',
+    this.externalLink,
+    this.startsAt,
+    this.endsAt,
+    this.isLive = false,
   });
 
+  final String? id;
   final String title;
   final String subtitle;
   final String caption;
+  final String type;
+  final String? externalLink;
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  final bool isLive;
 }
 
 class HomeTrainingItem {
@@ -367,6 +379,8 @@ class LeaveRequestDraft {
     this.representativeId,
     this.representativeLabel,
     this.placeToTravel,
+    this.filePath,
+    this.fileName,
   });
 
   final String leaveTypeId;
@@ -379,6 +393,8 @@ class LeaveRequestDraft {
   final String? representativeId;
   final String? representativeLabel;
   final String? placeToTravel;
+  final String? filePath;
+  final String? fileName;
 }
 
 class TransferRequestDraft {
@@ -391,6 +407,8 @@ class TransferRequestDraft {
     required this.preferredTransferDate,
     this.departmentId,
     this.departmentLabel,
+    this.filePath,
+    this.fileName,
   });
 
   final String facilityId;
@@ -401,44 +419,70 @@ class TransferRequestDraft {
   final DateTime preferredTransferDate;
   final String? departmentId;
   final String? departmentLabel;
+  final String? filePath;
+  final String? fileName;
+}
+
+class SickSheetDraft {
+  const SickSheetDraft({
+    required this.leaveTypeId,
+    required this.leaveTypeLabel,
+    required this.startDate,
+    required this.contactOnLeave,
+    required this.filePath,
+    required this.fileName,
+    this.numberOfDays,
+    this.note,
+  });
+
+  final String leaveTypeId;
+  final String leaveTypeLabel;
+  final DateTime startDate;
+  final String contactOnLeave;
+  final String filePath;
+  final String fileName;
+  final int? numberOfDays;
+  final String? note;
 }
 
 class ActivityRequestDraft {
   const ActivityRequestDraft({
-    required this.activityTitle,
-    required this.category,
-    required this.scope,
-    required this.location,
-    required this.startDate,
-    required this.endDate,
-    required this.participants,
-    required this.description,
+    required this.name,
+    required this.activityDate,
+    required this.activityAreaType,
+    this.destinationName,
+    this.description,
   });
 
-  final String activityTitle;
-  final String category;
-  final String scope;
-  final String location;
-  final DateTime startDate;
-  final DateTime endDate;
-  final String participants;
-  final String description;
+  final String name;
+  final DateTime activityDate;
+  final String activityAreaType;
+  final String? destinationName;
+  final String? description;
 }
 
 class LoanRequestDraft {
   const LoanRequestDraft({
+    required this.bankId,
+    required this.bankLabel,
     required this.loanType,
     required this.requestedAmount,
     required this.employerStatus,
     required this.monthlySalary,
     required this.repaymentMonths,
+    required this.termDuration,
+    required this.termPeriod,
     required this.purpose,
   });
 
+  final String bankId;
+  final String bankLabel;
   final String loanType;
   final String requestedAmount;
   final String employerStatus;
   final String monthlySalary;
   final String repaymentMonths;
+  final int termDuration;
+  final String termPeriod;
   final String purpose;
 }

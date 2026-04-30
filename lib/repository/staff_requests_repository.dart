@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:dio/dio.dart';
 
 import '../data/network/api_service.dart';
@@ -181,6 +183,35 @@ class StaffRequestsRepository {
         ],
       );
     }).toList();
+  }
+
+  Future<List<StaffRequestRecord>> fetchLoanRequests(UserModel user) async {
+    final queryParameters = <String, dynamic>{'perPage': 50};
+    final userId = int.tryParse(user.userId);
+    if (userId != null) {
+      queryParameters['loanee_id'] = userId;
+    }
+    log(queryParameters.toString());
+    final response = await _dio.get(
+      '/loans',
+      queryParameters: queryParameters,
+      options: await _authorizedOptions(),
+    );
+    log(response.data.toString());
+    final items = _extractListByKey(response.data, 'loans');
+
+    return items.map(_loanRecordFromApi).toList();
+  }
+
+  Future<List<StaffRequestRecord>> fetchSickSheets(UserModel user) async {
+    final response = await _dio.get(
+      '/sick-sheets',
+      queryParameters: const {'perPage': 50},
+      options: await _authorizedOptions(),
+    );
+    final items = _extractListByKey(response.data, 'sick_sheets');
+
+    return items.map(_sickSheetRecordFromApi).toList();
   }
 
   Future<List<ApprovalTask>> fetchLeaveApprovalTasks() async {
@@ -400,8 +431,8 @@ class StaffRequestsRepository {
         );
     }
 
-    _ensureSuccessfulStatus(
-      response.data,
+    _ensureSuccessfulResponse(
+      response,
       fallback: 'Leave approval action failed.',
     );
 
@@ -516,8 +547,8 @@ class StaffRequestsRepository {
       data: {'transfer_request_id': task.requestId, 'comment': comment},
     );
 
-    _ensureSuccessfulStatus(
-      response.data,
+    _ensureSuccessfulResponse(
+      response,
       fallback: 'Transfer approval action failed.',
     );
 
@@ -529,7 +560,7 @@ class StaffRequestsRepository {
 
   Future<List<HomeTrainingItem>> fetchUpcomingTraining(UserModel user) async {
     if (user.personalInformationId.trim().isEmpty) {
-      return buildMockTraining();
+      return const [];
     }
 
     final response = await _postJson(
@@ -539,7 +570,7 @@ class StaffRequestsRepository {
 
     final items = _extractList(response.data);
     if (items.isEmpty) {
-      return buildMockTraining();
+      return const [];
     }
 
     return items
@@ -564,6 +595,20 @@ class StaffRequestsRepository {
           ),
         )
         .toList();
+  }
+
+  Future<List<HomeAnnouncement>> fetchAnnouncements() async {
+    final response = await _get('/trainingAnnouncements');
+    final items = _extractList(response.data);
+    if (items.isEmpty) {
+      return buildAnnouncements(null);
+    }
+
+    return items.map(_announcementFromApi).toList()..sort((first, second) {
+      final firstDate = first.startsAt ?? DateTime(1970);
+      final secondDate = second.startsAt ?? DateTime(1970);
+      return secondDate.compareTo(firstDate);
+    });
   }
 
   Future<List<RequestLookupOption>> fetchLeaveTypes(UserModel user) async {
@@ -629,8 +674,68 @@ class StaffRequestsRepository {
               item['transfer_reason_name'],
               fallback: 'Transfer',
             ),
+            requiresAttachment: _boolValue(item['need_upload']),
           ),
         )
+        .toList();
+  }
+
+  Future<List<RequestLookupOption>> fetchActivityOptions() async {
+    try {
+      final response = await _get('/activities');
+      log('Activities response: ${response.data}');
+      final items = _extractList(response.data);
+      final options = <RequestLookupOption>[];
+
+      void addActivity(Map<String, dynamic> item) {
+        final id = _stringValue(item['activity_id']);
+        if (id.isEmpty) return;
+        options.add(
+          RequestLookupOption(
+            id: id,
+            label: _stringValue(item['activity_name'], fallback: 'Activity'),
+            subtitle: [
+              _stringValue(item['activity_code']),
+              _stringValue(item['type']),
+            ].where((value) => value.isNotEmpty).join(' • '),
+          ),
+        );
+
+        final children = item['children'];
+        if (children is List) {
+          for (final child in children) {
+            if (child is! Map) continue;
+            addActivity(
+              child.map((key, value) => MapEntry(key.toString(), value)),
+            );
+          }
+        }
+      }
+
+      for (final item in items) {
+        addActivity(item);
+      }
+
+      return options;
+    } catch (e) {
+      log('Error fetching activities: $e');
+      return [];
+    }
+  }
+
+  Future<List<RequestLookupOption>> fetchLoanBanks() async {
+    final response = await _get('/banks');
+    final items = _extractList(response.data);
+
+    return items
+        .map(
+          (item) => RequestLookupOption(
+            id: _stringValue(item['bank_id']),
+            label: _stringValue(item['bank_name'], fallback: 'Bank'),
+            subtitle: _stringValue(item['abraviation']),
+          ),
+        )
+        .where((item) => item.id.isNotEmpty)
         .toList();
   }
 
@@ -695,11 +800,16 @@ class StaffRequestsRepository {
         'representative_id': draft.representativeId,
       if ((draft.placeToTravel ?? '').trim().isNotEmpty)
         'place_to_travel': draft.placeToTravel,
+      if ((draft.filePath ?? '').trim().isNotEmpty)
+        'upload_file_name': await MultipartFile.fromFile(
+          draft.filePath!,
+          filename: draft.fileName,
+        ),
     };
 
     final response = await _postForm('/leaveRequests', data: payload);
-    _ensureSuccessfulStatus(
-      response.data,
+    _ensureSuccessfulResponse(
+      response,
       fallback: 'Leave request was not submitted.',
     );
 
@@ -745,6 +855,8 @@ class StaffRequestsRepository {
             label: 'Place To Travel',
             value: draft.placeToTravel!,
           ),
+        if ((draft.fileName ?? '').trim().isNotEmpty)
+          RequestDetailField(label: 'Attachment', value: draft.fileName!),
         RequestDetailField(label: 'Reason', value: draft.reason),
         RequestDetailField(
           label: 'Status',
@@ -770,11 +882,16 @@ class StaffRequestsRepository {
         'working_position_id_to': draft.departmentId,
       if (draft.reasonText.trim().isNotEmpty) 'request_from': draft.reasonText,
       if (draft.reasonText.trim().isNotEmpty) 'reason_text': draft.reasonText,
+      if ((draft.filePath ?? '').trim().isNotEmpty)
+        'upload_file_name': await MultipartFile.fromFile(
+          draft.filePath!,
+          filename: draft.fileName,
+        ),
     };
 
     final response = await _postForm('/staffTransferRequests', data: payload);
-    _ensureSuccessfulStatus(
-      response.data,
+    _ensureSuccessfulResponse(
+      response,
       fallback: 'Transfer request was not submitted.',
     );
 
@@ -788,6 +905,7 @@ class StaffRequestsRepository {
       submittedAt: DateTime.now(),
       referenceNumber: reference,
       location: draft.facilityLabel,
+      attachmentName: draft.fileName,
       stageLabel: 'Submitted',
       isLive: true,
       detailFields: [
@@ -808,6 +926,8 @@ class StaffRequestsRepository {
           label: 'Preferred Transfer Date',
           value: _displayDate(draft.preferredTransferDate),
         ),
+        if ((draft.fileName ?? '').trim().isNotEmpty)
+          RequestDetailField(label: 'Attachment', value: draft.fileName!),
         RequestDetailField(
           label: 'Status',
           value: StaffRequestStatus.pending.label,
@@ -817,36 +937,350 @@ class StaffRequestsRepository {
     );
   }
 
-  List<HomeAnnouncement> buildAnnouncements(UserModel? user) {
-    return const [
-      HomeAnnouncement(
-        title: 'New Training Opportunity',
-        subtitle: 'Public Health Surveillance training open for nominations.',
-        caption: 'Deadline is 15 March 2026',
+  Future<StaffRequestRecord> submitSickSheet({
+    required UserModel user,
+    required SickSheetDraft draft,
+  }) async {
+    final payload = <String, dynamic>{
+      'document': await MultipartFile.fromFile(
+        draft.filePath,
+        filename: draft.fileName,
       ),
-      HomeAnnouncement(
-        title: 'Internal Memo',
-        subtitle: 'Quarterly planning workshop registration closes this week.',
-        caption: 'Seats are limited',
-      ),
-    ];
+    };
+
+    final response = await _postForm('/sick-sheets', data: payload);
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Sick sheet was not submitted.',
+    );
+
+    final serverRecord = _extractMap(response.data, 'sick_sheet');
+    if (serverRecord.isNotEmpty) {
+      return _sickSheetRecordFromApi(serverRecord).copyWith(
+        startDate: draft.startDate,
+        attachmentName: draft.fileName,
+        detailFields: [
+          ..._sickSheetRecordFromApi(serverRecord).detailFields,
+          RequestDetailField(
+            label: 'Sick Sheet Date',
+            value: _displayDate(draft.startDate),
+          ),
+          RequestDetailField(label: 'Contact', value: draft.contactOnLeave),
+          if (draft.note?.trim().isNotEmpty == true)
+            RequestDetailField(label: 'Note', value: draft.note!.trim()),
+        ],
+      );
+    }
+
+    final reference = _reference(prefix: 'SL');
+    return StaffRequestRecord(
+      id: reference,
+      type: StaffRequestType.sickLeave,
+      title: 'Sick Sheet Submission',
+      summary: draft.note?.trim().isNotEmpty == true
+          ? draft.note!.trim()
+          : 'Sick sheet uploaded for supervisor review',
+      status: StaffRequestStatus.pending,
+      submittedAt: DateTime.now(),
+      referenceNumber: reference,
+      startDate: draft.startDate,
+      attachmentName: draft.fileName,
+      stageLabel: 'Submitted',
+      isLive: true,
+      detailFields: [
+        RequestDetailField(label: 'Leave Type', value: draft.leaveTypeLabel),
+        RequestDetailField(
+          label: 'Sick Sheet Date',
+          value: _displayDate(draft.startDate),
+        ),
+        RequestDetailField(label: 'Attachment', value: draft.fileName),
+        RequestDetailField(label: 'Contact', value: draft.contactOnLeave),
+        if (draft.note?.trim().isNotEmpty == true)
+          RequestDetailField(label: 'Note', value: draft.note!.trim()),
+        RequestDetailField(
+          label: 'Status',
+          value: StaffRequestStatus.pending.label,
+          status: StaffRequestStatus.pending,
+        ),
+      ],
+    );
   }
 
-  List<HomeTrainingItem> buildMockTraining() {
-    return const [
-      HomeTrainingItem(
-        title: 'Maternal Health Capacity Training',
-        location: 'Zanzibar Health Training Institute',
-        dateLabel: '12/03/2026',
-        tag: 'Internal',
+  Future<StaffRequestRecord> submitActivityRequest({
+    required UserModel user,
+    required ActivityRequestDraft draft,
+  }) async {
+    final payload = <String, dynamic>{
+      'name': draft.name,
+      'activity_date': _toApiDate(draft.activityDate),
+      'activity_area_type': draft.activityAreaType,
+      if (draft.destinationName != null &&
+          draft.destinationName!.trim().isNotEmpty)
+        'destination_name': draft.destinationName!.trim(),
+    };
+
+    final response = await _postJson('/staff-activities', data: payload);
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Activity request was not submitted.',
+    );
+
+    final reference = _reference(prefix: 'AR');
+    return StaffRequestRecord(
+      id: reference,
+      type: StaffRequestType.activity,
+      title: draft.name,
+      summary: draft.description?.trim().isEmpty == true
+          ? 'Activity scope: ${draft.activityAreaType}'
+          : draft.description!.trim(),
+      status: StaffRequestStatus.submitted,
+      submittedAt: DateTime.now(),
+      referenceNumber: reference,
+      startDate: draft.activityDate,
+      location: draft.destinationName,
+      stageLabel: 'Submitted',
+      isLive: true,
+      detailFields: [
+        RequestDetailField(label: 'Activity', value: draft.name),
+        RequestDetailField(
+          label: 'Activity Scope',
+          value: draft.activityAreaType,
+        ),
+        if (draft.destinationName?.trim().isNotEmpty == true)
+          RequestDetailField(label: 'Location', value: draft.destinationName!),
+        if (draft.description?.trim().isNotEmpty == true)
+          RequestDetailField(label: 'Description', value: draft.description!),
+        RequestDetailField(
+          label: 'Status',
+          value: StaffRequestStatus.submitted.label,
+          status: StaffRequestStatus.submitted,
+        ),
+      ],
+    );
+  }
+
+  Future<StaffRequestRecord> submitLoanRequest({
+    required LoanRequestDraft draft,
+  }) async {
+    final amount = int.tryParse(draft.requestedAmount.replaceAll(',', ''));
+    if (amount == null || amount < 1) {
+      throw Exception('Enter a valid requested amount.');
+    }
+
+    final bankId = int.tryParse(draft.bankId);
+    if (bankId == null) {
+      throw Exception('Select a valid bank.');
+    }
+
+    final response = await _postJson(
+      '/loans',
+      data: {
+        'approved_bank_id': bankId,
+        'amount': amount,
+        'term_duration': draft.termDuration,
+        'term_period': draft.termPeriod,
+      },
+    );
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Loan request was not submitted.',
+    );
+
+    final serverRecord = _extractMap(response.data, 'loan');
+    if (serverRecord.isNotEmpty) {
+      return _loanRecordFromApi(serverRecord).copyWith(
+        summary: draft.purpose.trim().isEmpty
+            ? _loanRecordFromApi(serverRecord).summary
+            : draft.purpose.trim(),
+        detailFields: [
+          ..._loanRecordFromApi(serverRecord).detailFields,
+          RequestDetailField(label: 'Loan Type', value: draft.loanType),
+          RequestDetailField(
+            label: 'Employer Status',
+            value: draft.employerStatus,
+          ),
+          RequestDetailField(
+            label: 'Monthly Salary',
+            value: draft.monthlySalary,
+          ),
+          if (draft.purpose.trim().isNotEmpty)
+            RequestDetailField(label: 'Purpose', value: draft.purpose.trim()),
+        ],
+      );
+    }
+
+    final reference = _reference(prefix: 'LN');
+    return StaffRequestRecord(
+      id: reference,
+      type: StaffRequestType.loan,
+      title: 'Loan Application',
+      summary: draft.purpose.trim().isEmpty
+          ? draft.bankLabel
+          : draft.purpose.trim(),
+      status: StaffRequestStatus.pending,
+      submittedAt: DateTime.now(),
+      referenceNumber: reference,
+      stageLabel: 'Submitted',
+      isLive: true,
+      detailFields: [
+        RequestDetailField(label: 'Bank', value: draft.bankLabel),
+        RequestDetailField(
+          label: 'Requested Amount',
+          value: draft.requestedAmount,
+        ),
+        RequestDetailField(
+          label: 'Repayment Period',
+          value: draft.repaymentMonths,
+        ),
+        RequestDetailField(label: 'Loan Type', value: draft.loanType),
+        RequestDetailField(label: 'Purpose', value: draft.purpose),
+        const RequestDetailField(
+          label: 'Status',
+          value: 'Pending',
+          status: StaffRequestStatus.pending,
+        ),
+      ],
+    );
+  }
+
+  StaffRequestRecord _loanRecordFromApi(Map<String, dynamic> item) {
+    final amount = _stringValue(item['amount'], fallback: '0');
+    final bank = _extractNestedMap(item['approved_bank']);
+    final latestReview = _extractNestedMap(item['latest_review']);
+    final status = _statusFromApi(
+      latestReview['status'] ?? item['review_status'] ?? item['current_status'],
+    );
+    final uuid = _stringValue(item['uuid'], fallback: _reference(prefix: 'LN'));
+    final termDuration = _stringValue(item['term_duration']);
+    final termPeriod = _stringValue(item['term_period'], fallback: 'MONTH');
+    final bankName = _stringValue(bank['bank_name'], fallback: 'Selected bank');
+
+    return StaffRequestRecord(
+      id: 'loan-$uuid',
+      type: StaffRequestType.loan,
+      title: 'Loan Application',
+      summary: '$bankName • TZS $amount',
+      status: status,
+      submittedAt: _dateValue(item['created_at']) ?? DateTime.now(),
+      referenceNumber: 'LN-${uuid.length > 8 ? uuid.substring(0, 8) : uuid}',
+      stageLabel: _stringValue(item['current_status'], fallback: status.label),
+      isLive: true,
+      detailFields: [
+        RequestDetailField(label: 'Bank', value: bankName),
+        RequestDetailField(label: 'Requested Amount', value: 'TZS $amount'),
+        RequestDetailField(
+          label: 'Repayment Period',
+          value: '$termDuration ${termPeriod.toLowerCase()}',
+        ),
+        RequestDetailField(
+          label: 'Current Status',
+          value: _stringValue(item['current_status'], fallback: status.label),
+        ),
+        RequestDetailField(
+          label: 'Review Status',
+          value: _stringValue(latestReview['status'], fallback: status.label),
+          status: status,
+        ),
+        if (_stringValue(latestReview['comment']).isNotEmpty)
+          RequestDetailField(
+            label: 'Review Comment',
+            value: _stringValue(latestReview['comment']),
+          ),
+      ],
+    );
+  }
+
+  StaffRequestRecord _sickSheetRecordFromApi(Map<String, dynamic> item) {
+    final uuid = _stringValue(item['uuid'], fallback: _reference(prefix: 'SL'));
+    final status = _statusFromApi(item['status']);
+    final filePath = _stringValue(item['file_path']);
+
+    return StaffRequestRecord(
+      id: 'sick-$uuid',
+      type: StaffRequestType.sickLeave,
+      title: 'Sick Sheet Submission',
+      summary: _stringValue(
+        item['review_comment'],
+        fallback: 'Sick sheet uploaded for supervisor review',
       ),
-      HomeTrainingItem(
-        title: 'Public Health Surveillance',
-        location: 'Mnazi Mmoja Conference Hall',
-        dateLabel: '15/03/2026',
-        tag: 'Workshop',
+      status: status,
+      submittedAt: _dateValue(item['created_at']) ?? DateTime.now(),
+      referenceNumber: 'SL-${uuid.length > 8 ? uuid.substring(0, 8) : uuid}',
+      attachmentName: filePath.split('/').last,
+      stageLabel: status.label,
+      isLive: true,
+      detailFields: [
+        RequestDetailField(label: 'Submission Type', value: 'Sick Sheet'),
+        if (filePath.isNotEmpty)
+          RequestDetailField(
+            label: 'Attachment',
+            value: filePath.split('/').last,
+          ),
+        RequestDetailField(
+          label: 'Review Comment',
+          value: _stringValue(
+            item['review_comment'],
+            fallback: 'Pending review',
+          ),
+        ),
+        RequestDetailField(
+          label: 'Status',
+          value: status.label,
+          status: status,
+        ),
+      ],
+    );
+  }
+
+  List<HomeAnnouncement> buildAnnouncements(UserModel? user) {
+    return const [];
+  }
+
+  HomeAnnouncement _announcementFromApi(Map<String, dynamic> item) {
+    final title = _stringValue(
+      item['title'],
+      fallback: _stringValue(
+        item['training_name'],
+        fallback: 'Training Announcement',
       ),
-    ];
+    );
+    final description = _stringValue(
+      item['body'],
+      fallback: _stringValue(
+        item['text'],
+        fallback: _stringValue(
+          item['discription'],
+          fallback: 'Announcement details are available.',
+        ),
+      ),
+    );
+    final startsAt = _dateValue(
+      item['starts_at'],
+      fallback: _dateValue(item['announce_start_date']),
+    );
+    final endsAt = _dateValue(
+      item['ends_at'],
+      fallback: _dateValue(item['announce_end_date']),
+    );
+    final type = _stringValue(item['type'], fallback: 'Training');
+    final caption = endsAt == null
+        ? type
+        : '$type • Ends ${_displayDate(endsAt)}';
+
+    return HomeAnnouncement(
+      id: _stringValue(
+        item['announcement_id'],
+        fallback: _stringValue(item['training_announcement_id']),
+      ),
+      title: title,
+      subtitle: description,
+      caption: caption,
+      type: type,
+      externalLink: _stringValue(item['external_link']),
+      startsAt: startsAt,
+      endsAt: endsAt,
+      isLive: true,
+    );
   }
 
   List<RequestLookupOption> buildMockLeaveTypes() {
@@ -1044,27 +1478,58 @@ class StaffRequestsRepository {
   }
 
   Future<Response<dynamic>> _get(String path) async {
-    return _dio.get(path, options: await _authorizedOptions());
+    try {
+      return await _dio.get(path, options: await _authorizedOptions());
+    } on DioException catch (error) {
+      throw Exception(
+        _resolveRequestError(
+          error,
+          fallback: 'We could not load the requested data.',
+        ),
+      );
+    }
   }
 
   Future<Response<dynamic>> _postJson(
     String path, {
     required Map<String, dynamic> data,
   }) async {
-    return _dio.post(path, data: data, options: await _authorizedOptions());
+    try {
+      return await _dio.post(
+        path,
+        data: data,
+        options: await _authorizedOptions(),
+      );
+    } on DioException catch (error) {
+      throw Exception(
+        _resolveRequestError(
+          error,
+          fallback: 'The request could not be completed.',
+        ),
+      );
+    }
   }
 
   Future<Response<dynamic>> _postForm(
     String path, {
     required Map<String, dynamic> data,
   }) async {
-    return _dio.post(
-      path,
-      data: FormData.fromMap(data),
-      options: await _authorizedOptions(
-        extraHeaders: const {'Content-Type': 'multipart/form-data'},
-      ),
-    );
+    try {
+      return await _dio.post(
+        path,
+        data: FormData.fromMap(data),
+        options: await _authorizedOptions(
+          extraHeaders: const {'Content-Type': 'multipart/form-data'},
+        ),
+      );
+    } on DioException catch (error) {
+      throw Exception(
+        _resolveRequestError(
+          error,
+          fallback: 'The request could not be submitted.',
+        ),
+      );
+    }
   }
 
   Future<Options> _authorizedOptions({
@@ -1128,6 +1593,18 @@ class StaffRequestsRepository {
     return const [];
   }
 
+  Map<String, dynamic> _extractNestedMap(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return value.map((mapKey, mapValue) {
+        return MapEntry(mapKey.toString(), mapValue);
+      });
+    }
+    return const {};
+  }
+
   Map<String, dynamic> _extractMap(dynamic responseData, String key) {
     if (responseData is Map<String, dynamic>) {
       final value = responseData[key];
@@ -1153,14 +1630,18 @@ class StaffRequestsRepository {
     final value = _stringValue(rawStatus).toUpperCase();
     switch (value) {
       case 'APPROVED':
+      case 'COMPLETED':
         return StaffRequestStatus.approved;
       case 'DENIED':
       case 'REJECTED':
+      case 'DEFAULTED':
         return StaffRequestStatus.rejected;
       case 'WITHDRAWN':
         return StaffRequestStatus.withdrawn;
       case 'SUBMITTED':
+      case 'RECEIVED':
         return StaffRequestStatus.submitted;
+      case 'APPLIED':
       case 'REQUESTED':
       case 'FORWARDED':
       default:
@@ -1262,11 +1743,29 @@ class StaffRequestsRepository {
   String _extractMessage(dynamic responseData, {required String fallback}) {
     if (responseData is Map<String, dynamic>) {
       final message = responseData['message'];
+      if (message is Map && message.isNotEmpty) {
+        final firstEntry = message.values.first;
+        return _extractMessage(firstEntry, fallback: fallback);
+      }
       if (message is List && message.isNotEmpty) {
-        return message.first.toString();
+        return _extractMessage(message.first, fallback: fallback);
       }
       if (message != null && message.toString().trim().isNotEmpty) {
         return message.toString().trim();
+      }
+
+      final messages = responseData['messages'];
+      if (messages is Map && messages.isNotEmpty) {
+        final firstEntry = messages.values.first;
+        return _extractMessage(firstEntry, fallback: fallback);
+      }
+      if (messages is List && messages.isNotEmpty) {
+        return _extractMessage(messages.first, fallback: fallback);
+      }
+
+      final error = responseData['error'];
+      if (error is String && error.trim().isNotEmpty) {
+        return error.trim();
       }
     }
     if (responseData is Map) {
@@ -1275,22 +1774,30 @@ class StaffRequestsRepository {
         fallback: fallback,
       );
     }
+    if (responseData is List && responseData.isNotEmpty) {
+      return _extractMessage(responseData.first, fallback: fallback);
+    }
     if (responseData is String && responseData.trim().isNotEmpty) {
       return responseData.trim();
     }
     return fallback;
   }
 
-  void _ensureSuccessfulStatus(
-    dynamic responseData, {
+  void _ensureSuccessfulResponse(
+    Response<dynamic> response, {
     required String fallback,
   }) {
-    final statusCode = _extractStatusCode(responseData);
+    final httpStatus = response.statusCode;
+    if (httpStatus != null && (httpStatus < 200 || httpStatus >= 300)) {
+      throw Exception(_extractMessage(response.data, fallback: fallback));
+    }
+
+    final statusCode = _extractStatusCode(response.data);
     if (statusCode == null || statusCode == 200 || statusCode == 201) {
       return;
     }
 
-    throw Exception(_extractMessage(responseData, fallback: fallback));
+    throw Exception(_extractMessage(response.data, fallback: fallback));
   }
 
   int? _extractStatusCode(dynamic responseData) {
@@ -1307,5 +1814,26 @@ class StaffRequestsRepository {
       );
     }
     return null;
+  }
+
+  String _resolveRequestError(DioException error, {required String fallback}) {
+    final responseData = error.response?.data;
+    final message = _extractMessage(responseData, fallback: fallback);
+    final normalized = message.trim();
+    if (normalized.isNotEmpty && normalized != fallback) {
+      return normalized;
+    }
+
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.sendTimeout ||
+        error.type == DioExceptionType.receiveTimeout) {
+      return 'The request timed out. Please try again.';
+    }
+
+    if (error.type == DioExceptionType.connectionError) {
+      return 'Network error. Please check your connection and try again.';
+    }
+
+    return fallback;
   }
 }

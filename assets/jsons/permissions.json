@@ -1,0 +1,1847 @@
+[
+    {
+      "id": 1,
+      "name": "View Dashboard",
+      "isSelected": false
+    },
+    {
+      "id": 2,
+      "name": "View Permission",
+      "isSelected": false
+    },
+    {
+      "id": 3,
+      "name": "System Audit",
+      "isSelected": false
+    },
+    {
+      "id": 4,
+      "name": "Report Management",
+      "isSelected": false
+    },
+    {
+      "id": 5,
+      "name": "DMO permission",
+      "isSelected": false
+    },
+    {
+      "id": 6,
+      "name": "Unit permission",
+      "isSelected": false
+    },
+    {
+      "id": 7,
+      "name": "Division permission",
+      "isSelected": false
+    },
+    {
+      "id": 8,
+      "name": "Department permission",
+      "isSelected": false
+    },
+    {
+      "id": 9,
+      "name": "Setup Module",
+      "isSelected": false
+    },
+    {
+      "id": 10,
+      "name": "Leave Module",
+      "isSelected": false
+    },
+    {
+      "id": 11,
+      "name": "Training Module",
+      "isSelected": false
+    },
+    {
+      "id": 12,
+      "name": "Parfomance Module",
+      "isSelected": false
+    },
+    {
+      "id": 13,
+      "name": "Employee Module",
+      "isSelected": false
+    },
+    {
+      "id": 14,
+      "name": "Users Module",
+      "isSelected": false
+    },
+    {
+      "id": 15,
+      "name": "Report Module",
+      "isSelected": false
+    },
+    {
+      "id": 16,
+      "name": "User Management",
+      "isSelected": false
+    },
+    {
+      "id": 17,
+      "name": "Create User",
+      "isSelected": false
+    },
+    {
+      "id": 18,
+      "name": "Update User",
+      "isSelected": false
+    },
+    {
+      "id": 19,
+      "name": "Delete User",
+      "isSelected": false
+    },
+    {
+      "id": 20,
+      "name": "Create Role",
+      "isSelected": false
+    },
+    {
+      "id": 21,
+      "name": "Update Role",
+      "isSelected": false
+    },
+    {
+      "id": 22,
+      "name": "Delete Role",
+      "isSelected": false
+    },
+    {
+      "id": 23,
+      "name": "Setup Management",
+      "isSelected": false
+    },
+    {
+      "id": 24,
+      "name": "Create Location",
+      "isSelected": false
+    },
+    {
+      "id": 25,
+      "name": "Update Location",
+      "isSelected": false
+    },
+    {
+      "id": 26,
+      "name": "Delete Location",
+      "isSelected": false
+    },
+    {
+      "id": 27,
+      "name": "Create Facility Level",
+      "isSelected": false
+    },
+    {
+      "id": 28,
+      "name": "Update Facility Level",
+      "isSelected": false
+    },
+    {
+      "id": 29,
+      "name": "Delete Facility Level",
+      "isSelected": false
+    },
+    {
+      "id": 30,
+      "name": "Create Education Level",
+      "isSelected": false
+    },
+    {
+      "id": 31,
+      "name": "Update Education Level",
+      "isSelected": false
+    },
+    {
+      "id": 32,
+      "name": "Delete Education Level",
+      "isSelected": false
+    },
+    {
+      "id": 33,
+      "name": "Create Admin Hierarchies",
+      "isSelected": false
+    },
+    {
+      "id": 34,
+      "name": "Update Admin Hierarchies",
+      "isSelected": false
+    },
+    {
+      "id": 35,
+      "name": "Delete Admin Hierarchies",
+      "isSelected": false
+    },
+    {
+      "id": 36,
+      "name": "Create Work Station",
+      "isSelected": false
+    },
+    {
+      "id": 37,
+      "name": "Update Work Station",
+      "isSelected": false
+    },
+    {
+      "id": 38,
+      "name": "Delete Work Station",
+      "isSelected": false
+    },
+    {
+      "id": 39,
+      "name": "Create Marital Status",
+      "isSelected": false
+    },
+    {
+      "id": 40,
+      "name": "Update Marital Status",
+      "isSelected": false
+    },
+    {
+      "id": 41,
+      "name": "Delete Marital Status",
+      "isSelected": false
+    },
+    {
+      "id": 42,
+      "name": "Create Identification",
+      "isSelected": false
+    },
+    {
+      "id": 43,
+      "name": "Update Identification",
+      "isSelected": false
+    },
+    {
+      "id": 44,
+      "name": "Delete Identification",
+      "isSelected": false
+    },
+    {
+      "id": 45,
+      "name": "Create Specialization",
+      "isSelected": false
+    },
+    {
+      "id": 46,
+      "name": "Update Specialization",
+      "isSelected": false
+    },
+    {
+      "id": 47,
+      "name": "Delete Specialization",
+      "isSelected": false
+    },
+    {
+      "id": 48,
+      "name": "Create Relation",
+      "isSelected": false
+    },
+    {
+      "id": 49,
+      "name": "Update Relation",
+      "isSelected": false
+    },
+    {
+      "id": 50,
+      "name": "Delete Relation",
+      "isSelected": false
+    },
+    {
+      "id": 51,
+      "name": "Create Department",
+      "isSelected": false
+    },
+    {
+      "id": 52,
+      "name": "Update Department",
+      "isSelected": false
+    },
+    {
+      "id": 53,
+      "name": "Delete Department",
+      "isSelected": false
+    },
+    {
+      "id": 54,
+      "name": "Create Designation",
+      "isSelected": false
+    },
+    {
+      "id": 55,
+      "name": "Update Designation",
+      "isSelected": false
+    },
+    {
+      "id": 56,
+      "name": "Delete Designation",
+      "isSelected": false
+    },
+    {
+      "id": 57,
+      "name": "Create Employment Status",
+      "isSelected": false
+    },
+    {
+      "id": 58,
+      "name": "Update Employment Status",
+      "isSelected": false
+    },
+    {
+      "id": 59,
+      "name": "Delete Employment Status",
+      "isSelected": false
+    },
+    {
+      "id": 60,
+      "name": "Create Institute",
+      "isSelected": false
+    },
+    {
+      "id": 61,
+      "name": "Update Institute",
+      "isSelected": false
+    },
+    {
+      "id": 62,
+      "name": "Delete Institute",
+      "isSelected": false
+    },
+    {
+      "id": 63,
+      "name": "Create Senority",
+      "isSelected": false
+    },
+    {
+      "id": 64,
+      "name": "Update Senority",
+      "isSelected": false
+    },
+    {
+      "id": 65,
+      "name": "Delete Senority",
+      "isSelected": false
+    },
+    {
+      "id": 66,
+      "name": "Create Term Of Employment",
+      "isSelected": false
+    },
+    {
+      "id": 67,
+      "name": "Update Term Of Employment",
+      "isSelected": false
+    },
+    {
+      "id": 68,
+      "name": "Delete Term Of Employment",
+      "isSelected": false
+    },
+    {
+      "id": 69,
+      "name": "Create Upload Types",
+      "isSelected": false
+    },
+    {
+      "id": 70,
+      "name": "Update Upload Types",
+      "isSelected": false
+    },
+    {
+      "id": 71,
+      "name": "Delete Upload Types",
+      "isSelected": false
+    },
+    {
+      "id": 72,
+      "name": "Create Parent Upload Type",
+      "isSelected": false
+    },
+    {
+      "id": 73,
+      "name": "Update Parent Upload Type",
+      "isSelected": false
+    },
+    {
+      "id": 74,
+      "name": "Delete Parent Upload Type",
+      "isSelected": false
+    },
+    {
+      "id": 75,
+      "name": "Create Cader",
+      "isSelected": false
+    },
+    {
+      "id": 76,
+      "name": "Update Cader",
+      "isSelected": false
+    },
+    {
+      "id": 77,
+      "name": "Delete Cader",
+      "isSelected": false
+    },
+    {
+      "id": 78,
+      "name": "Create Disability",
+      "isSelected": false
+    },
+    {
+      "id": 79,
+      "name": "Update Disability",
+      "isSelected": false
+    },
+    {
+      "id": 80,
+      "name": "Delete Disability",
+      "isSelected": false
+    },
+    {
+      "id": 81,
+      "name": "Create Post Category",
+      "isSelected": false
+    },
+    {
+      "id": 82,
+      "name": "Update Post Category",
+      "isSelected": false
+    },
+    {
+      "id": 83,
+      "name": "Delete Post Category",
+      "isSelected": false
+    },
+    {
+      "id": 84,
+      "name": "Create Skills",
+      "isSelected": false
+    },
+    {
+      "id": 85,
+      "name": "Update Skills",
+      "isSelected": false
+    },
+    {
+      "id": 86,
+      "name": "Delete Skills",
+      "isSelected": false
+    },
+    {
+      "id": 87,
+      "name": "Create Language",
+      "isSelected": false
+    },
+    {
+      "id": 88,
+      "name": "Update Language",
+      "isSelected": false
+    },
+    {
+      "id": 89,
+      "name": "Delete Language",
+      "isSelected": false
+    },
+    {
+      "id": 90,
+      "name": "Create Hobby",
+      "isSelected": false
+    },
+    {
+      "id": 91,
+      "name": "Update Hobby",
+      "isSelected": false
+    },
+    {
+      "id": 92,
+      "name": "Delete Hobby",
+      "isSelected": false
+    },
+    {
+      "id": 93,
+      "name": "Create Employer",
+      "isSelected": false
+    },
+    {
+      "id": 94,
+      "name": "Update Employer",
+      "isSelected": false
+    },
+    {
+      "id": 95,
+      "name": "Delete Employer",
+      "isSelected": false
+    },
+    {
+      "id": 96,
+      "name": "Create Working Position",
+      "isSelected": false
+    },
+    {
+      "id": 97,
+      "name": "Update Working Position",
+      "isSelected": false
+    },
+    {
+      "id": 98,
+      "name": "Delete Working Position",
+      "isSelected": false
+    },
+    {
+      "id": 99,
+      "name": "Create Position Post",
+      "isSelected": false
+    },
+    {
+      "id": 100,
+      "name": "Update Position Post",
+      "isSelected": false
+    },
+    {
+      "id": 101,
+      "name": "Delete Position Post",
+      "isSelected": false
+    },
+    {
+      "id": 102,
+      "name": "Create Health Body",
+      "isSelected": false
+    },
+    {
+      "id": 103,
+      "name": "Update Health Body",
+      "isSelected": false
+    },
+    {
+      "id": 104,
+      "name": "Delete Health Body",
+      "isSelected": false
+    },
+    {
+      "id": 105,
+      "name": "Create Standard Level",
+      "isSelected": false
+    },
+    {
+      "id": 106,
+      "name": "Update Standard Level",
+      "isSelected": false
+    },
+    {
+      "id": 107,
+      "name": "Delete Standard Level",
+      "isSelected": false
+    },
+    {
+      "id": 108,
+      "name": "Create Salary Scale",
+      "isSelected": false
+    },
+    {
+      "id": 109,
+      "name": "Update Salary Scale",
+      "isSelected": false
+    },
+    {
+      "id": 110,
+      "name": "Delete Salary Scale",
+      "isSelected": false
+    },
+    {
+      "id": 111,
+      "name": "Delete Salary Source",
+      "isSelected": false
+    },
+    {
+      "id": 112,
+      "name": "Staff Management",
+      "isSelected": false
+    },
+    {
+      "id": 113,
+      "name": "Create Employee",
+      "isSelected": false
+    },
+    {
+      "id": 114,
+      "name": "Update Employee",
+      "isSelected": false
+    },
+    {
+      "id": 115,
+      "name": "Delete Employee",
+      "isSelected": false
+    },
+    {
+      "id": 151,
+      "name": "Create Program",
+      "isSelected": false
+    },
+    {
+      "id": 152,
+      "name": "Update Program",
+      "isSelected": false
+    },
+    {
+      "id": 116,
+      "name": "Zone A Permission",
+      "isSelected": false
+    },
+    {
+      "id": 117,
+      "name": "Zone B Permission",
+      "isSelected": false
+    },
+    {
+      "id": 118,
+      "name": "View User",
+      "isSelected": false
+    },
+    {
+      "id": 119,
+      "name": "View Role",
+      "isSelected": false
+    },
+    {
+      "id": 120,
+      "name": "View Location",
+      "isSelected": false
+    },
+    {
+      "id": 121,
+      "name": "View Facility Level",
+      "isSelected": false
+    },
+    {
+      "id": 122,
+      "name": "View Education Level",
+      "isSelected": false
+    },
+    {
+      "id": 123,
+      "name": "View Admin Hierarchies",
+      "isSelected": false
+    },
+    {
+      "id": 124,
+      "name": "View Work Station",
+      "isSelected": false
+    },
+    {
+      "id": 125,
+      "name": "View Marital Status",
+      "isSelected": false
+    },
+    {
+      "id": 126,
+      "name": "View Identification",
+      "isSelected": false
+    },
+    {
+      "id": 127,
+      "name": "View Specialization",
+      "isSelected": false
+    },
+    {
+      "id": 128,
+      "name": "View Relation",
+      "isSelected": false
+    },
+    {
+      "id": 129,
+      "name": "View Department",
+      "isSelected": false
+    },
+    {
+      "id": 130,
+      "name": "View Designation",
+      "isSelected": false
+    },
+    {
+      "id": 131,
+      "name": "View Employment Status",
+      "isSelected": false
+    },
+    {
+      "id": 132,
+      "name": "View Institute",
+      "isSelected": false
+    },
+    {
+      "id": 133,
+      "name": "View Senority",
+      "isSelected": false
+    },
+    {
+      "id": 134,
+      "name": "View Term Of Employment",
+      "isSelected": false
+    },
+    {
+      "id": 135,
+      "name": "View Upload Types",
+      "isSelected": false
+    },
+    {
+      "id": 136,
+      "name": "View Parent Upload Type",
+      "isSelected": false
+    },
+    {
+      "id": 137,
+      "name": "View Cader",
+      "isSelected": false
+    },
+    {
+      "id": 138,
+      "name": "View Disability",
+      "isSelected": false
+    },
+    {
+      "id": 139,
+      "name": "View Post Category",
+      "isSelected": false
+    },
+    {
+      "id": 140,
+      "name": "View Skills",
+      "isSelected": false
+    },
+    {
+      "id": 141,
+      "name": "View Language",
+      "isSelected": false
+    },
+    {
+      "id": 142,
+      "name": "View Hobby",
+      "isSelected": false
+    },
+    {
+      "id": 143,
+      "name": "View Employer",
+      "isSelected": false
+    },
+    {
+      "id": 144,
+      "name": "View Working Position",
+      "isSelected": false
+    },
+    {
+      "id": 145,
+      "name": "View Position Post",
+      "isSelected": false
+    },
+    {
+      "id": 146,
+      "name": "View Health Body",
+      "isSelected": false
+    },
+    {
+      "id": 147,
+      "name": "View Standard Level",
+      "isSelected": false
+    },
+    {
+      "id": 148,
+      "name": "View Salary Scale",
+      "isSelected": false
+    },
+    {
+      "id": 149,
+      "name": "View Salary Source",
+      "isSelected": false
+    },
+    {
+      "id": 150,
+      "name": "View Employee",
+      "isSelected": false
+    },
+    {
+      "id": 153,
+      "name": "Delete Program",
+      "isSelected": false
+    },
+    {
+      "id": 154,
+      "name": "View Program",
+      "isSelected": false
+    },
+    {
+      "id": 155,
+      "name": "Create Advertisement",
+      "isSelected": false
+    },
+    {
+      "id": 156,
+      "name": "Update Advertisement",
+      "isSelected": false
+    },
+    {
+      "id": 157,
+      "name": "Delete Advertisement",
+      "isSelected": false
+    },
+    {
+      "id": 158,
+      "name": "View Advertisement",
+      "isSelected": false
+    },
+    {
+      "id": 159,
+      "name": "Create Other Qualification",
+      "isSelected": false
+    },
+    {
+      "id": 160,
+      "name": "Update Other Qualification",
+      "isSelected": false
+    },
+    {
+      "id": 161,
+      "name": "Delete Other Qualification",
+      "isSelected": false
+    },
+    {
+      "id": 162,
+      "name": "View Other Qualification",
+      "isSelected": false
+    },
+    {
+      "id": 163,
+      "name": "Application Management",
+      "isSelected": false
+    },
+    {
+      "id": 164,
+      "name": "View Application",
+      "isSelected": false
+    },
+    {
+      "id": 165,
+      "name": "Approve Application",
+      "isSelected": false
+    },
+    {
+      "id": 166,
+      "name": "Denied Application",
+      "isSelected": false
+    },
+    {
+      "id": 167,
+      "name": "View Exam Schedule",
+      "isSelected": false
+    },
+    {
+      "id": 168,
+      "name": "Create Exam Schedule",
+      "isSelected": false
+    },
+    {
+      "id": 169,
+      "name": "Register Member",
+      "isSelected": false
+    },
+    {
+      "id": 170,
+      "name": "Transfer Module",
+      "isSelected": false
+    },
+    {
+      "id": 171,
+      "name": "Create Transfer Path",
+      "isSelected": false
+    },
+    {
+      "id": 172,
+      "name": "Update Transfer Path",
+      "isSelected": false
+    },
+    {
+      "id": 173,
+      "name": "Delete Transfer Path",
+      "isSelected": false
+    },
+    {
+      "id": 174,
+      "name": "View Transfer Path",
+      "isSelected": false
+    },
+    {
+      "id": 175,
+      "name": "Create Transfer Reason",
+      "isSelected": false
+    },
+    {
+      "id": 176,
+      "name": "Update Transfer Reason",
+      "isSelected": false
+    },
+    {
+      "id": 177,
+      "name": "Delete Transfer Reason",
+      "isSelected": false
+    },
+    {
+      "id": 178,
+      "name": "View Other Transfer Reason",
+      "isSelected": false
+    },
+    {
+      "id": 179,
+      "name": "Create Transfer Request",
+      "isSelected": false
+    },
+    {
+      "id": 180,
+      "name": "View Transfer Request",
+      "isSelected": false
+    },
+    {
+      "id": 181,
+      "name": "Update Transfer Request",
+      "isSelected": false
+    },
+    {
+      "id": 182,
+      "name": "Forward Transfer Request",
+      "isSelected": false
+    },
+    {
+      "id": 183,
+      "name": "Approve Transfer Request",
+      "isSelected": false
+    },
+    {
+      "id": 184,
+      "name": "Denied Transfer Request",
+      "isSelected": false
+    },
+    {
+      "id": 185,
+      "name": "Create Personal Education",
+      "isSelected": false
+    },
+    {
+      "id": 186,
+      "name": "Update Personal Education",
+      "isSelected": false
+    },
+    {
+      "id": 187,
+      "name": "Delete Personal Education",
+      "isSelected": false
+    },
+    {
+      "id": 188,
+      "name": "View Personal Education",
+      "isSelected": false
+    },
+    {
+      "id": 189,
+      "name": "Create Personal Experience",
+      "isSelected": false
+    },
+    {
+      "id": 190,
+      "name": "Update Personal Experience",
+      "isSelected": false
+    },
+    {
+      "id": 191,
+      "name": "Delete Personal Experience",
+      "isSelected": false
+    },
+    {
+      "id": 192,
+      "name": "View Personal Experience",
+      "isSelected": false
+    },
+    {
+      "id": 193,
+      "name": "Create Personal Hobbies",
+      "isSelected": false
+    },
+    {
+      "id": 194,
+      "name": "Update Personal Hobbies",
+      "isSelected": false
+    },
+    {
+      "id": 195,
+      "name": "Delete Personal Hobbies",
+      "isSelected": false
+    },
+    {
+      "id": 196,
+      "name": "View Personal Hobbies",
+      "isSelected": false
+    },
+    {
+      "id": 197,
+      "name": "Create Personal Skills",
+      "isSelected": false
+    },
+    {
+      "id": 198,
+      "name": "Update Personal Skills",
+      "isSelected": false
+    },
+    {
+      "id": 199,
+      "name": "Delete Personal Skills",
+      "isSelected": false
+    },
+    {
+      "id": 200,
+      "name": "View Personal Skills",
+      "isSelected": false
+    },
+    {
+      "id": 201,
+      "name": "Create Personal Language",
+      "isSelected": false
+    },
+    {
+      "id": 202,
+      "name": "Update Personal Language",
+      "isSelected": false
+    },
+    {
+      "id": 203,
+      "name": "Delete Personal Language",
+      "isSelected": false
+    },
+    {
+      "id": 204,
+      "name": "View Personal Language",
+      "isSelected": false
+    },
+    {
+      "id": 205,
+      "name": "Create Personal Next Of Kin",
+      "isSelected": false
+    },
+    {
+      "id": 206,
+      "name": "Update Personal Next Of Kin",
+      "isSelected": false
+    },
+    {
+      "id": 207,
+      "name": "Delete Personal Next Of Kin",
+      "isSelected": false
+    },
+    {
+      "id": 208,
+      "name": "View Personal Next Of Kin",
+      "isSelected": false
+    },
+    {
+      "id": 209,
+      "name": "Create Personal Refferee",
+      "isSelected": false
+    },
+    {
+      "id": 210,
+      "name": "Update Personal Refferee",
+      "isSelected": false
+    },
+    {
+      "id": 211,
+      "name": "Delete Personal Refferee",
+      "isSelected": false
+    },
+    {
+      "id": 212,
+      "name": "View Personal Refferee",
+      "isSelected": false
+    },
+    {
+      "id": 213,
+      "name": "Create Personal Attachement",
+      "isSelected": false
+    },
+    {
+      "id": 214,
+      "name": "Update Personal Attachement",
+      "isSelected": false
+    },
+    {
+      "id": 215,
+      "name": "Delete Personal Attachement",
+      "isSelected": false
+    },
+    {
+      "id": 216,
+      "name": "View Personal Attachement",
+      "isSelected": false
+    },
+    {
+      "id": 217,
+      "name": "Create Position Request",
+      "isSelected": false
+    },
+    {
+      "id": 218,
+      "name": "Update Position Request",
+      "isSelected": false
+    },
+    {
+      "id": 219,
+      "name": "Delete Position Request",
+      "isSelected": false
+    },
+    {
+      "id": 220,
+      "name": "View Position Request",
+      "isSelected": false
+    },
+    {
+      "id": 221,
+      "name": "Create Postpond Reason",
+      "isSelected": false
+    },
+    {
+      "id": 222,
+      "name": "Update Postpond Reason",
+      "isSelected": false
+    },
+    {
+      "id": 223,
+      "name": "Delete Postpond Reason",
+      "isSelected": false
+    },
+    {
+      "id": 224,
+      "name": "View Postpond Reason",
+      "isSelected": false
+    },
+    {
+      "id": 225,
+      "name": "Create  Training Type",
+      "isSelected": false
+    },
+    {
+      "id": 226,
+      "name": "Update Training Type",
+      "isSelected": false
+    },
+    {
+      "id": 227,
+      "name": "Delete Training Type",
+      "isSelected": false
+    },
+    {
+      "id": 228,
+      "name": "View Training Type",
+      "isSelected": false
+    },
+    {
+      "id": 229,
+      "name": "Create Carder Category",
+      "isSelected": false
+    },
+    {
+      "id": 230,
+      "name": "Update Carder Category",
+      "isSelected": false
+    },
+    {
+      "id": 231,
+      "name": "Delete Carder Category",
+      "isSelected": false
+    },
+    {
+      "id": 232,
+      "name": "View Carder Category",
+      "isSelected": false
+    },
+    {
+      "id": 233,
+      "name": "Create Training Announcement",
+      "isSelected": false
+    },
+    {
+      "id": 234,
+      "name": "Update Training Announcement",
+      "isSelected": false
+    },
+    {
+      "id": 235,
+      "name": "Delete Training Announcement",
+      "isSelected": false
+    },
+    {
+      "id": 236,
+      "name": "View Training Announcement",
+      "isSelected": false
+    },
+    {
+      "id": 237,
+      "name": "Create Training Development Plan",
+      "isSelected": false
+    },
+    {
+      "id": 238,
+      "name": "Update Training Development Plan",
+      "isSelected": false
+    },
+    {
+      "id": 239,
+      "name": "Delete Training Development Plan",
+      "isSelected": false
+    },
+    {
+      "id": 240,
+      "name": "View Training Development Plan",
+      "isSelected": false
+    },
+    {
+      "id": 241,
+      "name": "Publish Training Development Plan",
+      "isSelected": false
+    },
+    {
+      "id": 242,
+      "name": "Create Program Group",
+      "isSelected": false
+    },
+    {
+      "id": 243,
+      "name": "Update Program Group",
+      "isSelected": false
+    },
+    {
+      "id": 244,
+      "name": "Delete Program Group",
+      "isSelected": false
+    },
+    {
+      "id": 245,
+      "name": "View Program Group",
+      "isSelected": false
+    },
+    {
+      "id": 246,
+      "name": "Create Assessment Request",
+      "isSelected": false
+    },
+    {
+      "id": 247,
+      "name": "Update Assessment Request",
+      "isSelected": false
+    },
+    {
+      "id": 248,
+      "name": "Delete Assessment Request",
+      "isSelected": false
+    },
+    {
+      "id": 249,
+      "name": "View Assessment Request",
+      "isSelected": false
+    },
+    {
+      "id": 250,
+      "name": "Approve Assessment Request",
+      "isSelected": false
+    },
+    {
+      "id": 251,
+      "name": "Denied Assessment Request",
+      "isSelected": false
+    },
+    {
+      "id": 252,
+      "name": "Create Training Request",
+      "isSelected": false
+    },
+    {
+      "id": 253,
+      "name": "Update Training Request",
+      "isSelected": false
+    },
+    {
+      "id": 254,
+      "name": "Delete Training Request",
+      "isSelected": false
+    },
+    {
+      "id": 255,
+      "name": "View Training Request",
+      "isSelected": false
+    },
+    {
+      "id": 256,
+      "name": "Forward Training Request",
+      "isSelected": false
+    },
+    {
+      "id": 257,
+      "name": "Approve Training Request",
+      "isSelected": false
+    },
+    {
+      "id": 258,
+      "name": "Denied Training Request",
+      "isSelected": false
+    },
+    {
+      "id": 259,
+      "name": "Approve Position Request",
+      "isSelected": false
+    },
+    {
+      "id": 260,
+      "name": "Denied Position Request",
+      "isSelected": false
+    },
+    {
+      "id": 261,
+      "name": "Create Vendor",
+      "isSelected": false
+    },
+    {
+      "id": 262,
+      "name": "Update Vendor",
+      "isSelected": false
+    },
+    {
+      "id": 263,
+      "name": "Delete Vendor",
+      "isSelected": false
+    },
+    {
+      "id": 264,
+      "name": "View Vendor",
+      "isSelected": false
+    },
+    {
+      "id": 265,
+      "name": "Assign Vendor",
+      "isSelected": false
+    },
+    {
+      "id": 266,
+      "name": "Create Training Result",
+      "isSelected": false
+    },
+    {
+      "id": 267,
+      "name": "Update Training Result",
+      "isSelected": false
+    },
+    {
+      "id": 268,
+      "name": "Delete Training Result",
+      "isSelected": false
+    },
+    {
+      "id": 269,
+      "name": "View Training Result",
+      "isSelected": false
+    },
+    {
+      "id": 270,
+      "name": "View Training Student",
+      "isSelected": false
+    },
+    {
+      "id": 271,
+      "name": "Approve Training Result",
+      "isSelected": false
+    },
+    {
+      "id": 272,
+      "name": "Approve Training Contract",
+      "isSelected": false
+    },
+    {
+      "id": 273,
+      "name": "Denied Training Contract",
+      "isSelected": false
+    },
+    {
+      "id": 274,
+      "name": "Denied Training Result",
+      "isSelected": false
+    },
+    {
+      "id": 275,
+      "name": "Create Leave Path",
+      "isSelected": false
+    },
+    {
+      "id": 276,
+      "name": "Update Leave Path",
+      "isSelected": false
+    },
+    {
+      "id": 277,
+      "name": "Delete Leave Path",
+      "isSelected": false
+    },
+    {
+      "id": 278,
+      "name": "View Leave Path",
+      "isSelected": false
+    },
+    {
+      "id": 279,
+      "name": "Create Leave Condition",
+      "isSelected": false
+    },
+    {
+      "id": 280,
+      "name": "Update Leave Condition",
+      "isSelected": false
+    },
+    {
+      "id": 281,
+      "name": "Delete Leave Condition",
+      "isSelected": false
+    },
+    {
+      "id": 282,
+      "name": "View Leave Condition",
+      "isSelected": false
+    },
+    {
+      "id": 283,
+      "name": "Create Leave Payment",
+      "isSelected": false
+    },
+    {
+      "id": 284,
+      "name": "Update Leave Payment",
+      "isSelected": false
+    },
+    {
+      "id": 285,
+      "name": "Delete Leave Payment",
+      "isSelected": false
+    },
+    {
+      "id": 286,
+      "name": "View Leave Payment",
+      "isSelected": false
+    },
+    {
+      "id": 287,
+      "name": "View Leave Request",
+      "isSelected": false
+    },
+    {
+      "id": 288,
+      "name": "Create Leave Request",
+      "isSelected": false
+    },
+    {
+      "id": 289,
+      "name": "Update Leave Request",
+      "isSelected": false
+    },
+    {
+      "id": 290,
+      "name": "Forward Leave Request",
+      "isSelected": false
+    },
+    {
+      "id": 291,
+      "name": "Approve Leave Request",
+      "isSelected": false
+    },
+    {
+      "id": 292,
+      "name": "Denied Leave Request",
+      "isSelected": false
+    },
+    {
+      "id": 293,
+      "name": "Create Short Course",
+      "isSelected": false
+    },
+    {
+      "id": 294,
+      "name": "Update Short Course",
+      "isSelected": false
+    },
+    {
+      "id": 295,
+      "name": "Delete Short Course",
+      "isSelected": false
+    },
+    {
+      "id": 296,
+      "name": "View Short Course",
+      "isSelected": false
+    },
+    {
+      "id": 297,
+      "name": "HQ permission",
+      "isSelected": false
+    },
+    {
+      "id": 298,
+      "name": "View Transfer Sequence",
+      "isSelected": false
+    },
+    {
+      "id": 299,
+      "name": "View Training Sequence",
+      "isSelected": false
+    },
+    {
+      "id": 300,
+      "name": "View Leave Sequence",
+      "isSelected": false
+    },
+    {
+      "id": 301,
+      "name": "View Transfer Notification",
+      "isSelected": false
+    },
+    {
+      "id": 302,
+      "name": "Create Cost Type",
+      "isSelected": false
+    },
+    {
+      "id": 303,
+      "name": "Update Cost Type",
+      "isSelected": false
+    },
+    {
+      "id": 304,
+      "name": "Delete Cost Type",
+      "isSelected": false
+    },
+    {
+      "id": 305,
+      "name": "View Cost Type",
+      "isSelected": false
+    },
+    {
+      "id": 306,
+      "name": "Create Bank",
+      "isSelected": false
+    },
+    {
+      "id": 307,
+      "name": "Update Bank",
+      "isSelected": false
+    },
+    {
+      "id": 308,
+      "name": "Delete Bank",
+      "isSelected": false
+    },
+    {
+      "id": 309,
+      "name": "View Bank",
+      "isSelected": false
+    },
+    {
+      "id": 310,
+      "name": "Create  Training Path",
+      "isSelected": false
+    },
+    {
+      "id": 311,
+      "name": "Update Training Path",
+      "isSelected": false
+    },
+    {
+      "id": 312,
+      "name": "Delete Training Path",
+      "isSelected": false
+    },
+    {
+      "id": 313,
+      "name": "View Training Path",
+      "isSelected": false
+    },
+    {
+      "id": 314,
+      "name": "Forward Cadre Request",
+      "isSelected": false
+    },
+    {
+      "id": 315,
+      "name": "Forward Staff Transfer",
+      "isSelected": false
+    },
+    {
+      "id": 316,
+      "name": "Forward Staff Request",
+      "isSelected": false
+    },
+    {
+      "id": 317,
+      "name": "Approve Staff Request",
+      "isSelected": false
+    },
+    {
+      "id": 318,
+      "name": "Deny Staff Request",
+      "isSelected": false
+    },
+    {
+      "id": 319,
+      "name": "Receive Staff",
+      "isSelected": false
+    },
+    {
+      "id": 320,
+      "name": "PS Permission",
+      "isSelected": false
+    },
+    {
+      "id": 321,
+      "name": "Create Activity",
+      "isSelected": false
+    },
+    {
+      "id": 322,
+      "name": "View Activity",
+      "isSelected": false
+    },
+    {
+      "id": 323,
+      "name": "Update Activity",
+      "isSelected": false
+    },
+    {
+      "id": 324,
+      "name": "Delete Activity",
+      "isSelected": false
+    },
+    {
+      "id": 325,
+      "name": "Create Objective",
+      "isSelected": false
+    },
+    {
+      "id": 326,
+      "name": "View Objective",
+      "isSelected": false
+    },
+    {
+      "id": 327,
+      "name": "Update Objective",
+      "isSelected": false
+    },
+    {
+      "id": 328,
+      "name": "Delete Objective",
+      "isSelected": false
+    },
+    {
+      "id": 329,
+      "name": "Create Job Description",
+      "isSelected": false
+    },
+    {
+      "id": 330,
+      "name": "View Job Description",
+      "isSelected": false
+    },
+    {
+      "id": 331,
+      "name": "Update Job Description",
+      "isSelected": false
+    },
+    {
+      "id": 332,
+      "name": "Delete Job Description",
+      "isSelected": false
+    },
+    {
+      "id": 333,
+      "name": "Create Challenge",
+      "isSelected": false
+    },
+    {
+      "id": 334,
+      "name": "View Challenge",
+      "isSelected": false
+    },
+    {
+      "id": 335,
+      "name": "Update Challenge",
+      "isSelected": false
+    },
+    {
+      "id": 336,
+      "name": "Delete Challenge",
+      "isSelected": false
+    },
+    {
+      "id": 337,
+      "name": "View Conversation",
+      "isSelected": false
+    },
+    {
+      "id": 338,
+      "name": "Create Conversation Group",
+      "isSelected": false
+    },
+    {
+      "id": 339,
+      "name": "Manage Conversation Group",
+      "isSelected": false
+    },
+    {
+      "id": 340,
+      "name": "Manage Conversation Group Members",
+      "isSelected": false
+    },
+    {
+      "id": 341,
+      "name": "Send Conversation Message",
+      "isSelected": false
+    },
+    {
+      "id": 342,
+      "name": "Create Topic",
+      "isSelected": false
+    },
+    {
+      "id": 343,
+      "name": "Moderate Topic",
+      "isSelected": false
+    },
+    {
+      "id": 344,
+      "name": "Create Question Category",
+      "isSelected": false
+    },
+    {
+      "id": 345,
+      "name": "Create Staff Activity",
+      "isSelected": false
+    },
+    {
+      "id": 346,
+      "name": "View Staff Activity",
+      "isSelected": false
+    },
+    {
+      "id": 347,
+      "name": "Approve Staff Activity",
+      "isSelected": false
+    },
+    {
+      "id": 348,
+      "name": "Reject Staff Activity",
+      "isSelected": false
+    },
+    {
+      "id": 349,
+      "name": "Manage Staff Activity Members",
+      "isSelected": false
+    },
+    {
+      "id": 350,
+      "name": "Create Loan",
+      "isSelected": false
+    },
+    {
+      "id": 351,
+      "name": "View Loan",
+      "isSelected": false
+    },
+    {
+      "id": 352,
+      "name": "Review Loan",
+      "isSelected": false
+    },
+    {
+      "id": 353,
+      "name": "Complete Loan",
+      "isSelected": false
+    },
+    {
+      "id": 354,
+      "name": "Create Sick Sheet",
+      "isSelected": false
+    },
+    {
+      "id": 355,
+      "name": "View Sick Sheet",
+      "isSelected": false
+    },
+    {
+      "id": 356,
+      "name": "Review Sick Sheet",
+      "isSelected": false
+    },
+    {
+      "id": 357,
+      "name": "Create Resource",
+      "isSelected": false
+    },
+    {
+      "id": 358,
+      "name": "View Resource",
+      "isSelected": false
+    },
+    {
+      "id": 359,
+      "name": "Update Resource",
+      "isSelected": false
+    },
+    {
+      "id": 360,
+      "name": "Delete Resource",
+      "isSelected": false
+    },
+    {
+      "id": 361,
+      "name": "Create Announcement",
+      "isSelected": false
+    },
+    {
+      "id": 362,
+      "name": "View Announcement",
+      "isSelected": false
+    },
+    {
+      "id": 363,
+      "name": "Update Announcement",
+      "isSelected": false
+    },
+    {
+      "id": 364,
+      "name": "Delete Announcement",
+      "isSelected": false
+    },
+    {
+      "id": 365,
+      "name": "Create Priority",
+      "isSelected": false
+    },
+    {
+      "id": 366,
+      "name": "View Priority",
+      "isSelected": false
+    },
+    {
+      "id": 367,
+      "name": "Update Priority",
+      "isSelected": false
+    },
+    {
+      "id": 368,
+      "name": "Delete Priority",
+      "isSelected": false
+    },
+    {
+      "id": 369,
+      "name": "Assign Priority",
+      "isSelected": false
+    }
+  ]

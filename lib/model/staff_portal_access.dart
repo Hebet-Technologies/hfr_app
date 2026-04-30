@@ -25,6 +25,7 @@ extension StaffPortalModeX on StaffPortalMode {
 class StaffPortalAccess {
   StaffPortalAccess._({
     required this.activeMode,
+    required this.hasEmployeeProfile,
     required this.hasApproverMode,
     required this.roles,
     required this.permissions,
@@ -37,6 +38,7 @@ class StaffPortalAccess {
     required this.canViewTrainingRequests,
     required this.canForwardTrainingRequests,
     required this.canApproveTrainingRequests,
+    required this.canCreateTrainingResult,
   });
 
   factory StaffPortalAccess.fromUser(
@@ -46,6 +48,8 @@ class StaffPortalAccess {
     final roles = [...user?.roles ?? const <String>[]];
     final permissions = [...user?.permissions ?? const <String>[]];
     final values = [...roles, ...permissions].map(_normalize).toList();
+    final hasEmployeeProfile =
+        user?.personalInformationId.trim().isNotEmpty == true;
 
     final isAdmin = _containsAny(values, const [
       'role admin',
@@ -74,7 +78,11 @@ class StaffPortalAccess {
           'forward transfer request',
         ]);
     final canApproveTransfer =
-        isAdmin || _containsAny(values, const ['approve staff request']);
+        isAdmin ||
+        _containsAny(values, const [
+          'approve staff request',
+          'approve transfer request',
+        ]);
     final canDenyTransfer =
         isAdmin ||
         _containsAny(values, const [
@@ -86,7 +94,9 @@ class StaffPortalAccess {
     final canForwardTrainingRequests =
         isAdmin || _containsAny(values, const ['forward training request']);
     final canApproveTrainingRequests =
-        isAdmin || _containsAny(values, const ['approve training request']);
+        isAdmin || _containsAny(values, const ['approve training']);
+    final canCreateTrainingResult =
+        isAdmin || _containsAny(values, const ['create training result']);
 
     final hasApproverMode =
         canForwardLeave ||
@@ -97,10 +107,12 @@ class StaffPortalAccess {
         canDenyTransfer ||
         canViewTrainingRequests ||
         canForwardTrainingRequests ||
-        canApproveTrainingRequests;
+        canApproveTrainingRequests ||
+        canCreateTrainingResult;
 
     return StaffPortalAccess._(
       activeMode: hasApproverMode ? preferredMode : StaffPortalMode.employee,
+      hasEmployeeProfile: hasEmployeeProfile,
       hasApproverMode: hasApproverMode,
       roles: roles,
       permissions: permissions,
@@ -113,10 +125,12 @@ class StaffPortalAccess {
       canViewTrainingRequests: canViewTrainingRequests,
       canForwardTrainingRequests: canForwardTrainingRequests,
       canApproveTrainingRequests: canApproveTrainingRequests,
+      canCreateTrainingResult: canCreateTrainingResult,
     );
   }
 
   final StaffPortalMode activeMode;
+  final bool hasEmployeeProfile;
   final bool hasApproverMode;
   final List<String> roles;
   final List<String> permissions;
@@ -129,6 +143,7 @@ class StaffPortalAccess {
   final bool canViewTrainingRequests;
   final bool canForwardTrainingRequests;
   final bool canApproveTrainingRequests;
+  final bool canCreateTrainingResult;
 
   bool get isEmployeeMode => activeMode == StaffPortalMode.employee;
 
@@ -136,9 +151,15 @@ class StaffPortalAccess {
       hasApproverMode && activeMode == StaffPortalMode.approver;
 
   bool get canReviewTrainingRequests =>
-      canViewTrainingRequests ||
-      canForwardTrainingRequests ||
-      canApproveTrainingRequests;
+      canApproveTrainingRequests || canCreateTrainingResult;
+
+  bool get hasRequestApproverAccess =>
+      canForwardLeave ||
+      canApproveLeave ||
+      canDenyLeave ||
+      canForwardTransfer ||
+      canApproveTransfer ||
+      canDenyTransfer;
 
   List<StaffPortalMode> get availableModes {
     return hasApproverMode

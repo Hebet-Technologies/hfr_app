@@ -6,6 +6,11 @@ import '../../model/staff_portal_access.dart';
 import '../../model/staff_request_models.dart';
 import '../../view_model/providers.dart';
 import '../../view_model/staff_request_view_model.dart';
+import 'activity_request_form.dart';
+import 'leave_request_form.dart';
+import 'loan_request_form.dart';
+import 'sick_sheet_form.dart';
+import 'transfer_request_form.dart';
 
 const _requestBlue = Color(0xFF1F6BFF);
 const _requestSurface = Color(0xFFF5F7FB);
@@ -28,9 +33,7 @@ void openRequestFormScreen(BuildContext context, StaffRequestType type) {
     StaffRequestType.leave => const LeaveRequestFormScreen(),
     StaffRequestType.transfer => const TransferRequestFormScreen(),
     StaffRequestType.loan => const LoanRequestFormScreen(),
-    StaffRequestType.sickLeave => const RequestCategoryListScreen(
-      type: StaffRequestType.sickLeave,
-    ),
+    StaffRequestType.sickLeave => const SickSheetFormScreen(),
   };
 
   Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
@@ -166,14 +169,14 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(staffRequestsViewModelProvider);
     final access = ref.watch(staffPortalAccessProvider);
-    final showApprovals = access.isApproverMode && _showApprovals;
+    final showApprovals = access.hasRequestApproverAccess && _showApprovals;
     final visibleRequestTypes = _visibleRequestTypes(state);
     final activeFilterLabels = _activeFilterLabels(showApprovals);
     final activeFilterCount = _activeFilterCount(showApprovals);
 
     return Scaffold(
       backgroundColor: _requestSurface,
-      floatingActionButton: access.isApproverMode && showApprovals
+      floatingActionButton: access.hasRequestApproverAccess && showApprovals
           ? null
           : FloatingActionButton(
               backgroundColor: _requestBlue,
@@ -232,7 +235,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                       : _clearRequestFilters,
                 ),
               ],
-              if (access.isApproverMode) ...[
+              if (access.hasRequestApproverAccess) ...[
                 const SizedBox(height: 14),
                 _RequestBoardToggle(
                   showApprovals: _showApprovals,
@@ -580,8 +583,10 @@ class _RequestFilterSheetState extends State<_RequestFilterSheet> {
                   onTap: () => setState(() {
                     if (widget.showApprovals) {
                       _approvalType = null;
+                      _approvalStatus = null;
                     } else {
                       _requestType = null;
+                      _requestStatus = null;
                     }
                   }),
                 ),
@@ -624,8 +629,10 @@ class _RequestFilterSheetState extends State<_RequestFilterSheet> {
                       : _requestStatus == null,
                   onTap: () => setState(() {
                     if (widget.showApprovals) {
+                      _approvalType = null;
                       _approvalStatus = null;
                     } else {
+                      _requestType = null;
                       _requestStatus = null;
                     }
                   }),
@@ -2049,761 +2056,6 @@ class RequestSubmissionSuccessScreen extends StatelessWidget {
     );
   }
 }
-
-class LeaveRequestFormScreen extends ConsumerStatefulWidget {
-  const LeaveRequestFormScreen({super.key});
-
-  @override
-  ConsumerState<LeaveRequestFormScreen> createState() =>
-      _LeaveRequestFormScreenState();
-}
-
-class _LeaveRequestFormScreenState
-    extends ConsumerState<LeaveRequestFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _contactController = TextEditingController();
-  final _numberOfDaysController = TextEditingController();
-  final _placeToTravelController = TextEditingController();
-  final _reasonController = TextEditingController();
-  DateTime? _startDate;
-  String? _leaveTypeId;
-  String? _representativeId;
-
-  @override
-  void dispose() {
-    _contactController.dispose();
-    _numberOfDaysController.dispose();
-    _placeToTravelController.dispose();
-    _reasonController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(staffRequestsViewModelProvider);
-    final selectedLeaveType = state.leaveTypes.firstWhereOrNull(
-      (item) => item.id == _leaveTypeId,
-    );
-
-    return Scaffold(
-      backgroundColor: _requestSurface,
-      appBar: AppBar(
-        backgroundColor: _requestSurface,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          'Apply Leave',
-          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                _AppDropdownField(
-                  label: 'Leave Type',
-                  value: _leaveTypeId,
-                  hintText: 'Select',
-                  items: state.leaveTypes,
-                  onChanged: (value) {
-                    setState(() {
-                      _leaveTypeId = value;
-                      final nextType = state.leaveTypes.firstWhereOrNull(
-                        (item) => item.id == value,
-                      );
-                      if (nextType?.requiresDayCount != true) {
-                        _numberOfDaysController.clear();
-                      }
-                    });
-                  },
-                  validator: (value) =>
-                      value == null ? 'Select a leave type' : null,
-                ),
-                _DateInputField(
-                  label: 'Start Date',
-                  value: _startDate,
-                  onTap: () async {
-                    final picked = await _pickDate(
-                      context,
-                      initial: _startDate,
-                    );
-                    if (picked != null) {
-                      setState(() => _startDate = picked);
-                    }
-                  },
-                ),
-                if (selectedLeaveType?.requiresDayCount == true)
-                  _AppTextField(
-                    label: 'Number of Days',
-                    controller: _numberOfDaysController,
-                    hintText: 'Input Number of Days',
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      final normalized = (value ?? '').trim();
-                      if (normalized.isEmpty) {
-                        return 'This field is required';
-                      }
-                      final days = int.tryParse(normalized);
-                      if (days == null || days <= 0) {
-                        return 'Enter a valid number of days';
-                      }
-                      return null;
-                    },
-                  ),
-                _AppTextField(
-                  label: 'Contact on Leave',
-                  controller: _contactController,
-                  hintText: 'Input Number',
-                  keyboardType: TextInputType.phone,
-                ),
-                if (selectedLeaveType?.requiresAttachment == true)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 14),
-                    child: _InlineErrorText(
-                      message:
-                          'This leave type requires a PDF attachment. Submit it from the web portal for now.',
-                    ),
-                  ),
-                _AppDropdownField(
-                  label: 'Representative',
-                  value: _representativeId,
-                  hintText: 'Input Name',
-                  items: state.representatives,
-                  onChanged: (value) =>
-                      setState(() => _representativeId = value),
-                ),
-                _AppTextField(
-                  label: 'Place To Travel',
-                  controller: _placeToTravelController,
-                  hintText: 'Optional',
-                  validator: (_) => null,
-                ),
-                _AppTextField(
-                  label: 'Reason for Leave',
-                  controller: _reasonController,
-                  hintText: 'Optional',
-                  maxLines: 5,
-                  validator: (_) => null,
-                ),
-                if (state.errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  _InlineErrorText(message: state.errorMessage!),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: _filledStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting
-                          ? 'Submitting...'
-                          : 'Submit Leave Request',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_startDate == null) {
-      _showError('Choose a start date.');
-      return;
-    }
-
-    final state = ref.read(staffRequestsViewModelProvider);
-    final leaveType = state.leaveTypes.firstWhereOrNull(
-      (item) => item.id == _leaveTypeId,
-    );
-    if (leaveType == null) {
-      _showError('Leave types are unavailable. Refresh and try again.');
-      return;
-    }
-    if (leaveType.requiresAttachment) {
-      _showError(
-        'This leave type requires a PDF attachment. Submit it from the web portal for now.',
-      );
-      return;
-    }
-
-    int? numberOfDays;
-    if (leaveType.requiresDayCount) {
-      numberOfDays = int.tryParse(_numberOfDaysController.text.trim());
-      if (numberOfDays == null || numberOfDays <= 0) {
-        _showError('Enter a valid number of days.');
-        return;
-      }
-    }
-
-    final representative = state.representatives.firstWhereOrNull(
-      (item) => item.id == _representativeId,
-    );
-    final placeToTravel = _placeToTravelController.text.trim();
-
-    try {
-      final record = await ref
-          .read(staffRequestsViewModelProvider.notifier)
-          .submitLeaveRequest(
-            LeaveRequestDraft(
-              leaveTypeId: leaveType.id,
-              leaveTypeLabel: leaveType.label,
-              startDate: _startDate!,
-              contactOnLeave: _contactController.text.trim(),
-              reason: _reasonController.text.trim(),
-              numberOfDays: numberOfDays,
-              representativeId: representative?.id,
-              representativeLabel: representative?.label,
-              placeToTravel: placeToTravel.isEmpty ? null : placeToTravel,
-            ),
-          );
-
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(
-          builder: (_) => RequestSubmissionSuccessScreen(request: record),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      _showError(error.toString().replaceAll('Exception: ', ''));
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-}
-
-class TransferRequestFormScreen extends ConsumerStatefulWidget {
-  const TransferRequestFormScreen({super.key});
-
-  @override
-  ConsumerState<TransferRequestFormScreen> createState() =>
-      _TransferRequestFormScreenState();
-}
-
-class _TransferRequestFormScreenState
-    extends ConsumerState<TransferRequestFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _reasonTextController = TextEditingController();
-  String? _facilityId;
-  String? _departmentId;
-  String? _reasonId;
-  DateTime? _preferredDate;
-
-  @override
-  void dispose() {
-    _reasonTextController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(staffRequestsViewModelProvider);
-    final departments = state.departmentsByFacilityId[_facilityId] ?? const [];
-
-    return Scaffold(
-      backgroundColor: _requestSurface,
-      appBar: AppBar(
-        backgroundColor: _requestSurface,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          'Request Transfer',
-          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                _AppDropdownField(
-                  label: 'Preferred Facility',
-                  value: _facilityId,
-                  hintText: 'Select',
-                  items: state.facilities,
-                  onChanged: (value) {
-                    setState(() {
-                      _facilityId = value;
-                      _departmentId = null;
-                    });
-                  },
-                  validator: (value) =>
-                      value == null ? 'Select a facility' : null,
-                ),
-                _AppDropdownField(
-                  label: 'Preferred Department',
-                  value: _departmentId,
-                  hintText: 'Select',
-                  items: departments,
-                  onChanged: (value) => setState(() => _departmentId = value),
-                ),
-                _AppDropdownField(
-                  label: 'Reason for Transfer',
-                  value: _reasonId,
-                  hintText: 'Select',
-                  items: state.transferReasons,
-                  onChanged: (value) => setState(() => _reasonId = value),
-                  validator: (value) =>
-                      value == null ? 'Select a transfer reason' : null,
-                ),
-                _AppTextField(
-                  label: 'Reason for Transfer',
-                  controller: _reasonTextController,
-                  hintText: 'Input',
-                  maxLines: 5,
-                ),
-                _DateInputField(
-                  label: 'Preferred Transfer Date',
-                  value: _preferredDate,
-                  onTap: () async {
-                    final picked = await _pickDate(
-                      context,
-                      initial: _preferredDate,
-                    );
-                    if (picked != null) {
-                      setState(() => _preferredDate = picked);
-                    }
-                  },
-                ),
-                const SizedBox(height: 10),
-                const _UploadPlaceholder(),
-                if (state.errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  _InlineErrorText(message: state.errorMessage!),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: _filledStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting
-                          ? 'Submitting...'
-                          : 'Submit Transfer Request',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_preferredDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Choose a preferred transfer date.')),
-      );
-      return;
-    }
-
-    final state = ref.read(staffRequestsViewModelProvider);
-    final facility = state.facilities.firstWhereOrNull(
-      (item) => item.id == _facilityId,
-    );
-    final reason = state.transferReasons.firstWhereOrNull(
-      (item) => item.id == _reasonId,
-    );
-    if (facility == null || reason == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Transfer options are unavailable. Refresh and try again.',
-          ),
-        ),
-      );
-      return;
-    }
-    final department = state.departmentsByFacilityId[_facilityId]
-        ?.firstWhereOrNull((item) => item.id == _departmentId);
-
-    try {
-      final record = await ref
-          .read(staffRequestsViewModelProvider.notifier)
-          .submitTransferRequest(
-            TransferRequestDraft(
-              facilityId: facility.id,
-              facilityLabel: facility.label,
-              reasonId: reason.id,
-              reasonLabel: reason.label,
-              reasonText: _reasonTextController.text.trim(),
-              preferredTransferDate: _preferredDate!,
-              departmentId: department?.id,
-              departmentLabel: department?.label,
-            ),
-          );
-
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute<void>(
-          builder: (_) => RequestSubmissionSuccessScreen(request: record),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
-      );
-    }
-  }
-}
-
-class ActivityRequestFormScreen extends ConsumerStatefulWidget {
-  const ActivityRequestFormScreen({super.key});
-
-  @override
-  ConsumerState<ActivityRequestFormScreen> createState() =>
-      _ActivityRequestFormScreenState();
-}
-
-class _ActivityRequestFormScreenState
-    extends ConsumerState<ActivityRequestFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _titleController = TextEditingController();
-  final _locationController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  DateTime? _startDate;
-  DateTime? _endDate;
-  String? _category;
-  String? _scope;
-  String _participants = 'Individual Activity';
-
-  static const _categories = ['Travel', 'Workshop', 'Outreach', 'Meeting'];
-
-  static const _scopes = [
-    'Within Facility',
-    'Within District',
-    'Within Zanzibar',
-    'Mainland Tanzania',
-    'International',
-  ];
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _locationController.dispose();
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(staffRequestsViewModelProvider);
-    return Scaffold(
-      backgroundColor: _requestSurface,
-      appBar: AppBar(
-        backgroundColor: _requestSurface,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          'Register Activity',
-          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                _AppTextField(
-                  label: 'Activity Title',
-                  controller: _titleController,
-                  hintText: 'Input',
-                ),
-                _SimpleDropdownField(
-                  label: 'Activity Category',
-                  value: _category,
-                  hintText: 'Select',
-                  items: _categories,
-                  onChanged: (value) => setState(() => _category = value),
-                ),
-                _SimpleDropdownField(
-                  label: 'Activity Scope',
-                  value: _scope,
-                  hintText: 'Select',
-                  items: _scopes,
-                  onChanged: (value) => setState(() => _scope = value),
-                ),
-                _AppTextField(
-                  label: 'Activity Location',
-                  controller: _locationController,
-                  hintText: 'Input',
-                ),
-                _DateInputField(
-                  label: 'Start Date',
-                  value: _startDate,
-                  onTap: () async {
-                    final picked = await _pickDate(
-                      context,
-                      initial: _startDate,
-                    );
-                    if (picked != null) {
-                      setState(() => _startDate = picked);
-                    }
-                  },
-                ),
-                _DateInputField(
-                  label: 'End Date',
-                  value: _endDate,
-                  onTap: () async {
-                    final picked = await _pickDate(
-                      context,
-                      initial: _endDate ?? _startDate,
-                    );
-                    if (picked != null) {
-                      setState(() => _endDate = picked);
-                    }
-                  },
-                ),
-                _ParticipantsSelector(
-                  value: _participants,
-                  onChanged: (value) => setState(() => _participants = value),
-                ),
-                _AppTextField(
-                  label: 'Description',
-                  controller: _descriptionController,
-                  hintText: 'Input',
-                  maxLines: 5,
-                ),
-                const SizedBox(height: 10),
-                const _UploadPlaceholder(),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: _filledStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting ? 'Submitting...' : 'Submit Activity',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_startDate == null ||
-        _endDate == null ||
-        _category == null ||
-        _scope == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fill all required fields.')),
-      );
-      return;
-    }
-
-    final record = await ref
-        .read(staffRequestsViewModelProvider.notifier)
-        .submitActivityRequest(
-          ActivityRequestDraft(
-            activityTitle: _titleController.text.trim(),
-            category: _category!,
-            scope: _scope!,
-            location: _locationController.text.trim(),
-            startDate: _startDate!,
-            endDate: _endDate!,
-            participants: _participants,
-            description: _descriptionController.text.trim(),
-          ),
-        );
-
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => RequestSubmissionSuccessScreen(request: record),
-      ),
-    );
-  }
-}
-
-class LoanRequestFormScreen extends ConsumerStatefulWidget {
-  const LoanRequestFormScreen({super.key});
-
-  @override
-  ConsumerState<LoanRequestFormScreen> createState() =>
-      _LoanRequestFormScreenState();
-}
-
-class _LoanRequestFormScreenState extends ConsumerState<LoanRequestFormScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
-  final _salaryController = TextEditingController();
-  final _purposeController = TextEditingController();
-  String? _loanType;
-  String? _employerStatus;
-  String? _repaymentPeriod;
-
-  static const _loanTypes = [
-    'Soft Development Loan',
-    'Emergency Loan',
-    'School Fees Loan',
-  ];
-
-  static const _employerStatuses = [
-    'Permanent Staff',
-    'Contract Staff',
-    'Probation',
-  ];
-
-  static const _repaymentOptions = [
-    '6 Months',
-    '12 Months',
-    '18 Months',
-    '24 Months',
-  ];
-
-  @override
-  void dispose() {
-    _amountController.dispose();
-    _salaryController.dispose();
-    _purposeController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(staffRequestsViewModelProvider);
-    return Scaffold(
-      backgroundColor: _requestSurface,
-      appBar: AppBar(
-        backgroundColor: _requestSurface,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          'Apply for Loan',
-          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                _SimpleDropdownField(
-                  label: 'Loan Type',
-                  value: _loanType,
-                  hintText: 'Select',
-                  items: _loanTypes,
-                  onChanged: (value) => setState(() => _loanType = value),
-                ),
-                _AppTextField(
-                  label: 'Requested Amount',
-                  controller: _amountController,
-                  hintText: 'Input Number',
-                  keyboardType: TextInputType.number,
-                ),
-                _SimpleDropdownField(
-                  label: 'Employer Status',
-                  value: _employerStatus,
-                  hintText: 'Select',
-                  items: _employerStatuses,
-                  onChanged: (value) => setState(() => _employerStatus = value),
-                ),
-                _AppTextField(
-                  label: 'Monthly Salary',
-                  controller: _salaryController,
-                  hintText: 'Input Number',
-                  keyboardType: TextInputType.number,
-                ),
-                _SimpleDropdownField(
-                  label: 'Repayment Period',
-                  value: _repaymentPeriod,
-                  hintText: 'Select',
-                  items: _repaymentOptions,
-                  onChanged: (value) =>
-                      setState(() => _repaymentPeriod = value),
-                ),
-                _AppTextField(
-                  label: 'Purpose of Loan',
-                  controller: _purposeController,
-                  hintText: 'Input',
-                  maxLines: 5,
-                ),
-                const SizedBox(height: 10),
-                const _UploadPlaceholder(),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: _filledStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting
-                          ? 'Submitting...'
-                          : 'Submit Loan Application',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_loanType == null ||
-        _employerStatus == null ||
-        _repaymentPeriod == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fill all required fields.')),
-      );
-      return;
-    }
-
-    final record = await ref
-        .read(staffRequestsViewModelProvider.notifier)
-        .submitLoanRequest(
-          LoanRequestDraft(
-            loanType: _loanType!,
-            requestedAmount: _amountController.text.trim(),
-            employerStatus: _employerStatus!,
-            monthlySalary: _salaryController.text.trim(),
-            repaymentMonths: _repaymentPeriod!,
-            purpose: _purposeController.text.trim(),
-          ),
-        );
-
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => RequestSubmissionSuccessScreen(request: record),
-      ),
-    );
-  }
-}
-
 class _NewRequestSheet extends StatelessWidget {
   const _NewRequestSheet({required this.parentContext});
 
@@ -3571,8 +2823,7 @@ class _AppDropdownField extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            key: ValueKey('$label::$value'),
-            initialValue: value,
+            value: value,
             isExpanded: true,
             decoration: _inputDecoration(hintText),
             items: items
@@ -3626,8 +2877,7 @@ class _SimpleDropdownField extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            key: ValueKey('$label::$value'),
-            initialValue: value,
+            value: value,
             isExpanded: true,
             decoration: _inputDecoration(hintText),
             items: items

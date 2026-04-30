@@ -81,7 +81,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     final currentUser = ref.watch(
       authViewModelProvider.select((authState) => authState.user),
     );
+
     final portalAccess = ref.watch(staffPortalAccessProvider);
+
     final access = PeerExchangeAccess.fromUser(
       currentUser,
       isApproverOverride: portalAccess.hasApproverMode,
@@ -90,6 +92,15 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     final directConversations = state.conversations
         .where((conversation) => !conversation.isGroup)
         .toList();
+    // return Scaffold(
+    //   appBar: AppBar(
+    //     title: Text('Community'),
+    //     backgroundColor: _peerPrimary,
+    //     foregroundColor: Colors.white,
+    //   ),
+    //   body: Center(child: Text('Community')),
+    // );
+
     final isQuestionSection = _section == _CommunitySection.questions;
 
     if (state.isLoading &&
@@ -887,9 +898,12 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                         _formatRelative(group.lastMessageAt),
                         style: _textStyle(fontSize: 12, color: _peerMuted),
                       ),
-                      if (_canManageGroup(access, group)) ...[
+                      if (_canEditGroup(access, group) ||
+                          _canDeleteGroup(access, group)) ...[
                         const SizedBox(width: 4),
                         _buildEntityMenu(
+                          showEdit: _canEditGroup(access, group),
+                          showDelete: _canDeleteGroup(access, group),
                           onSelected: (action) async {
                             switch (action) {
                               case _ItemMenuAction.edit:
@@ -1226,23 +1240,31 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   Widget _buildEntityMenu({
     required Future<void> Function(_ItemMenuAction action) onSelected,
+    bool showEdit = true,
+    bool showDelete = true,
   }) {
+    final items = <PopupMenuItem<_ItemMenuAction>>[
+      if (showEdit)
+        const PopupMenuItem<_ItemMenuAction>(
+          value: _ItemMenuAction.edit,
+          child: Text('Edit'),
+        ),
+      if (showDelete)
+        const PopupMenuItem<_ItemMenuAction>(
+          value: _ItemMenuAction.delete,
+          child: Text('Delete'),
+        ),
+    ];
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
     return PopupMenuButton<_ItemMenuAction>(
       icon: const Icon(Icons.more_horiz_rounded, color: _peerMuted, size: 20),
       padding: EdgeInsets.zero,
       splashRadius: 18,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (action) async => onSelected(action),
-      itemBuilder: (context) => const [
-        PopupMenuItem<_ItemMenuAction>(
-          value: _ItemMenuAction.edit,
-          child: Text('Edit'),
-        ),
-        PopupMenuItem<_ItemMenuAction>(
-          value: _ItemMenuAction.delete,
-          child: Text('Delete'),
-        ),
-      ],
+      itemBuilder: (context) => items,
     );
   }
 
@@ -1271,15 +1293,19 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }
 
   bool _canCreateGroups(PeerExchangeAccess access) {
-    return access.isPrivileged && access.canCreateGroups;
+    return access.canCreateGroups;
+  }
+
+  bool _canEditGroup(PeerExchangeAccess access, PeerConversation group) {
+    return access.canEditGroup(group.createdBy);
+  }
+
+  bool _canDeleteGroup(PeerExchangeAccess access, PeerConversation group) {
+    return access.canDeleteGroup(group.createdBy);
   }
 
   bool _canCreateTopics(PeerExchangeAccess access) {
     return access.isPrivileged && access.canCreateTopics;
-  }
-
-  bool _canManageGroup(PeerExchangeAccess access, PeerConversation group) {
-    return access.canManageGroup(group.createdBy);
   }
 
   bool _canEditQuestion(PeerExchangeAccess access, PeerQuestion question) {
@@ -1475,7 +1501,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
       case _CommunitySection.groups:
         if (!_canCreateGroups(access)) {
           _showMessage(
-            'Only approvers, moderators, and HR admins can create closed groups.',
+            'You do not have permission to create groups.',
             error: true,
           );
           return;
@@ -1926,9 +1952,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     List<PeerDirectoryPerson> initialSelection = const [],
   }) async {
     final queryController = TextEditingController();
-    final directoryFuture = ref
-        .read(peerExchangeRepositoryProvider)
-        .fetchStaffDirectory();
+    final repository = ref.read(peerExchangeRepositoryProvider);
+    Future<List<PeerDirectoryPerson>> directoryFuture =
+        multiSelect
+        ? repository.fetchStaffDirectory()
+        : repository.fetchConversationUsers();
     final selected = <int, PeerDirectoryPerson>{
       for (final person in initialSelection) person.id: person,
     };
@@ -1959,7 +1987,18 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                       controller: queryController,
                       label: 'Search staff',
                       hintText: 'Search by name, role, or email',
-                      onChanged: (_) => setModalState(() {}),
+                      onChanged: (value) {
+                        if (multiSelect) {
+                          setModalState(() {});
+                          return;
+                        }
+
+                        setModalState(() {
+                          directoryFuture = repository.fetchConversationUsers(
+                            search: value.trim(),
+                          );
+                        });
+                      },
                     ),
                     const SizedBox(height: 14),
                     FutureBuilder<List<PeerDirectoryPerson>>(
@@ -1980,15 +2019,17 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                         final people =
                             snapshot.data ?? const <PeerDirectoryPerson>[];
                         final query = queryController.text.trim().toLowerCase();
-                        final filtered = people.where((person) {
-                          if (query.isEmpty) return true;
-                          final haystack = [
-                            person.fullName,
-                            person.subtitle,
-                            person.email,
-                          ].join(' ').toLowerCase();
-                          return haystack.contains(query);
-                        }).toList();
+                        final filtered = multiSelect
+                            ? people.where((person) {
+                                if (query.isEmpty) return true;
+                                final haystack = [
+                                  person.fullName,
+                                  person.subtitle,
+                                  person.email,
+                                ].join(' ').toLowerCase();
+                                return haystack.contains(query);
+                              }).toList()
+                            : people;
 
                         if (filtered.isEmpty) {
                           return Container(
@@ -2603,7 +2644,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     final access = _currentAccess();
     if (!_canCreateGroups(access)) {
       _showMessage(
-        'Only approvers, moderators, and HR admins can create groups.',
+        'You do not have permission to create groups.',
         error: true,
       );
       return;
@@ -2764,7 +2805,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   Future<void> _showEditGroupSheet(PeerConversation group) async {
     final access = _currentAccess();
-    if (!_canManageGroup(access, group)) {
+    if (!_canEditGroup(access, group)) {
       _showMessage(
         'You do not have permission to update this group.',
         error: true,
@@ -3108,7 +3149,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   Future<void> _deleteGroup(PeerConversation group) async {
     final access = _currentAccess();
-    if (!_canManageGroup(access, group)) {
+    if (!_canDeleteGroup(access, group)) {
       _showMessage(
         'You do not have permission to delete this group.',
         error: true,

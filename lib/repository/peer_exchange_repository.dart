@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:developer';
 
 import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -25,11 +26,15 @@ class PeerExchangeRepository {
   }) async {
     final response = await _get(
       '/conversations',
-      queryParameters: _cleanMap({'search': search, 'perPage': perPage}),
+      queryParameters: _cleanMap({
+        'search': search,
+        'perPage': perPage,
+        'per_page': perPage,
+      }),
     );
 
     return _listFromResponse(
-      response.data['conversations'],
+      _listPayload(response.data, const ['conversations']),
       PeerConversation.fromJson,
     );
   }
@@ -71,13 +76,27 @@ class PeerExchangeRepository {
     String? search,
     int perPage = 20,
   }) async {
-    final response = await _get(
+    final response = await _getOptional(
       '/conversations/groups',
-      queryParameters: _cleanMap({'search': search, 'perPage': perPage}),
+      queryParameters: _cleanMap({
+        'search': search,
+        'perPage': perPage,
+        'per_page': perPage,
+      }),
     );
 
+    if (response == null) {
+      final conversations = await fetchConversations(
+        search: search,
+        perPage: perPage,
+      );
+      return conversations
+          .where((conversation) => conversation.isGroup)
+          .toList();
+    }
+
     return _listFromResponse(
-      response.data['groups'],
+      _listPayload(response.data, const ['groups', 'conversations']),
       PeerConversation.fromJson,
     );
   }
@@ -156,13 +175,19 @@ class PeerExchangeRepository {
     String? search,
     int perPage = 20,
   }) async {
-    final response = await _get(
+    final response = await _getOptional(
       '/question-categories',
-      queryParameters: _cleanMap({'search': search, 'perPage': perPage}),
+      queryParameters: _cleanMap({
+        'search': search,
+        'perPage': perPage,
+        'per_page': perPage,
+      }),
     );
 
+    if (response == null) return const [];
+
     return _listFromResponse(
-      response.data['question_categories'],
+      _listPayload(response.data, const ['question_categories', 'categories']),
       PeerQuestionCategory.fromJson,
     );
   }
@@ -203,16 +228,22 @@ class PeerExchangeRepository {
     String? categoryUuid,
     int perPage = 20,
   }) async {
-    final response = await _get(
+    final response = await _getOptional(
       '/questions',
       queryParameters: _cleanMap({
         'search': search,
         'category_uuid': categoryUuid,
         'perPage': perPage,
+        'per_page': perPage,
       }),
     );
 
-    return _listFromResponse(response.data['questions'], PeerQuestion.fromJson);
+    if (response == null) return const [];
+
+    return _listFromResponse(
+      _listPayload(response.data, const ['questions']),
+      PeerQuestion.fromJson,
+    );
   }
 
   Future<PeerQuestion> createQuestion({
@@ -278,12 +309,21 @@ class PeerExchangeRepository {
     String? search,
     int perPage = 20,
   }) async {
-    final response = await _get(
+    final response = await _getOptional(
       '/topics',
-      queryParameters: _cleanMap({'search': search, 'perPage': perPage}),
+      queryParameters: _cleanMap({
+        'search': search,
+        'perPage': perPage,
+        'per_page': perPage,
+      }),
     );
 
-    return _listFromResponse(response.data['topics'], PeerTopic.fromJson);
+    if (response == null) return const [];
+
+    return _listFromResponse(
+      _listPayload(response.data, const ['topics']),
+      PeerTopic.fromJson,
+    );
   }
 
   Future<PeerTopic> createTopic({
@@ -371,34 +411,29 @@ class PeerExchangeRepository {
 
   Future<List<PeerDirectoryPerson>> fetchStaffDirectory({
     String? search,
+    int limit = 50,
   }) async {
+    return fetchConversationUsers(search: search, limit: limit);
+  }
+
+  Future<List<PeerDirectoryPerson>> fetchConversationUsers({
+    String? search,
+    int limit = 20,
+  }) async {
+    final response = await _get(
+      '/conversations/users/search',
+      queryParameters: _cleanMap({
+        'search': search,
+        'limit': limit.clamp(1, 50),
+      }),
+    );
+
     final prefs = await SharedPreferences.getInstance();
-    final workingStationId = prefs.getString('working_station_id') ?? '';
     final currentUserId = prefs.getString('user_id') ?? '';
-    final paths = <String>[
-      '/userAccounts',
-      '/getAllSectionStaff',
-      if (workingStationId.trim().isNotEmpty)
-        '/getAllEmployee/$workingStationId',
-      if (workingStationId.trim().isNotEmpty)
-        '/getActiveEmployee/$workingStationId',
-    ];
 
-    for (final path in paths) {
-      try {
-        final response = await _get(path);
-        final people = _directoryPeopleFromResponse(
-          response.data,
-        ).where((person) => person.id.toString() != currentUserId).toList();
-        if (people.isNotEmpty) {
-          return _filterDirectoryPeople(people, search);
-        }
-      } catch (_) {
-        continue;
-      }
-    }
-
-    return const [];
+    return _directoryPeopleFromResponse(
+      response.data,
+    ).where((person) => person.id.toString() != currentUserId).toList();
   }
 
   Future<Response<dynamic>> _get(
@@ -412,6 +447,28 @@ class PeerExchangeRepository {
         options: await _authorizedOptions(),
       );
     } on DioException catch (error) {
+      log(
+        '$path PeerExchangeRepository._get error: $error ${error.response?.data}',
+      );
+      throw Exception(_resolveMessage(error));
+    }
+  }
+
+  Future<Response<dynamic>?> _getOptional(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
+    try {
+      return await _dio.get(
+        path,
+        queryParameters: queryParameters,
+        options: await _authorizedOptions(),
+      );
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      if (statusCode == 404 || statusCode == 401 || statusCode == 403) {
+        return null;
+      }
       throw Exception(_resolveMessage(error));
     }
   }
@@ -532,6 +589,34 @@ class PeerExchangeRepository {
               parser(item.map((key, value) => MapEntry(key.toString(), value))),
         )
         .toList();
+  }
+
+  dynamic _listPayload(dynamic source, List<String> keys) {
+    if (source is List) return source;
+    if (source is Map<String, dynamic>) {
+      for (final key in keys) {
+        final value = source[key];
+        if (value is List) return value;
+        if (value is Map) {
+          final nested = _listPayload(value, keys);
+          if (nested is List) return nested;
+        }
+      }
+
+      final data = source['data'];
+      if (data is List) return data;
+      if (data is Map) {
+        final nested = _listPayload(data, keys);
+        if (nested is List) return nested;
+      }
+    }
+    if (source is Map) {
+      return _listPayload(
+        source.map((key, value) => MapEntry(key.toString(), value)),
+        keys,
+      );
+    }
+    return const [];
   }
 
   Map<String, dynamic> _requireMap(dynamic value, String key) {
@@ -719,24 +804,4 @@ class PeerExchangeRepository {
     return const [];
   }
 
-  List<PeerDirectoryPerson> _filterDirectoryPeople(
-    List<PeerDirectoryPerson> people,
-    String? search,
-  ) {
-    final query = (search ?? '').trim().toLowerCase();
-    if (query.isEmpty) {
-      return people;
-    }
-
-    return people.where((person) {
-      final haystack = [
-        person.fullName,
-        person.email,
-        person.phoneNo,
-        person.title,
-        person.workingStationName,
-      ].join(' ').toLowerCase();
-      return haystack.contains(query);
-    }).toList();
-  }
 }

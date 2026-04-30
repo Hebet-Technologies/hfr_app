@@ -68,6 +68,10 @@ class AuthViewModel extends Notifier<AuthState> {
         user,
         preferredMode: state.activePortalMode,
       );
+
+      // if (user.personalInformationId.trim().isEmpty) {
+      //   throw Exception('User Information not found');
+      // }
       await _authRepository.persistActivePortalMode(access.activeMode);
       state = state.copyWith(
         isLoading: false,

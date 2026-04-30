@@ -24,7 +24,7 @@ class TrainingRepository {
     final response = await _get('/getPublishedDevelopmentPlanCurrentYear');
     final items = _extractList(response.data);
     if (items.isEmpty) {
-      return buildMockLatestTrainings(myTrainings: myTrainings);
+      return const [];
     }
 
     final byDevelopmentPlanVendorId = <String, TrainingProgram>{};
@@ -38,48 +38,44 @@ class TrainingRepository {
     final programs = <TrainingProgram>[];
     for (var index = 0; index < items.length; index += 1) {
       final item = items[index];
-      final template = _latestTemplates[index % _latestTemplates.length];
       final developmentPlanVendorId = _stringValue(
         item['development_plan_vendor_id'],
       );
       final matchedTraining =
           byDevelopmentPlanVendorId[developmentPlanVendorId];
-      final availableSlots = _intValue(
-        item['quantity'],
-        fallback: template.availableSlots,
-      );
+      final availableSlots = _intValue(item['quantity']);
+      final educationLevelName = _stringValue(item['education_level_name']);
+      final caderName = _stringValue(item['cader_name'], fallback: 'Staff');
+      final trainingType = _boolValue(item['is_short_course'])
+          ? 'Short Course'
+          : _stringValue(item['training_name'], fallback: 'Training');
       final title = matchedTraining?.title.isNotEmpty == true
           ? matchedTraining!.title
-          : template.title;
+          : _compact([trainingType, caderName, educationLevelName]).join(' - ');
       final organizer = _stringValue(
         item['vendor_name'],
-        fallback: template.organizer,
+        fallback: 'Ministry of Health Zanzibar',
       );
       final location = matchedTraining?.location.isNotEmpty == true
           ? matchedTraining!.location
-          : template.location;
-      final educationLevelName = _stringValue(item['education_level_name']);
-      final caderName = _stringValue(item['cader_name'], fallback: 'Staff');
+          : _stringValue(item['institute_name'], fallback: organizer);
 
       programs.add(
         TrainingProgram(
           id: 'latest-$developmentPlanVendorId-${index + 1}',
           title: title,
-          trainingType: _boolValue(item['is_short_course'])
-              ? 'Short Course'
-              : template.trainingType,
+          trainingType: trainingType,
           organizer: organizer,
           location: location,
-          description: _buildLatestDescription(
-            template: template,
-            organizer: organizer,
-            caderName: caderName,
-          ),
+          description: _compact([
+            _stringValue(item['description']),
+            'Organised with $organizer for $caderName teams.',
+          ]).join(' '),
           targetCadres: _resolveTargetCadres(
             item,
-            fallbackCadres: template.targetCadres,
+            fallbackCadres: const ['Staff Members'],
           ),
-          badge: template.badge,
+          badge: trainingType,
           status:
               matchedTraining?.status ?? TrainingParticipationStatus.notApplied,
           availableSlots: availableSlots,
@@ -105,13 +101,86 @@ class TrainingRepository {
       );
     }
 
+    try {
+      final shortCourses = await fetchShortCoursePlans(
+        myTrainings: myTrainings,
+      );
+      programs.addAll(shortCourses);
+    } catch (_) {}
+
     programs.sort(_sortProgramsByDate);
     return programs;
   }
 
+  Future<List<TrainingProgram>> fetchShortCoursePlans({
+    List<TrainingProgram> myTrainings = const [],
+  }) async {
+    final response = await _get('/shortCoursePlans');
+    final items = _extractList(response.data);
+    if (items.isEmpty) {
+      return const [];
+    }
+
+    final myByShortCourseId = <String, TrainingProgram>{};
+    for (final item in myTrainings) {
+      final key = _stringValue(item.shortCourseDescriptionId);
+      if (key.isNotEmpty) {
+        myByShortCourseId[key] = item;
+      }
+    }
+
+    return items.map((item) {
+      final shortCourseId = _stringValue(item['short_course_descr_id']);
+      final programId = _stringValue(item['program_id']);
+      final matchedTraining = myByShortCourseId[shortCourseId];
+      final startDate = _dateValue(item['start_date']);
+      final endDate = _dateValue(item['end_date']);
+      final title = _stringValue(
+        item['program_name'],
+        fallback: _stringValue(item['training_name'], fallback: 'Short Course'),
+      );
+      final venue = _stringValue(
+        item['venue_place'],
+        fallback: 'Training Venue',
+      );
+
+      return TrainingProgram(
+        id: 'short-course-$shortCourseId',
+        title: title,
+        trainingType: 'Short Course',
+        organizer: _stringValue(
+          item['vendor_name'],
+          fallback: 'Ministry of Health Zanzibar',
+        ),
+        location: venue,
+        description:
+            'Short course scheduled for staff development and practical capacity building.',
+        targetCadres: _compact([
+          _stringValue(item['cader_name']),
+          _stringValue(item['education_level_name']),
+          'Staff Members',
+        ]),
+        badge: 'Short Course',
+        status:
+            matchedTraining?.status ?? TrainingParticipationStatus.notApplied,
+        availableSlots: _intValue(item['quantity'], fallback: 1),
+        participantCount: matchedTraining?.participantCount ?? 0,
+        resources: matchedTraining?.resources ?? const [],
+        startDate: startDate,
+        endDate: endDate,
+        trainingApplicationId: matchedTraining?.trainingApplicationId,
+        shortCourseDescriptionId: shortCourseId,
+        programId: programId,
+        workingStationName: matchedTraining?.workingStationName,
+        isLive: true,
+        canApplyLive: shortCourseId.isNotEmpty && programId.isNotEmpty,
+      );
+    }).toList();
+  }
+
   Future<List<TrainingProgram>> fetchMyTrainings(UserModel user) async {
     if (user.personalInformationId.trim().isEmpty) {
-      return buildMockMyTrainings(user);
+      return const [];
     }
 
     final response = await _postJson(
@@ -120,7 +189,7 @@ class TrainingRepository {
     );
     final items = _extractList(response.data);
     if (items.isEmpty) {
-      return buildMockMyTrainings(user);
+      return const [];
     }
 
     final programs = items
@@ -177,13 +246,75 @@ class TrainingRepository {
         )
         .toList();
 
+    try {
+      programs.addAll(await fetchMyShortCourseRequests(user));
+    } catch (_) {}
+
     programs.sort(_sortProgramsByDate);
     return programs;
   }
 
+  Future<List<TrainingProgram>> fetchMyShortCourseRequests(
+    UserModel user,
+  ) async {
+    if (user.personalInformationId.trim().isEmpty) {
+      return const [];
+    }
+
+    final response = await _postJson(
+      '/viewStaffShortCourseRequest',
+      data: {'personal_information_id': user.personalInformationId},
+    );
+    final items = _extractList(response.data);
+    if (items.isEmpty) {
+      return const [];
+    }
+
+    return items.map((item) {
+      final title = _stringValue(
+        item['program_name'],
+        fallback: 'Short Course',
+      );
+      final startDate = _dateValue(item['start_date']);
+      final endDate = _dateValue(item['end_date']);
+      final shortCourseId = _stringValue(item['short_course_descr_id']);
+
+      return TrainingProgram(
+        id: 'my-short-${_stringValue(item['short_course_application_id'], fallback: '$title-${_stringValue(item['start_date'])}')}',
+        title: title,
+        trainingType: 'Short Course',
+        organizer: 'Ministry of Health Zanzibar',
+        location: _stringValue(item['venue_place'], fallback: 'Training Venue'),
+        description:
+            'Short course request submitted through the staff portal and awaiting workflow review.',
+        targetCadres: _compact([user.workingStationName, 'Staff Members']),
+        badge: 'Short Course',
+        status: TrainingParticipationStatusX.fromRaw(
+          item['short_course_status'],
+        ),
+        availableSlots: 1,
+        participantCount: 1,
+        resources: const [],
+        startDate: startDate,
+        endDate: endDate,
+        trainingApplicationId: _stringValue(
+          item['short_course_application_id'],
+        ),
+        shortCourseDescriptionId: shortCourseId,
+        programId: _stringValue(item['program_id']),
+        workingStationName: _stringValue(
+          item['working_station_name'],
+          fallback: user.workingStationName,
+        ),
+        isLive: true,
+        canApplyLive: false,
+      );
+    }).toList();
+  }
+
   Future<List<TrainingResource>> fetchResources(UserModel user) async {
     if (user.personalInformationId.trim().isEmpty) {
-      return buildMockResources();
+      return const [];
     }
 
     final response = await _postJson(
@@ -192,7 +323,7 @@ class TrainingRepository {
     );
     final items = _extractList(response.data);
     if (items.isEmpty) {
-      return buildMockResources();
+      return const [];
     }
 
     final resources = items.map((item) {
@@ -200,12 +331,19 @@ class TrainingRepository {
         item['file_name'],
         fallback: _stringValue(item['upload_file_name']),
       );
+      final filePath = _resolveTrainingFileUrl(
+        fileName: fileName,
+        filePath: _stringValue(
+          item['file_url'],
+          fallback: _stringValue(item['file_path']),
+        ),
+      );
       return TrainingResource(
         id: 'resource-${_stringValue(item['training_attachment_id'], fallback: fileName)}',
         title: _stringValue(item['upload_name'], fallback: 'Training Resource'),
         sizeLabel: _resolveFileSize(fileName),
         fileName: fileName.isNotEmpty ? fileName : 'resource.pdf',
-        filePath: _stringValue(item['file_path']),
+        filePath: filePath,
         fileType: _fileTypeFor(fileName),
         isLive: true,
       );
@@ -244,7 +382,13 @@ class TrainingRepository {
               item['upload_file_name'],
               fallback: 'attachment.pdf',
             ),
-            filePath: '',
+            filePath: _resolveTrainingFileUrl(
+              fileName: _stringValue(item['upload_file_name']),
+              filePath: _stringValue(
+                item['file_url'],
+                fallback: _stringValue(item['file_path']),
+              ),
+            ),
             fileType: _fileTypeFor(_stringValue(item['upload_file_name'])),
             isLive: true,
           ),
@@ -468,6 +612,25 @@ class TrainingRepository {
     required UserModel user,
     required TrainingProgram training,
   }) async {
+    final shortCourseDescriptionId = _stringValue(
+      training.shortCourseDescriptionId,
+    );
+    final programId = _stringValue(training.programId);
+    if (shortCourseDescriptionId.isNotEmpty &&
+        programId.isNotEmpty &&
+        user.personalInformationId.trim().isNotEmpty) {
+      await _postJson(
+        '/storeShortRequest',
+        data: {
+          'personal_information_id': user.personalInformationId,
+          'short_course_descr_id': shortCourseDescriptionId,
+          'program_id': programId,
+        },
+      );
+
+      return buildOptimisticAppliedProgram(training).copyWith(isLive: true);
+    }
+
     final canSubmitLive =
         training.canApplyLive &&
         user.personalInformationId.trim().isNotEmpty &&
@@ -503,293 +666,6 @@ class TrainingRepository {
           'local-training-${now.microsecondsSinceEpoch}',
       canApplyLive: false,
     );
-  }
-
-  List<TrainingProgram> buildMockLatestTrainings({
-    List<TrainingProgram> myTrainings = const [],
-  }) {
-    final myByVendor = <String, TrainingProgram>{};
-    for (final item in myTrainings) {
-      final key = _stringValue(item.developmentPlanVendorId);
-      if (key.isNotEmpty) {
-        myByVendor[key] = item;
-      }
-    }
-
-    final programs = <TrainingProgram>[
-      TrainingProgram(
-        id: 'latest-mock-1001',
-        title: 'Maternal Health Capacity Training',
-        trainingType: 'Internal Training',
-        organizer: 'Ministry of Health Zanzibar',
-        location: 'Zanzibar Health Training Institute',
-        description:
-            'Training focused on strengthening maternal health services, improving monitoring of maternal indicators, and enhancing clinical response in health facilities.',
-        targetCadres: const ['Clinical Officers', 'Nurses', 'Medical Officers'],
-        badge: 'Internal',
-        status:
-            myByVendor['1001']?.status ??
-            TrainingParticipationStatus.notApplied,
-        availableSlots: 25,
-        participantCount: 25,
-        resources: const [],
-        startDate: DateTime(2026, 3, 20),
-        endDate: DateTime(2026, 3, 22),
-        developmentPlanVendorId: '1001',
-        isLive: false,
-        canApplyLive: false,
-      ),
-      TrainingProgram(
-        id: 'latest-mock-1002',
-        title: 'Leadership in Health Systems',
-        trainingType: 'Workshop',
-        organizer: 'Leadership Institute Zanzibar',
-        location: 'Zanzibar Health Training Institute',
-        description:
-            'Practical leadership sessions for supervisors and coordinators managing service delivery, planning, and performance reviews across health teams.',
-        targetCadres: const [
-          'Department Leads',
-          'Programme Coordinators',
-          'Facility Managers',
-        ],
-        badge: 'Internal',
-        status:
-            myByVendor['1002']?.status ??
-            TrainingParticipationStatus.notApplied,
-        availableSlots: 18,
-        participantCount: 18,
-        resources: const [],
-        startDate: DateTime(2026, 4, 12),
-        endDate: DateTime(2026, 4, 14),
-        developmentPlanVendorId: '1002',
-        isLive: false,
-        canApplyLive: false,
-      ),
-      TrainingProgram(
-        id: 'latest-mock-1003',
-        title: 'Infection Prevention Workshop',
-        trainingType: 'Workshop',
-        organizer: 'Public Health Surveillance Unit',
-        location: 'Mnazi Mmoja Conference Hall',
-        description:
-            'Workshop designed to strengthen prevention workflows, reporting discipline, and outbreak preparedness among front-line clinical teams.',
-        targetCadres: const [
-          'Nurses',
-          'Clinical Officers',
-          'Public Health Officers',
-        ],
-        badge: 'Workshop',
-        status:
-            myByVendor['1003']?.status ??
-            TrainingParticipationStatus.notApplied,
-        availableSlots: 30,
-        participantCount: 30,
-        resources: const [],
-        startDate: DateTime(2026, 5, 8),
-        endDate: DateTime(2026, 5, 9),
-        developmentPlanVendorId: '1003',
-        isLive: false,
-        canApplyLive: false,
-      ),
-    ];
-
-    programs.sort(_sortProgramsByDate);
-    return programs;
-  }
-
-  List<TrainingProgram> buildMockMyTrainings(UserModel? user) {
-    final workingStation = user?.workingStationName.trim().isNotEmpty == true
-        ? user!.workingStationName.trim()
-        : 'Ministry of Health Zanzibar';
-
-    final programs = [
-      TrainingProgram(
-        id: 'my-mock-2001',
-        title: 'Maternal Health Capacity Training',
-        trainingType: 'Internal Training',
-        organizer: 'Ministry of Health Zanzibar',
-        location: 'Zanzibar Health Training Institute',
-        description:
-            'Training request submitted for maternal health strengthening and capacity building.',
-        targetCadres: ['Clinical Officers', 'Nurses', workingStation],
-        badge: 'Internal',
-        status: TrainingParticipationStatus.pending,
-        availableSlots: 25,
-        participantCount: 25,
-        resources: const [],
-        startDate: DateTime(2026, 12, 12),
-        endDate: DateTime(2026, 12, 14),
-        trainingApplicationId: '2001',
-        developmentPlanVendorId: '1001',
-        instituteId: '501',
-        workingStationName: workingStation,
-        isLive: false,
-        canApplyLive: false,
-      ),
-      TrainingProgram(
-        id: 'my-mock-2002',
-        title: 'Infection Prevention Workshop',
-        trainingType: 'Workshop',
-        organizer: 'Public Health Surveillance Unit',
-        location: 'Mnazi Mmoja Hall',
-        description:
-            'Workshop covering prevention protocols and facility reporting practices.',
-        targetCadres: ['Nurses', 'Clinical Officers', workingStation],
-        badge: 'Workshop',
-        status: TrainingParticipationStatus.completed,
-        availableSlots: 24,
-        participantCount: 24,
-        resources: const [],
-        startDate: DateTime(2026, 2, 12),
-        endDate: DateTime(2026, 2, 12),
-        trainingApplicationId: '2002',
-        developmentPlanVendorId: '1003',
-        instituteId: '502',
-        workingStationName: workingStation,
-        isLive: false,
-        canApplyLive: false,
-      ),
-      TrainingProgram(
-        id: 'my-mock-2003',
-        title: 'Leadership in Health Systems',
-        trainingType: 'Workshop',
-        organizer: 'Leadership Institute Zanzibar',
-        location: 'Zanzibar Health Training Institute',
-        description:
-            'Leadership programme approved for current supervisors and unit coordinators.',
-        targetCadres: ['Department Leads', 'Coordinators', workingStation],
-        badge: 'Internal',
-        status: TrainingParticipationStatus.approved,
-        availableSlots: 18,
-        participantCount: 18,
-        resources: const [],
-        startDate: DateTime(2026, 2, 12),
-        endDate: DateTime(2026, 2, 14),
-        trainingApplicationId: '2003',
-        developmentPlanVendorId: '1002',
-        instituteId: '503',
-        workingStationName: workingStation,
-        isLive: false,
-        canApplyLive: false,
-      ),
-    ];
-
-    programs.sort(_sortProgramsByDate);
-    return programs;
-  }
-
-  List<TrainingApprovalRecord> buildMockApprovalQueue() {
-    return [
-      TrainingApprovalRecord(
-        id: 'approval-mock-3001',
-        trainingApplicationId: '3001',
-        trainingAppStatusId: '7001',
-        title: 'Maternal Health Capacity Training',
-        applicantName: 'Dr. Amina Salim',
-        applicantPhone: '0712345678',
-        applicantEmail: 'amina.salim@mohz.go.tz',
-        applicantGender: 'Female',
-        vendorName: 'Ministry of Health Zanzibar',
-        cadreName: 'Clinical Officer',
-        instituteName: 'Zanzibar Health Training Institute',
-        educationLevelName: 'Internal Training',
-        batchYear: '2026',
-        workingStationName: 'Mnazi Mmoja Hospital',
-        rawStatus: 'REQUESTED',
-        startDate: DateTime(2026, 4, 10),
-        endDate: DateTime(2026, 4, 12),
-        resources: const [
-          TrainingResource(
-            id: 'approval-resource-3001',
-            title: 'Training Invitation',
-            sizeLabel: '94 KB',
-            fileName: 'training_invitation.pdf',
-            filePath: '',
-            fileType: 'PDF',
-          ),
-        ],
-      ),
-      TrainingApprovalRecord(
-        id: 'approval-mock-3002',
-        trainingApplicationId: '3002',
-        trainingAppStatusId: '7002',
-        title: 'Infection Prevention Workshop',
-        applicantName: 'Dr. Hassan Juma',
-        applicantPhone: '0719876543',
-        applicantEmail: 'hassan.juma@mohz.go.tz',
-        applicantGender: 'Male',
-        vendorName: 'Public Health Surveillance Unit',
-        cadreName: 'Medical Officer',
-        instituteName: 'Ministry of Health HQ',
-        educationLevelName: 'Workshop',
-        batchYear: '2026',
-        workingStationName: 'Pemba Regional Hospital',
-        rawStatus: 'FORWARDED',
-        startDate: DateTime(2026, 4, 20),
-        endDate: DateTime(2026, 4, 22),
-      ),
-    ];
-  }
-
-  List<TrainingResource> buildMockResources() {
-    return const [
-      TrainingResource(
-        id: 'resource-guideline',
-        title: 'Infection Prevention Guidelines',
-        sizeLabel: '94 KB',
-        fileName: 'infection_prevention_guidelines.pdf',
-        filePath: '',
-        fileType: 'PDF',
-      ),
-      TrainingResource(
-        id: 'resource-maternal-best-practice',
-        title: 'Maternal Health Best Practices',
-        sizeLabel: '94 KB',
-        fileName: 'maternal_health_best_practices.pdf',
-        filePath: '',
-        fileType: 'PDF',
-      ),
-      TrainingResource(
-        id: 'resource-surveillance-manual',
-        title: 'Public Health Surveillance Manual',
-        sizeLabel: '94 KB',
-        fileName: 'public_health_surveillance_manual.pdf',
-        filePath: '',
-        fileType: 'PDF',
-      ),
-      TrainingResource(
-        id: 'resource-ipc-manual',
-        title: 'Infection Prevention & Control Manual',
-        sizeLabel: '94 KB',
-        fileName: 'ipc_manual.pdf',
-        filePath: '',
-        fileType: 'PDF',
-      ),
-      TrainingResource(
-        id: 'resource-malaria',
-        title: 'Malaria Case Management Guide',
-        sizeLabel: '94 KB',
-        fileName: 'malaria_case_management_guide.pdf',
-        filePath: '',
-        fileType: 'PDF',
-      ),
-      TrainingResource(
-        id: 'resource-health-data',
-        title: 'Health Data Reporting Procedures',
-        sizeLabel: '94 KB',
-        fileName: 'health_data_reporting_procedures.pdf',
-        filePath: '',
-        fileType: 'PDF',
-      ),
-      TrainingResource(
-        id: 'resource-emergency',
-        title: 'Emergency Response Protocols',
-        sizeLabel: '94 KB',
-        fileName: 'emergency_response_protocols.pdf',
-        filePath: '',
-        fileType: 'PDF',
-      ),
-    ];
   }
 
   Future<Response<dynamic>> _get(String path) async {
@@ -866,14 +742,6 @@ class TrainingRepository {
     ]).take(3).toList();
   }
 
-  String _buildLatestDescription({
-    required _TrainingTemplate template,
-    required String organizer,
-    required String caderName,
-  }) {
-    return '${template.description} Organised with $organizer for $caderName teams.';
-  }
-
   String _stringValue(dynamic value, {String fallback = ''}) {
     final normalized = value?.toString().trim() ?? '';
     return normalized.isEmpty ? fallback : normalized;
@@ -920,6 +788,28 @@ class TrainingRepository {
     return 'FILE';
   }
 
+  String _resolveTrainingFileUrl({
+    required String fileName,
+    required String filePath,
+  }) {
+    final normalizedPath = filePath.trim();
+    final pathUri = Uri.tryParse(normalizedPath);
+    if (pathUri != null && pathUri.hasScheme) {
+      return normalizedPath;
+    }
+
+    final apiUri = Uri.parse(ApiService.baseUrl);
+    final publicBaseUrl = '${apiUri.scheme}://${apiUri.host}';
+    if (normalizedPath.isNotEmpty) {
+      final relativePath = normalizedPath.replaceFirst(RegExp(r'^/+'), '');
+      return '$publicBaseUrl/$relativePath';
+    }
+
+    final normalizedFileName = fileName.trim();
+    if (normalizedFileName.isEmpty) return '';
+    return '$publicBaseUrl/uploads/Employee/TrainingFile/$normalizedFileName';
+  }
+
   TrainingResource? _approvalResourceFromItem(
     Map<String, dynamic> item, {
     required String idPrefix,
@@ -935,7 +825,13 @@ class TrainingRepository {
       title: _stringValue(item['upload_name'], fallback: 'Training Document'),
       sizeLabel: _resolveFileSize(fileName),
       fileName: fileName,
-      filePath: _stringValue(item['file_path']),
+      filePath: _resolveTrainingFileUrl(
+        fileName: fileName,
+        filePath: _stringValue(
+          item['file_url'],
+          fallback: _stringValue(item['file_path']),
+        ),
+      ),
       fileType: _fileTypeFor(fileName),
       isLive: true,
     );
@@ -1055,65 +951,3 @@ class TrainingRepository {
     return result;
   }
 }
-
-class _TrainingTemplate {
-  const _TrainingTemplate({
-    required this.title,
-    required this.trainingType,
-    required this.organizer,
-    required this.location,
-    required this.description,
-    required this.targetCadres,
-    required this.badge,
-    required this.availableSlots,
-  });
-
-  final String title;
-  final String trainingType;
-  final String organizer;
-  final String location;
-  final String description;
-  final List<String> targetCadres;
-  final String badge;
-  final int availableSlots;
-}
-
-const _latestTemplates = [
-  _TrainingTemplate(
-    title: 'Maternal Health Capacity Training',
-    trainingType: 'Internal Training',
-    organizer: 'Ministry of Health Zanzibar',
-    location: 'Zanzibar Health Training Institute',
-    description:
-        'Training focused on strengthening maternal health services, improving monitoring of maternal indicators, and enhancing clinical response in health facilities.',
-    targetCadres: ['Clinical Officers', 'Nurses', 'Medical Officers'],
-    badge: 'Internal',
-    availableSlots: 25,
-  ),
-  _TrainingTemplate(
-    title: 'Leadership in Health Systems',
-    trainingType: 'Workshop',
-    organizer: 'Leadership Institute Zanzibar',
-    location: 'Zanzibar Health Training Institute',
-    description:
-        'Practical leadership sessions for supervisors and coordinators managing service delivery, planning, and performance reviews across health teams.',
-    targetCadres: [
-      'Department Leads',
-      'Programme Coordinators',
-      'Facility Managers',
-    ],
-    badge: 'Internal',
-    availableSlots: 18,
-  ),
-  _TrainingTemplate(
-    title: 'Infection Prevention Workshop',
-    trainingType: 'Workshop',
-    organizer: 'Public Health Surveillance Unit',
-    location: 'Mnazi Mmoja Conference Hall',
-    description:
-        'Workshop designed to strengthen prevention workflows, reporting discipline, and outbreak preparedness among front-line clinical teams.',
-    targetCadres: ['Nurses', 'Clinical Officers', 'Public Health Officers'],
-    badge: 'Workshop',
-    availableSlots: 30,
-  ),
-];
