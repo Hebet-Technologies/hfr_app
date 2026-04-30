@@ -3901,6 +3901,24 @@ class _ConversationDetailScreenState
     );
   }
 
+  String? _senderNameFor(PeerMessage message) {
+    final directSenderName = message.sender?.fullName.trim() ?? '';
+    if (directSenderName.isNotEmpty) {
+      return directSenderName;
+    }
+
+    for (final member in _members) {
+      if (member.numericId == message.senderId) {
+        final memberName = member.fullName.trim();
+        if (memberName.isNotEmpty) {
+          return memberName;
+        }
+      }
+    }
+
+    return null;
+  }
+
   bool _canManageGroupMembers(PeerExchangeAccess access, int? createdBy) {
     return access.isPrivileged && access.canManageGroupMembers(createdBy);
   }
@@ -4478,6 +4496,7 @@ class _ConversationDetailScreenState
                       (message) => _MessageBubble(
                         message: message,
                         isMine: message.senderId.toString() == currentUserId,
+                        senderName: _senderNameFor(message),
                       ),
                     ),
                 ],
@@ -5404,15 +5423,22 @@ class _CommentCard extends StatelessWidget {
 }
 
 class _MessageBubble extends StatelessWidget {
-  const _MessageBubble({required this.message, required this.isMine});
+  const _MessageBubble({
+    required this.message,
+    required this.isMine,
+    this.senderName,
+  });
 
   final PeerMessage message;
   final bool isMine;
+  final String? senderName;
 
   @override
   Widget build(BuildContext context) {
     final background = isMine ? _peerPrimary : Colors.white;
     final textColor = isMine ? Colors.white : _peerText;
+    final resolvedSenderName = (senderName ?? message.sender?.fullName ?? '')
+        .trim();
 
     return Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
@@ -5430,9 +5456,9 @@ class _MessageBubble extends StatelessWidget {
               ? CrossAxisAlignment.end
               : CrossAxisAlignment.start,
           children: [
-            if (!isMine && (message.sender?.fullName ?? '').isNotEmpty) ...[
+            if (!isMine && resolvedSenderName.isNotEmpty) ...[
               Text(
-                message.sender!.fullName,
+                resolvedSenderName,
                 style: _textStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
