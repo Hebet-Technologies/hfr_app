@@ -80,18 +80,14 @@ class PeerExchangeAccess {
   bool get canReplyToTopics => isAuthenticated;
   bool get canViewGroupMembers => isAuthenticated;
 
-  bool get canCreateGroups => _hasPermission('Create Program Group');
+  bool get canCreateGroups =>
+      _hasPermission('Create Program Group') || _hasPermission('Create Topic');
 
   bool get canUpdateGroups => _hasPermission('Update Program Group');
 
   bool get canDeleteGroups => _hasPermission('Delete Program Group');
 
-  bool get canCreateTopics =>
-      isPrivileged ||
-      _hasScopedPermission(
-        verbs: const ['create', 'store', 'manage', 'update'],
-        nouns: const ['topic', 'topics', 'community'],
-      );
+  bool get canCreateTopics => _hasPermission('Create Topic');
 
   bool get canManageQuestionCategories =>
       isPrivileged ||

@@ -140,10 +140,7 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     _authRepository = ref.watch(authRepositoryProvider);
     final authState = ref.watch(authViewModelProvider);
     _currentUser = authState.user;
-    _currentAccess = StaffPortalAccess.fromUser(
-      authState.user,
-      preferredMode: authState.activePortalMode,
-    );
+    _currentAccess = StaffPortalAccess.fromUser(authState.user);
     Future<void>.microtask(load);
     return const StaffRequestsState();
   }
@@ -233,7 +230,7 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
         } catch (_) {}
       }
 
-      if (_currentAccess.hasApproverMode) {
+      if (_currentAccess.hasRequestApproverAccess) {
         try {
           leaveApprovalTasks = await _repository.fetchLeaveApprovalTasks();
         } catch (_) {}
@@ -278,15 +275,12 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     final user = _currentUser ?? await _authRepository.getSavedUser();
     final resolved = await _authRepository.resolveEmployeeUser(user);
     _currentUser = resolved;
-    _currentAccess = StaffPortalAccess.fromUser(
-      resolved,
-      preferredMode: _currentAccess.activeMode,
-    );
+    _currentAccess = StaffPortalAccess.fromUser(resolved);
     return resolved;
   }
 
   String _missingEmployeeInformationMessage() {
-    if (_currentAccess.hasApproverMode) {
+    if (_currentAccess.hasRequestApproverAccess) {
       return 'This admin account is not linked to an employee profile, so it cannot submit employee leave requests. Switch to a staff account or use the approver workspace.';
     }
     return 'Your account is missing employee information. Please sign in again or contact support.';

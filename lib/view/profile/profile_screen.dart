@@ -90,14 +90,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     Navigator.pushReplacementNamed(context, RoutesName.login);
   }
 
-  Future<void> _switchPortalMode(bool approverEnabled) async {
-    final mode = approverEnabled
-        ? StaffPortalMode.approver
-        : StaffPortalMode.employee;
-    await ref.read(authViewModelProvider.notifier).setActivePortalMode(mode);
-    await ref.read(staffRequestsViewModelProvider.notifier).refresh();
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authViewModelProvider).user;
@@ -180,16 +172,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               else if (profile != null) ...[
                 _ProfileHeroCard(profile: profile, roleLabel: roleLabel),
                 const SizedBox(height: 14),
-                if (access.hasApproverMode) ...[
-                  _SectionLabel(title: 'WORKSPACE MODE'),
-                  const SizedBox(height: 8),
-                  _PortalModeCard(
-                    activeMode: access.activeMode,
-                    summary: access.modeSummary,
-                    onChanged: _switchPortalMode,
-                  ),
-                  const SizedBox(height: 14),
-                ],
                 _SectionLabel(title: 'PERSONAL DETAILS'),
                 const SizedBox(height: 8),
                 _ProfileInfoCard(

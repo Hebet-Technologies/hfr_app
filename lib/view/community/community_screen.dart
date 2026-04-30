@@ -83,10 +83,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     );
 
     final portalAccess = ref.watch(staffPortalAccessProvider);
-
     final access = PeerExchangeAccess.fromUser(
       currentUser,
-      isApproverOverride: portalAccess.hasApproverMode,
+      isApproverOverride: portalAccess.hasRequestApproverAccess,
     );
     final currentUserName = currentUser?.fullName.trim() ?? '';
     final directConversations = state.conversations
@@ -1273,7 +1272,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     final portalAccess = ref.read(staffPortalAccessProvider);
     return PeerExchangeAccess.fromUser(
       user,
-      isApproverOverride: portalAccess.hasApproverMode,
+      isApproverOverride: portalAccess.hasRequestApproverAccess,
     );
   }
 
@@ -1305,7 +1304,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }
 
   bool _canCreateTopics(PeerExchangeAccess access) {
-    return access.isPrivileged && access.canCreateTopics;
+    final requestAccess = ref.read(staffPortalAccessProvider);
+    return requestAccess.hasRequestApproverAccess;
   }
 
   bool _canEditQuestion(PeerExchangeAccess access, PeerQuestion question) {
@@ -1554,6 +1554,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   Future<void> _showOverviewActionsSheet() async {
     final access = _currentAccess();
+    final requestAccess = ref.read(staffPortalAccessProvider);
     final actions = <Widget>[
       if (access.canAskQuestions)
         _ActionTile(
@@ -1564,7 +1565,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             _showCreateQuestionSheet(ref.read(peerExchangeViewModelProvider));
           },
         ),
-      if (_canCreateTopics(access))
+      if (requestAccess.hasRequestApproverAccess)
         _ActionTile(
           title: 'Create a topic',
           subtitle: 'Open a structured discussion for your team.',
@@ -1573,7 +1574,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             _showCreateTopicSheet();
           },
         ),
-      if (_canCreateGroups(access))
+      if (requestAccess.hasRequestApproverAccess)
         _ActionTile(
           title: 'Create a group',
           subtitle: 'Set up a shared room for a team or activity.',
@@ -1953,8 +1954,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }) async {
     final queryController = TextEditingController();
     final repository = ref.read(peerExchangeRepositoryProvider);
-    Future<List<PeerDirectoryPerson>> directoryFuture =
-        multiSelect
+    Future<List<PeerDirectoryPerson>> directoryFuture = multiSelect
         ? repository.fetchStaffDirectory()
         : repository.fetchConversationUsers();
     final selected = <int, PeerDirectoryPerson>{
@@ -2641,14 +2641,15 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   }
 
   Future<void> _showCreateGroupSheet() async {
-    final access = _currentAccess();
-    if (!_canCreateGroups(access)) {
-      _showMessage(
-        'You do not have permission to create groups.',
-        error: true,
-      );
-      return;
-    }
+    // final access = _currentAccess();
+    // final requestAccess = ref.read(staffPortalAccessProvider);
+    // if (!_canCreateGroups(access)) {
+    //   _showMessage(
+    //     'You do not have permission to create groups.',
+    //     error: true,
+    //   );
+    //   return;
+    // }
 
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
@@ -3896,7 +3897,7 @@ class _ConversationDetailScreenState
     final portalAccess = ref.read(staffPortalAccessProvider);
     return PeerExchangeAccess.fromUser(
       user,
-      isApproverOverride: portalAccess.hasApproverMode,
+      isApproverOverride: portalAccess.hasRequestApproverAccess,
     );
   }
 

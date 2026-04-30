@@ -38,10 +38,7 @@ final authViewModelProvider = NotifierProvider<AuthViewModel, AuthState>(() {
 
 final staffPortalAccessProvider = Provider<StaffPortalAccess>((ref) {
   final authState = ref.watch(authViewModelProvider);
-  return StaffPortalAccess.fromUser(
-    authState.user,
-    preferredMode: authState.activePortalMode,
-  );
+  return StaffPortalAccess.fromUser(authState.user);
 });
 
 final peerExchangeViewModelProvider =

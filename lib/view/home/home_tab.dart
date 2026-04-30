@@ -28,11 +28,12 @@ class HomeTab extends ConsumerWidget {
     final displayName = (user?.fullName.trim().isNotEmpty ?? false)
         ? user!.fullName.trim()
         : 'Staff Member';
-    final isApproverMode = access.isApproverMode;
+    final isApproverMode = access.hasRequestApproverAccess;
     final roleLabel = _resolveRoleLabel(user);
     final training = requestsState.trainings.isNotEmpty
         ? requestsState.trainings.first
         : null;
+    final announcementItems = requestsState.announcements.take(3).toList();
     final approvalItems = [
       ...requestsState.leaveApprovalTasks,
       ...requestsState.transferApprovalTasks,
@@ -80,7 +81,7 @@ class HomeTab extends ConsumerWidget {
                   showAction: false,
                 ),
                 const SizedBox(height: 12),
-                _AnnouncementCarousel(items: requestsState.announcements),
+                _AnnouncementCarousel(items: announcementItems),
                 const SizedBox(height: 20),
                 _SectionHeader(
                   title: 'Approval Queue',
@@ -212,11 +213,11 @@ class HomeTab extends ConsumerWidget {
                 height: 142,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: requestsState.announcements.length,
+                  itemCount: announcementItems.length,
                   separatorBuilder: (context, index) =>
                       const SizedBox(width: 12),
                   itemBuilder: (context, index) {
-                    final item = requestsState.announcements[index];
+                    final item = announcementItems[index];
                     return _AnnouncementCard(item: item);
                   },
                 ),
@@ -539,15 +540,16 @@ class _AnnouncementCarouselState extends State<_AnnouncementCarousel> {
           ),
         if (items.length > 1) ...[
           const SizedBox(height: 10),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 6,
+            runSpacing: 6,
             children: List.generate(
               items.length,
               (index) => AnimatedContainer(
                 duration: const Duration(milliseconds: 180),
                 width: index == _page ? 14 : 6,
                 height: 6,
-                margin: const EdgeInsets.symmetric(horizontal: 3),
                 decoration: BoxDecoration(
                   color: index == _page ? _homeBlue : const Color(0xFFD0D5DD),
                   borderRadius: BorderRadius.circular(999),
@@ -1833,6 +1835,7 @@ class _EmptyActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: _homeCard,

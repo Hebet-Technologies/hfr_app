@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../model/peer_exchange_models.dart';
@@ -193,6 +195,8 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
       state = state.copyWith(isSubmitting: false);
       return group;
     } catch (error) {
+      print(error);
+      log(error.toString());
       state = state.copyWith(
         isSubmitting: false,
         errorMessage: error.toString().replaceFirst('Exception: ', ''),

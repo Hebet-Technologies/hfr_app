@@ -41,10 +41,7 @@ class StaffPortalAccess {
     required this.canCreateTrainingResult,
   });
 
-  factory StaffPortalAccess.fromUser(
-    UserModel? user, {
-    StaffPortalMode preferredMode = StaffPortalMode.employee,
-  }) {
+  factory StaffPortalAccess.fromUser(UserModel? user) {
     final roles = [...user?.roles ?? const <String>[]];
     final permissions = [...user?.permissions ?? const <String>[]];
     final values = [...roles, ...permissions].map(_normalize).toList();
@@ -111,7 +108,9 @@ class StaffPortalAccess {
         canCreateTrainingResult;
 
     return StaffPortalAccess._(
-      activeMode: hasApproverMode ? preferredMode : StaffPortalMode.employee,
+      activeMode: hasApproverMode
+          ? StaffPortalMode.approver
+          : StaffPortalMode.employee,
       hasEmployeeProfile: hasEmployeeProfile,
       hasApproverMode: hasApproverMode,
       roles: roles,
@@ -147,8 +146,7 @@ class StaffPortalAccess {
 
   bool get isEmployeeMode => activeMode == StaffPortalMode.employee;
 
-  bool get isApproverMode =>
-      hasApproverMode && activeMode == StaffPortalMode.approver;
+  bool get isApproverMode => hasApproverMode;
 
   bool get canReviewTrainingRequests =>
       canApproveTrainingRequests || canCreateTrainingResult;

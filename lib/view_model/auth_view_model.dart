@@ -49,13 +49,12 @@ class AuthViewModel extends Notifier<AuthState> {
 
   Future<void> _restoreSavedSession() async {
     final user = await _authRepository.getSavedUser();
-    final savedMode = await _authRepository.getSavedActivePortalMode();
     if (user == null) {
       state = state.copyWith(activePortalMode: StaffPortalMode.employee);
       return;
     }
 
-    final access = StaffPortalAccess.fromUser(user, preferredMode: savedMode);
+    final access = StaffPortalAccess.fromUser(user);
     state = state.copyWith(user: user, activePortalMode: access.activeMode);
   }
 
@@ -64,10 +63,7 @@ class AuthViewModel extends Notifier<AuthState> {
 
     try {
       final user = await _authRepository.login(email, password);
-      final access = StaffPortalAccess.fromUser(
-        user,
-        preferredMode: state.activePortalMode,
-      );
+      final access = StaffPortalAccess.fromUser(user);
 
       // if (user.personalInformationId.trim().isEmpty) {
       //   throw Exception('User Information not found');
@@ -136,16 +132,13 @@ class AuthViewModel extends Notifier<AuthState> {
 
   Future<void> updateUser(UserModel user) async {
     await _authRepository.persistUser(user);
-    final access = StaffPortalAccess.fromUser(
-      user,
-      preferredMode: state.activePortalMode,
-    );
+    final access = StaffPortalAccess.fromUser(user);
     await _authRepository.persistActivePortalMode(access.activeMode);
     state = state.copyWith(user: user, activePortalMode: access.activeMode);
   }
 
   Future<void> setActivePortalMode(StaffPortalMode mode) async {
-    final access = StaffPortalAccess.fromUser(state.user, preferredMode: mode);
+    final access = StaffPortalAccess.fromUser(state.user);
     await _authRepository.persistActivePortalMode(access.activeMode);
     state = state.copyWith(activePortalMode: access.activeMode);
   }
