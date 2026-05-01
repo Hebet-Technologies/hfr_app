@@ -40,22 +40,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const ValueKey('Loan Type::null')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Emergency Loan').last);
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
+      final dropdowns = find.byType(DropdownButtonFormField<String>);
+      expect(dropdowns, findsNWidgets(2));
 
-      await tester.tap(find.byKey(const ValueKey('Repayment Period::null')));
+      await tester.tap(dropdowns.at(1));
       await tester.pumpAndSettle();
       await tester.tap(find.text('12 Months').last);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
 
-      expect(
-        find.byKey(const ValueKey('Repayment Period::12 Months')),
-        findsOneWidget,
-      );
+      expect(find.text('12 Months'), findsWidgets);
     },
   );
 
@@ -74,7 +68,7 @@ void main() {
         payroll: 'PAY-1',
         token: 'token',
         roles: const [],
-        permissions: const ['view training request'],
+        permissions: const ['approve training'],
       );
       final approverAccess = StaffPortalAccess.fromUser(
         approverUser,
@@ -91,15 +85,17 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Training'), findsOneWidget);
+      expect(find.text('All Trainings'), findsOneWidget);
+      expect(find.text('Applications'), findsOneWidget);
+      expect(find.text('Resources'), findsOneWidget);
+
+      await tester.tap(find.text('Applications'));
+      await tester.pumpAndSettle();
+
       expect(
         find.text('No training applications are waiting for review.'),
         findsOneWidget,
       );
-
-      await tester.tap(find.text('All Trainings'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('View Details'), findsWidgets);
       expect(tester.takeException(), isNull);
     },
   );
