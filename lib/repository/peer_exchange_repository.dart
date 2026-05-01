@@ -54,6 +54,7 @@ class PeerExchangeRepository {
     int? receiverId,
     required String message,
     String? replyToUuid,
+    List<MultipartFile> attachments = const [],
   }) async {
     final response = await _postForm(
       '/conversations/messages',
@@ -62,6 +63,7 @@ class PeerExchangeRepository {
         'receiver_id': receiverId,
         'message': message,
         'reply_to_uuid': replyToUuid,
+        'attachments': attachments.isEmpty ? null : attachments,
       }),
     );
 
@@ -257,10 +259,15 @@ class PeerExchangeRepository {
   Future<PeerQuestion> createQuestion({
     required String categoryUuid,
     required String content,
+    List<MultipartFile> attachments = const [],
   }) async {
     final response = await _postForm(
       '/questions',
-      data: {'category_uuid': categoryUuid, 'content': content},
+      data: _cleanMap({
+        'category_uuid': categoryUuid,
+        'content': content,
+        'attachments': attachments.isEmpty ? null : attachments,
+      }),
     );
 
     return PeerQuestion.fromJson(
@@ -272,10 +279,15 @@ class PeerExchangeRepository {
     required String questionUuid,
     required String categoryUuid,
     required String content,
+    List<MultipartFile> attachments = const [],
   }) async {
     final response = await _putForm(
       '/questions/$questionUuid',
-      data: {'category_uuid': categoryUuid, 'content': content},
+      data: _cleanMap({
+        'category_uuid': categoryUuid,
+        'content': content,
+        'attachments': attachments.isEmpty ? null : attachments,
+      }),
     );
 
     return PeerQuestion.fromJson(
@@ -302,10 +314,14 @@ class PeerExchangeRepository {
   Future<PeerComment> createQuestionComment({
     required String questionUuid,
     required String message,
+    List<MultipartFile> attachments = const [],
   }) async {
     final response = await _postForm(
       '/questions/$questionUuid/comments',
-      data: {'message': message},
+      data: _cleanMap({
+        'message': message,
+        'attachments': attachments.isEmpty ? null : attachments,
+      }),
     );
 
     return PeerComment.fromJson(
@@ -406,10 +422,14 @@ class PeerExchangeRepository {
   Future<PeerComment> createTopicComment({
     required String topicUuid,
     required String message,
+    List<MultipartFile> attachments = const [],
   }) async {
     final response = await _postForm(
       '/topics/$topicUuid/comments',
-      data: {'message': message},
+      data: _cleanMap({
+        'message': message,
+        'attachments': attachments.isEmpty ? null : attachments,
+      }),
     );
 
     return PeerComment.fromJson(

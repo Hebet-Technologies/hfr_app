@@ -41,6 +41,17 @@ void openAnnouncementsScreen(
   );
 }
 
+void openResourcesScreen(
+  BuildContext context, {
+  List<HomeResource> resources = const [],
+}) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => ResourcesScreen(resources: resources),
+    ),
+  );
+}
+
 class HomeTab extends ConsumerWidget {
   const HomeTab({super.key});
 
@@ -115,6 +126,31 @@ class HomeTab extends ConsumerWidget {
                       requestsState.isLoading &&
                       requestsState.announcements.isEmpty,
                 ),
+                const SizedBox(height: 20),
+                _SectionHeader(
+                  title: 'Resources',
+                  actionLabel: 'See All',
+                  onTap: () => openResourcesScreen(
+                    context,
+                    resources: requestsState.resources,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                if (requestsState.isLoading && requestsState.resources.isEmpty)
+                  const _ResourceListShimmer()
+                else if (requestsState.resources.isEmpty)
+                  const _EmptyActivityCard(
+                    message: 'No resources are available right now.',
+                  )
+                else
+                  ...requestsState.resources
+                      .take(2)
+                      .map(
+                        (resource) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _ResourceListTile(resource: resource),
+                        ),
+                      ),
                 const SizedBox(height: 20),
                 _SectionHeader(
                   title: 'Approval Queue',
@@ -263,6 +299,29 @@ class HomeTab extends ConsumerWidget {
                     },
                   ),
                 ),
+              const SizedBox(height: 22),
+              _SectionHeader(
+                title: 'Resources',
+                actionLabel: 'See All',
+                onTap: () => openResourcesScreen(
+                  context,
+                  resources: requestsState.resources,
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (requestsState.isLoading && requestsState.resources.isEmpty)
+                const _ResourceListShimmer()
+              else if (requestsState.resources.isEmpty)
+                const _EmptyActivityCard(message: 'No resources found')
+              else
+                ...requestsState.resources
+                    .take(3)
+                    .map(
+                      (resource) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _ResourceListTile(resource: resource),
+                      ),
+                    ),
               const SizedBox(height: 22),
               _SectionHeader(
                 title: 'Community Overview',
@@ -824,6 +883,36 @@ class _AnnouncementFeedShimmer extends StatelessWidget {
           padding: EdgeInsets.only(bottom: 12),
           child: SizedBox(
             height: 96,
+            child: _HomeShimmer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(18)),
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Color(0xFFE8EEF6)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ResourceListShimmer extends StatelessWidget {
+  const _ResourceListShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        3,
+        (index) => const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: SizedBox(
+            height: 92,
             child: _HomeShimmer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -1895,6 +1984,72 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
   }
 }
 
+class ResourcesScreen extends ConsumerStatefulWidget {
+  const ResourcesScreen({super.key, this.resources = const []});
+
+  final List<HomeResource> resources;
+
+  @override
+  ConsumerState<ResourcesScreen> createState() => _ResourcesScreenState();
+}
+
+class _ResourcesScreenState extends ConsumerState<ResourcesScreen> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(staffRequestsViewModelProvider);
+    final source = state.resources.isNotEmpty ? state.resources : widget.resources;
+    final query = _query.trim().toLowerCase();
+    final items = source.where((item) {
+      if (query.isEmpty) return true;
+      return item.title.toLowerCase().contains(query) ||
+          item.subtitle.toLowerCase().contains(query) ||
+          item.status.toLowerCase().contains(query) ||
+          item.attachments.any(
+            (attachment) =>
+                attachment.originalFileName.toLowerCase().contains(query) ||
+                attachment.label.toLowerCase().contains(query),
+          );
+    }).toList();
+
+    return Scaffold(
+      backgroundColor: _homeSurface,
+      appBar: AppBar(
+        backgroundColor: _homeSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'Resources',
+          style: _homeTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+        children: [
+          TextField(
+            onChanged: (value) => setState(() => _query = value),
+            style: _homeTextStyle(fontSize: 13),
+            decoration: _homeInputDecoration('Search resources'),
+          ),
+          const SizedBox(height: 16),
+          if (state.isLoading && source.isEmpty)
+            const _ResourceListShimmer()
+          else if (items.isEmpty)
+            const _EmptyActivityCard(message: 'No resources found')
+          else
+            ...items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _ResourceListTile(resource: item),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class AnnouncementDetailsScreen extends ConsumerStatefulWidget {
   const AnnouncementDetailsScreen({super.key, required this.announcement});
 
@@ -2058,6 +2213,20 @@ class _AnnouncementDetailsScreenState
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Future<void> _openAnnouncementLink() async {
+    final url = announcement.externalLink?.trim() ?? '';
+    if (url.isEmpty) {
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return;
+    }
+
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final trainingState = ref.watch(trainingViewModelProvider);
@@ -2185,6 +2354,18 @@ class _AnnouncementDetailsScreenState
               ),
             ),
           ),
+          if ((announcement.externalLink ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 16),
+            FilledButton.tonalIcon(
+              onPressed: _openAnnouncementLink,
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: Text(
+                (announcement.linkLabel ?? '').trim().isEmpty
+                    ? 'Open Link'
+                    : announcement.linkLabel!.trim(),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           Text(
             'Comments',
@@ -2293,12 +2474,7 @@ class _AnnouncementDetailsScreenState
             ],
             const SizedBox(height: 12),
             if (_isLoadingComments)
-              const Center(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: CircularProgressIndicator(),
-                ),
-              )
+              const _ResourceListShimmer()
             else if (_comments.isEmpty)
               const _EmptyActivityCard(message: 'No comments yet')
             else
@@ -2593,6 +2769,161 @@ class _AnnouncementInfoCard extends StatelessWidget {
   }
 }
 
+class ResourceDetailsScreen extends ConsumerStatefulWidget {
+  const ResourceDetailsScreen({super.key, required this.resource});
+
+  final HomeResource resource;
+
+  @override
+  ConsumerState<ResourceDetailsScreen> createState() =>
+      _ResourceDetailsScreenState();
+}
+
+class _ResourceDetailsScreenState extends ConsumerState<ResourceDetailsScreen> {
+  HomeResource? _resource;
+  bool _isLoading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _resource = widget.resource;
+    Future<void>.microtask(_loadDetail);
+  }
+
+  Future<void> _loadDetail() async {
+    final uuid = widget.resource.uuid.trim();
+    if (uuid.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final detail = await ref
+          .read(staffRequestsRepositoryProvider)
+          .fetchResourceDetail(uuid);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _resource = detail ?? widget.resource;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoading = false;
+        _error = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _openResourceAttachment(HomeResourceAttachment attachment) async {
+    final url = attachment.attachmentUrl.trim();
+    if (url.isEmpty) {
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return;
+    }
+
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final resource = _resource ?? widget.resource;
+
+    return Scaffold(
+      backgroundColor: _homeSurface,
+      appBar: AppBar(
+        backgroundColor: _homeSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'Resource Details',
+          style: _homeTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _homeCard,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: _homeBorder),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  resource.title,
+                  style: _homeTextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _AnnouncementMetric(label: 'Status', value: resource.status),
+                const SizedBox(height: 10),
+                _AnnouncementMetric(
+                  label: 'Updated',
+                  value: _formatAnnouncementDate(
+                    resource.updatedAt ?? resource.createdAt,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _AnnouncementMetric(
+                  label: 'Files',
+                  value: '${resource.attachments.length}',
+                ),
+              ],
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 16),
+            _AnnouncementInfoCard(message: _error!),
+          ],
+          const SizedBox(height: 20),
+          Text(
+            'Attachments',
+            style: _homeTextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: _homeMuted,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_isLoading)
+            const _ResourceListShimmer()
+          else if (resource.attachments.isEmpty)
+            const _EmptyActivityCard(message: 'No attachments found')
+          else
+            ...resource.attachments.map(
+              (attachment) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _ResourceAttachmentTile(
+                  attachment: attachment,
+                  onTap: () => _openResourceAttachment(attachment),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AnnouncementListTile extends StatelessWidget {
   const _AnnouncementListTile({required this.item});
 
@@ -2665,6 +2996,161 @@ class _AnnouncementListTile extends StatelessWidget {
                 color: _homeBlue,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResourceListTile extends StatelessWidget {
+  const _ResourceListTile({required this.resource});
+
+  final HomeResource resource;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => ResourceDetailsScreen(resource: resource),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _homeCard,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _homeBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.folder_outlined,
+                color: _homeBlue,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    resource.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeTextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    resource.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeTextStyle(
+                      fontSize: 12,
+                      color: _homeMuted,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Icon(Icons.chevron_right_rounded, color: _homeMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResourceAttachmentTile extends StatelessWidget {
+  const _ResourceAttachmentTile({
+    required this.attachment,
+    required this.onTap,
+  });
+
+  final HomeResourceAttachment attachment;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = attachment.label.trim().isEmpty
+        ? attachment.originalFileName
+        : attachment.label;
+    final sizeLabel = attachment.fileSize == null || attachment.fileSize == 0
+        ? ''
+        : _formatFileSize(attachment.fileSize!);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _homeCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _homeBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.attach_file_rounded,
+                color: _homeBlue,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label.isEmpty ? 'Attachment' : label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeTextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      attachment.originalFileName,
+                      if (sizeLabel.isNotEmpty) sizeLabel,
+                    ].where((item) => item.trim().isNotEmpty).join(' • '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeTextStyle(
+                      fontSize: 11,
+                      color: _homeMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Icon(Icons.open_in_new_rounded, color: _homeMuted, size: 18),
           ],
         ),
       ),
@@ -3150,6 +3636,16 @@ String _formatCompactDate(DateTime value) {
 String _formatAnnouncementDate(DateTime? value) {
   if (value == null) return 'Not specified';
   return _formatCompactDate(value);
+}
+
+String _formatFileSize(int value) {
+  if (value < 1024) {
+    return '$value B';
+  }
+  if (value < 1024 * 1024) {
+    return '${(value / 1024).toStringAsFixed(1)} KB';
+  }
+  return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
 }
 
 String _recentActivityTitle(StaffRequestRecord record) {

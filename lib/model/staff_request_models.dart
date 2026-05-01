@@ -329,6 +329,9 @@ class HomeAnnouncement {
     required this.caption,
     this.type = 'General',
     this.externalLink,
+    this.linkLabel,
+    this.sourceType,
+    this.sourceId,
     this.startsAt,
     this.endsAt,
     this.isLive = false,
@@ -343,6 +346,9 @@ class HomeAnnouncement {
   final String caption;
   final String type;
   final String? externalLink;
+  final String? linkLabel;
+  final String? sourceType;
+  final String? sourceId;
   final DateTime? startsAt;
   final DateTime? endsAt;
   final bool isLive;
@@ -352,6 +358,46 @@ class HomeAnnouncement {
     return (trainingAnnouncementId != null && trainingAnnouncementId!.isNotEmpty) ||
         (announcementUuid != null && announcementUuid!.isNotEmpty);
   }
+}
+
+class HomeResource {
+  const HomeResource({
+    required this.uuid,
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    required this.attachments,
+    this.createdAt,
+    this.updatedAt,
+    this.isLive = false,
+  });
+
+  final String uuid;
+  final String title;
+  final String subtitle;
+  final String status;
+  final List<HomeResourceAttachment> attachments;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final bool isLive;
+}
+
+class HomeResourceAttachment {
+  const HomeResourceAttachment({
+    required this.uuid,
+    required this.label,
+    required this.originalFileName,
+    required this.attachmentUrl,
+    required this.mimeType,
+    required this.fileSize,
+  });
+
+  final String uuid;
+  final String label;
+  final String originalFileName;
+  final String attachmentUrl;
+  final String mimeType;
+  final int? fileSize;
 }
 
 class HomeAnnouncementComment {

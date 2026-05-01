@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:developer';
 
+import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../data/network/api_service.dart';
 import '../../model/peer_exchange_access.dart';
 import '../../model/peer_exchange_models.dart';
 import '../../services/realtime_service.dart';
@@ -2198,6 +2202,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     final contentController = TextEditingController();
     String selectedCategoryUuid =
         state.selectedCategoryUuid ?? state.categories.first.uuid;
+    List<PlatformFile> selectedFiles = const [];
 
     await showModalBottomSheet<void>(
       context: context,
@@ -2251,6 +2256,48 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                           hintText: 'What do you need help with?',
                           maxLines: 5,
                         ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed: isSubmitting
+                                  ? null
+                                  : () async {
+                                      final picked = await _pickPeerFiles(
+                                        context,
+                                        existing: selectedFiles,
+                                      );
+                                      if (!sheetContext.mounted) return;
+                                      setModalState(() => selectedFiles = picked);
+                                    },
+                              icon: const Icon(Icons.attach_file_rounded),
+                              label: Text(
+                                selectedFiles.isEmpty
+                                    ? 'Add attachments'
+                                    : 'Add more files',
+                              ),
+                            ),
+                            ...selectedFiles.map(
+                              (file) => _AttachmentChip(
+                                fileName: file.name,
+                                fileSize: file.size,
+                                onRemove: isSubmitting
+                                    ? null
+                                    : () => setModalState(() {
+                                        selectedFiles = selectedFiles
+                                            .where(
+                                              (item) =>
+                                                  !(item.path == file.path &&
+                                                      item.name == file.name),
+                                            )
+                                            .toList();
+                                      }),
+                              ),
+                            ),
+                          ],
+                        ),
                         const SizedBox(height: 18),
                         _PrimaryButton(
                           label: isSubmitting ? 'Posting...' : 'Post question',
@@ -2267,6 +2314,10 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                     return;
                                   }
 
+                                  final attachments =
+                                      await _platformFilesToMultipart(
+                                        selectedFiles,
+                                      );
                                   final created = await ref
                                       .read(
                                         peerExchangeViewModelProvider.notifier,
@@ -2274,6 +2325,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                       .createQuestion(
                                         categoryUuid: selectedCategoryUuid,
                                         content: content,
+                                        attachments: attachments,
                                       );
 
                                   if (created == null || !mounted) return;
@@ -2936,6 +2988,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
     final contentController = TextEditingController(text: question.content);
     String selectedCategoryUuid = question.categoryUuid;
+    List<PlatformFile> selectedFiles = const [];
     var isSaving = false;
 
     await showModalBottomSheet<void>(
@@ -2982,6 +3035,48 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                       hintText: 'What do you need help with?',
                       maxLines: 5,
                     ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: isSaving
+                              ? null
+                              : () async {
+                                  final picked = await _pickPeerFiles(
+                                    context,
+                                    existing: selectedFiles,
+                                  );
+                                  if (!sheetContext.mounted) return;
+                                  setModalState(() => selectedFiles = picked);
+                                },
+                          icon: const Icon(Icons.attach_file_rounded),
+                          label: Text(
+                            selectedFiles.isEmpty
+                                ? 'Add attachments'
+                                : 'Add more files',
+                          ),
+                        ),
+                        ...selectedFiles.map(
+                          (file) => _AttachmentChip(
+                            fileName: file.name,
+                            fileSize: file.size,
+                            onRemove: isSaving
+                                ? null
+                                : () => setModalState(() {
+                                    selectedFiles = selectedFiles
+                                        .where(
+                                          (item) =>
+                                              !(item.path == file.path &&
+                                                  item.name == file.name),
+                                        )
+                                        .toList();
+                                  }),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 18),
                     _PrimaryButton(
                       label: isSaving ? 'Saving...' : 'Save changes',
@@ -2998,6 +3093,10 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                 return;
                               }
 
+                              final attachments =
+                                  await _platformFilesToMultipart(
+                                    selectedFiles,
+                                  );
                               setModalState(() => isSaving = true);
                               try {
                                 await ref
@@ -3006,6 +3105,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                       questionUuid: question.uuid,
                                       categoryUuid: selectedCategoryUuid,
                                       content: content,
+                                      attachments: attachments,
                                     );
                                 if (!mounted || !sheetContext.mounted) return;
                                 Navigator.pop(sheetContext);
@@ -3480,6 +3580,7 @@ class QuestionDetailScreen extends ConsumerStatefulWidget {
 
 class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
+  List<PlatformFile> _selectedFiles = const [];
   List<PeerComment> _comments = const [];
   bool _isLoading = true;
   bool _isPosting = false;
@@ -3523,20 +3624,25 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
 
   Future<void> _postComment() async {
     final message = _commentController.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty && _selectedFiles.isEmpty) return;
 
     setState(() {
       _isPosting = true;
     });
 
     try {
+      final attachments = await _platformFilesToMultipart(_selectedFiles);
       await ref
           .read(peerExchangeRepositoryProvider)
           .createQuestionComment(
             questionUuid: widget.question.uuid,
             message: message,
+            attachments: attachments,
           );
       _commentController.clear();
+      setState(() {
+        _selectedFiles = const [];
+      });
       await _loadComments();
     } catch (error) {
       if (!mounted) return;
@@ -3555,6 +3661,14 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
         });
       }
     }
+  }
+
+  Future<void> _pickAttachments() async {
+    final picked = await _pickPeerFiles(context, existing: _selectedFiles);
+    if (!mounted) return;
+    setState(() {
+      _selectedFiles = picked;
+    });
   }
 
   @override
@@ -3655,6 +3769,18 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
             hintText: 'Write a reply',
             isPosting: _isPosting,
             onSend: _postComment,
+            onPickAttachments: _pickAttachments,
+            attachments: _selectedFiles,
+            onRemoveAttachment: (file) {
+              setState(() {
+                _selectedFiles = _selectedFiles
+                    .where(
+                      (item) =>
+                          !(item.path == file.path && item.name == file.name),
+                    )
+                    .toList();
+              });
+            },
           ),
         ],
       ),
@@ -3673,6 +3799,7 @@ class TopicDetailScreen extends ConsumerStatefulWidget {
 
 class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
+  List<PlatformFile> _selectedFiles = const [];
   List<PeerComment> _comments = const [];
   bool _isLoading = true;
   bool _isPosting = false;
@@ -3716,17 +3843,25 @@ class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
 
   Future<void> _postComment() async {
     final message = _commentController.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty && _selectedFiles.isEmpty) return;
 
     setState(() {
       _isPosting = true;
     });
 
     try {
+      final attachments = await _platformFilesToMultipart(_selectedFiles);
       await ref
           .read(peerExchangeRepositoryProvider)
-          .createTopicComment(topicUuid: widget.topic.uuid, message: message);
+          .createTopicComment(
+            topicUuid: widget.topic.uuid,
+            message: message,
+            attachments: attachments,
+          );
       _commentController.clear();
+      setState(() {
+        _selectedFiles = const [];
+      });
       await _loadComments();
     } catch (error) {
       if (!mounted) return;
@@ -3745,6 +3880,14 @@ class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
         });
       }
     }
+  }
+
+  Future<void> _pickAttachments() async {
+    final picked = await _pickPeerFiles(context, existing: _selectedFiles);
+    if (!mounted) return;
+    setState(() {
+      _selectedFiles = picked;
+    });
   }
 
   @override
@@ -3847,6 +3990,18 @@ class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
             hintText: 'Write a comment',
             isPosting: _isPosting,
             onSend: _postComment,
+            onPickAttachments: _pickAttachments,
+            attachments: _selectedFiles,
+            onRemoveAttachment: (file) {
+              setState(() {
+                _selectedFiles = _selectedFiles
+                    .where(
+                      (item) =>
+                          !(item.path == file.path && item.name == file.name),
+                    )
+                    .toList();
+              });
+            },
           ),
         ],
       ),
@@ -3874,6 +4029,7 @@ class ConversationDetailScreen extends ConsumerStatefulWidget {
 class _ConversationDetailScreenState
     extends ConsumerState<ConversationDetailScreen> {
   final TextEditingController _messageController = TextEditingController();
+  List<PlatformFile> _selectedFiles = const [];
 
   PeerConversation? _conversation;
   List<PeerMember> _members = const [];
@@ -3979,20 +4135,25 @@ class _ConversationDetailScreenState
 
   Future<void> _sendMessage() async {
     final message = _messageController.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty && _selectedFiles.isEmpty) return;
 
     setState(() {
       _isPosting = true;
     });
 
     try {
+      final attachments = await _platformFilesToMultipart(_selectedFiles);
       final sent = await ref
           .read(peerExchangeRepositoryProvider)
           .sendConversationMessage(
             conversationUuid: widget.conversationUuid,
             message: message,
+            attachments: attachments,
           );
       _messageController.clear();
+      setState(() {
+        _selectedFiles = const [];
+      });
       _upsertMessage(sent);
     } catch (error) {
       if (!mounted) return;
@@ -4011,6 +4172,14 @@ class _ConversationDetailScreenState
         });
       }
     }
+  }
+
+  Future<void> _pickAttachments() async {
+    final picked = await _pickPeerFiles(context, existing: _selectedFiles);
+    if (!mounted) return;
+    setState(() {
+      _selectedFiles = picked;
+    });
   }
 
   Future<void> _bindRealtime() async {
@@ -4640,6 +4809,18 @@ class _ConversationDetailScreenState
             hintText: 'Type a message',
             isPosting: _isPosting,
             onSend: _sendMessage,
+            onPickAttachments: _pickAttachments,
+            attachments: _selectedFiles,
+            onRemoveAttachment: (file) {
+              setState(() {
+                _selectedFiles = _selectedFiles
+                    .where(
+                      (item) =>
+                          !(item.path == file.path && item.name == file.name),
+                    )
+                    .toList();
+              });
+            },
           ),
         ],
       ),
@@ -5539,10 +5720,32 @@ class _CommentCard extends StatelessWidget {
                 ),
                 if (comment.attachments.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  _MetaChip(
-                    label: '${comment.attachments.length} attachment(s)',
-                    color: _peerSoftOrange,
-                    textColor: const Color(0xFFB95817),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: comment.attachments
+                        .map(
+                          (attachment) => ActionChip(
+                            avatar: const Icon(
+                              Icons.attach_file_rounded,
+                              size: 16,
+                              color: _peerPrimary,
+                            ),
+                            backgroundColor: _peerSoftOrange,
+                            label: Text(
+                              attachment.originalFileName.isEmpty
+                                  ? 'Attachment'
+                                  : attachment.originalFileName,
+                              style: _textStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: const Color(0xFFB95817),
+                              ),
+                            ),
+                            onPressed: () => _openPeerAttachment(attachment),
+                          ),
+                        )
+                        .toList(),
                   ),
                 ],
               ],
@@ -5603,6 +5806,38 @@ class _MessageBubble extends StatelessWidget {
               message.preview,
               style: _textStyle(fontSize: 13, color: textColor, height: 1.45),
             ),
+            if (message.attachments.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: message.attachments
+                    .map(
+                      (attachment) => ActionChip(
+                        avatar: Icon(
+                          Icons.attach_file_rounded,
+                          size: 16,
+                          color: isMine ? Colors.white : _peerPrimary,
+                        ),
+                        backgroundColor: isMine
+                            ? Colors.white.withValues(alpha: 0.12)
+                            : _peerSoftBlue,
+                        label: Text(
+                          attachment.originalFileName.isEmpty
+                              ? 'Attachment'
+                              : attachment.originalFileName,
+                          style: _textStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isMine ? Colors.white : _peerPrimary,
+                          ),
+                        ),
+                        onPressed: () => _openPeerAttachment(attachment),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
             const SizedBox(height: 8),
             Text(
               _formatTime(message.sentAt ?? message.createdAt),
@@ -5626,12 +5861,18 @@ class _ComposerBar extends StatelessWidget {
     required this.hintText,
     required this.isPosting,
     required this.onSend,
+    this.onPickAttachments,
+    this.attachments = const [],
+    this.onRemoveAttachment,
   });
 
   final TextEditingController controller;
   final String hintText;
   final bool isPosting;
   final VoidCallback onSend;
+  final VoidCallback? onPickAttachments;
+  final List<PlatformFile> attachments;
+  final void Function(PlatformFile file)? onRemoveAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -5646,63 +5887,183 @@ class _ComposerBar extends StatelessWidget {
         color: Colors.white,
         border: Border(top: BorderSide(color: _peerBorder)),
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: TextField(
-              controller: controller,
-              style: _textStyle(fontSize: 14),
-              decoration: InputDecoration(
-                hintText: hintText,
-                hintStyle: _textStyle(
-                  fontSize: 13,
-                  color: const Color(0xFF98A2B3),
-                ),
-                filled: true,
-                fillColor: const Color(0xFFF8FAFC),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: _peerBorder),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: _peerBorder),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: _peerPrimary),
-                ),
-              ),
+          if (attachments.isNotEmpty) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: attachments
+                  .map(
+                    (file) => _AttachmentChip(
+                      fileName: file.name,
+                      fileSize: file.size,
+                      onRemove: onRemoveAttachment == null || isPosting
+                          ? null
+                          : () => onRemoveAttachment!(file),
+                    ),
+                  )
+                  .toList(),
             ),
-          ),
-          const SizedBox(width: 12),
-          InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: isPosting ? null : onSend,
-            child: Container(
-              height: 50,
-              width: 50,
-              decoration: BoxDecoration(
-                color: isPosting ? const Color(0xFF9EC0FF) : _peerPrimary,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              alignment: Alignment.center,
-              child: isPosting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(
-                      Icons.send_rounded,
-                      color: Colors.white,
+            const SizedBox(height: 12),
+          ],
+          Row(
+            children: [
+              if (onPickAttachments != null) ...[
+                InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: isPosting ? null : onPickAttachments,
+                  child: Container(
+                    height: 50,
+                    width: 50,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _peerBorder),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.attach_file_rounded,
+                      color: _peerMuted,
                       size: 20,
                     ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: TextField(
+                  controller: controller,
+                  style: _textStyle(fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: hintText,
+                    hintStyle: _textStyle(
+                      fontSize: 13,
+                      color: const Color(0xFF98A2B3),
+                    ),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: _peerBorder),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: _peerBorder),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: _peerPrimary),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: isPosting ? null : onSend,
+                child: Container(
+                  height: 50,
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: isPosting ? const Color(0xFF9EC0FF) : _peerPrimary,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  alignment: Alignment.center,
+                  child: isPosting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentChip extends StatelessWidget {
+  const _AttachmentChip({
+    required this.fileName,
+    required this.fileSize,
+    this.onRemove,
+  });
+
+  final String fileName;
+  final int fileSize;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final sizeLabel = fileSize <= 0 ? '' : _formatBytes(fileSize);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _peerSoftBlue,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD8E7FF)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.insert_drive_file_outlined,
+            size: 16,
+            color: _peerPrimary,
+          ),
+          const SizedBox(width: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 170),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _textStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _peerPrimary,
+                  ),
+                ),
+                if (sizeLabel.isNotEmpty)
+                  Text(
+                    sizeLabel,
+                    style: _textStyle(
+                      fontSize: 10,
+                      color: _peerMuted,
+                    ),
+                  ),
+              ],
             ),
           ),
+          if (onRemove != null) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onRemove,
+              child: const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: _peerMuted,
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -5820,6 +6181,98 @@ String _formatTime(DateTime? dateTime) {
   final minute = dateTime.minute.toString().padLeft(2, '0');
   final period = dateTime.hour >= 12 ? 'PM' : 'AM';
   return '$hour:$minute $period';
+}
+
+String _formatBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) {
+    return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  }
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+}
+
+Future<List<PlatformFile>> _pickPeerFiles(
+  BuildContext context, {
+  List<PlatformFile> existing = const [],
+}) async {
+  final result = await FilePicker.platform.pickFiles(
+    allowMultiple: true,
+    withData: false,
+  );
+  if (!context.mounted) {
+    return existing;
+  }
+  if (result == null || result.files.isEmpty) {
+    return existing;
+  }
+
+  final nextFiles = <PlatformFile>[...existing];
+  for (final file in result.files) {
+    final alreadyAdded = nextFiles.any(
+      (existingFile) =>
+          existingFile.path == file.path && existingFile.name == file.name,
+    );
+    if (alreadyAdded) {
+      continue;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${file.name} is larger than 4MB.'),
+          backgroundColor: const Color(0xFFD92D20),
+        ),
+      );
+      continue;
+    }
+    nextFiles.add(file);
+  }
+
+  return nextFiles;
+}
+
+Future<List<MultipartFile>> _platformFilesToMultipart(
+  List<PlatformFile> files,
+) async {
+  final attachments = <MultipartFile>[];
+  for (final file in files) {
+    final path = file.path?.trim() ?? '';
+    if (path.isEmpty) {
+      continue;
+    }
+    attachments.add(await MultipartFile.fromFile(path, filename: file.name));
+  }
+  return attachments;
+}
+
+String _resolvePeerAttachmentUrl(String filePath) {
+  final normalizedPath = filePath.trim();
+  final uri = Uri.tryParse(normalizedPath);
+  if (uri != null && uri.hasScheme) {
+    return normalizedPath;
+  }
+
+  if (normalizedPath.isEmpty) {
+    return '';
+  }
+
+  final apiUri = Uri.parse(ApiService.baseUrl);
+  final publicBase = '${apiUri.scheme}://${apiUri.host}';
+  final relativePath = normalizedPath.replaceFirst(RegExp(r'^/+'), '');
+  return '$publicBase/storage/$relativePath';
+}
+
+Future<void> _openPeerAttachment(PeerAttachment attachment) async {
+  final resolvedUrl = _resolvePeerAttachmentUrl(attachment.filePath);
+  if (resolvedUrl.isEmpty) {
+    return;
+  }
+
+  final uri = Uri.tryParse(resolvedUrl);
+  if (uri == null) {
+    return;
+  }
+
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
 bool _isSameDay(DateTime left, DateTime right) {

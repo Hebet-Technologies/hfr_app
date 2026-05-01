@@ -16,6 +16,7 @@ class StaffRequestsState {
     this.errorMessage,
     this.records = const [],
     this.announcements = const [],
+    this.resources = const [],
     this.trainings = const [],
     this.leaveTypes = const [],
     this.representatives = const [],
@@ -34,6 +35,7 @@ class StaffRequestsState {
   final String? errorMessage;
   final List<StaffRequestRecord> records;
   final List<HomeAnnouncement> announcements;
+  final List<HomeResource> resources;
   final List<HomeTrainingItem> trainings;
   final List<RequestLookupOption> leaveTypes;
   final List<RequestLookupOption> representatives;
@@ -91,6 +93,7 @@ class StaffRequestsState {
     Object? errorMessage = _sentinel,
     List<StaffRequestRecord>? records,
     List<HomeAnnouncement>? announcements,
+    List<HomeResource>? resources,
     List<HomeTrainingItem>? trainings,
     List<RequestLookupOption>? leaveTypes,
     List<RequestLookupOption>? representatives,
@@ -111,6 +114,7 @@ class StaffRequestsState {
           : errorMessage as String?,
       records: records ?? this.records,
       announcements: announcements ?? this.announcements,
+      resources: resources ?? this.resources,
       trainings: trainings ?? this.trainings,
       leaveTypes: leaveTypes ?? this.leaveTypes,
       representatives: representatives ?? this.representatives,
@@ -148,11 +152,13 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
   Future<void> load() async {
     final user = await _resolveCurrentUser();
     var announcements = const <HomeAnnouncement>[];
+    var resources = const <HomeResource>[];
 
     state = state.copyWith(
       isLoading: true,
       errorMessage: null,
       announcements: announcements,
+      resources: resources,
     );
 
     List<StaffRequestRecord> leaveRecords = [];
@@ -191,6 +197,9 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
         await Future.wait<void>([
           runSafely(() async {
             announcements = await _repository.fetchAnnouncements();
+          }),
+          runSafely(() async {
+            resources = await _repository.fetchResources();
           }),
           runSafely(() async {
             leaveRecords = await _repository.fetchLeaveRequests(user);
@@ -235,6 +244,9 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
         await runSafely(() async {
           announcements = await _repository.fetchAnnouncements();
         });
+        await runSafely(() async {
+          resources = await _repository.fetchResources();
+        });
       }
 
       if (_currentAccess.hasRequestApproverAccess) {
@@ -260,6 +272,7 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
       errorMessage: errorMessage,
       records: records,
       announcements: announcements,
+      resources: resources,
       trainings: trainings,
       leaveTypes: leaveTypes,
       representatives: representatives,

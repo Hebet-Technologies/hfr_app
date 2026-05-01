@@ -590,8 +590,11 @@ class StaffRequestsRepository {
   }
 
   Future<List<HomeAnnouncement>> fetchAnnouncements() async {
-    final response = await _get('/trainingAnnouncements');
-    final items = _extractList(response.data);
+    final response = await _get(
+      '/announcements',
+      queryParameters: const {'perPage': 20},
+    );
+    final items = _extractListByKey(response.data, 'announcements');
     if (items.isEmpty) {
       return const [];
     }
@@ -601,6 +604,69 @@ class StaffRequestsRepository {
       final secondDate = second.startsAt ?? DateTime(1970);
       return secondDate.compareTo(firstDate);
     });
+  }
+
+  Future<HomeAnnouncement?> fetchAnnouncementDetail(String announcementUuid) async {
+    final normalizedUuid = announcementUuid.trim();
+    if (normalizedUuid.isEmpty) {
+      return null;
+    }
+
+    final response = await _get('/announcements/$normalizedUuid');
+    final payload = response.data;
+    if (payload is Map<String, dynamic>) {
+      final announcement = payload['announcement'];
+      if (announcement is Map<String, dynamic>) {
+        return _announcementFromApi(announcement);
+      }
+      if (announcement is Map) {
+        return _announcementFromApi(
+          announcement.map((key, value) => MapEntry(key.toString(), value)),
+        );
+      }
+    }
+
+    return null;
+  }
+
+  Future<List<HomeResource>> fetchResources() async {
+    final response = await _get(
+      '/resources',
+      queryParameters: const {'perPage': 20},
+    );
+    final items = _extractListByKey(response.data, 'resources');
+    if (items.isEmpty) {
+      return const [];
+    }
+
+    return items.map(_resourceFromApi).toList()..sort((first, second) {
+      final firstDate = first.updatedAt ?? first.createdAt ?? DateTime(1970);
+      final secondDate = second.updatedAt ?? second.createdAt ?? DateTime(1970);
+      return secondDate.compareTo(firstDate);
+    });
+  }
+
+  Future<HomeResource?> fetchResourceDetail(String resourceUuid) async {
+    final normalizedUuid = resourceUuid.trim();
+    if (normalizedUuid.isEmpty) {
+      return null;
+    }
+
+    final response = await _get('/resources/$normalizedUuid');
+    final payload = response.data;
+    if (payload is Map<String, dynamic>) {
+      final resource = payload['resource'];
+      if (resource is Map<String, dynamic>) {
+        return _resourceFromApi(resource);
+      }
+      if (resource is Map) {
+        return _resourceFromApi(
+          resource.map((key, value) => MapEntry(key.toString(), value)),
+        );
+      }
+    }
+
+    return null;
   }
 
   Future<List<HomeAnnouncementComment>> fetchAnnouncementComments(
@@ -1270,25 +1336,86 @@ class StaffRequestsRepository {
   }
 
   HomeAnnouncement _announcementFromApi(Map<String, dynamic> item) {
-    final description = _stringValue(item['discription']);
-    final title = _announcementTitleFromDescription(description);
+    final description = _stringValue(
+      item['text'],
+      fallback: _stringValue(item['discription']),
+    );
+    final title = _stringValue(
+      item['title'],
+      fallback: _announcementTitleFromDescription(description),
+    );
     final startsAt = _dateValue(item['announce_start_date']);
     final endsAt = _dateValue(item['announce_end_date']);
-    final type = 'training';
+    final createdAt = _dateValue(item['created_at']);
+    final updatedAt = _dateValue(item['updated_at']);
+    final type = _stringValue(item['type'], fallback: 'training');
+    final primaryDate = endsAt ?? updatedAt ?? createdAt;
     final caption = endsAt == null
-        ? type
+        ? primaryDate == null
+              ? type
+              : '$type • ${_displayDate(primaryDate)}'
         : '$type • Ends ${_displayDate(endsAt)}';
+    final sourceType = _stringValue(item['source_type']);
+    final sourceId = _stringValue(item['source_id']);
+    final sourceTypeKey = sourceType.toLowerCase();
+    final trainingAnnouncementId =
+        sourceTypeKey.contains('trainingannouncement') ||
+            sourceTypeKey.contains('training_announcement')
+        ? sourceId
+        : _stringValue(item['training_announcement_id']);
 
     return HomeAnnouncement(
-      id: _stringValue(item['training_announcement_id']),
-      trainingAnnouncementId: _stringValue(item['training_announcement_id']),
+      id: _stringValue(
+        item['uuid'],
+        fallback: _stringValue(
+          item['announcement_id'],
+          fallback: _stringValue(item['training_announcement_id']),
+        ),
+      ),
+      trainingAnnouncementId: trainingAnnouncementId.isEmpty
+          ? null
+          : trainingAnnouncementId,
+      announcementUuid: _stringValue(item['uuid']),
       title: title,
       subtitle: description,
       caption: caption,
       type: type,
-      externalLink: '',
+      externalLink: _stringValue(item['link_url']),
+      linkLabel: _stringValue(item['link_label']),
+      sourceType: sourceType,
+      sourceId: sourceId,
       startsAt: startsAt,
       endsAt: endsAt,
+      isLive: true,
+      commentsCount: _intValue(item['comments_count']),
+    );
+  }
+
+  HomeResource _resourceFromApi(Map<String, dynamic> item) {
+    final attachments = _extractListByKey(item, 'attachments')
+        .map(
+          (attachment) => HomeResourceAttachment(
+            uuid: _stringValue(attachment['uuid']),
+            label: _stringValue(attachment['label']),
+            originalFileName: _stringValue(attachment['original_file_name']),
+            attachmentUrl: _stringValue(attachment['attachment_url']),
+            mimeType: _stringValue(attachment['mime_type']),
+            fileSize: _intValue(attachment['file_size']),
+          ),
+        )
+        .toList();
+    final subtitle = attachments.isEmpty
+        ? 'No files attached yet'
+        : '${attachments.length} file${attachments.length == 1 ? '' : 's'} available';
+
+    return HomeResource(
+      uuid: _stringValue(item['uuid']),
+      title: _stringValue(item['name'], fallback: 'Resource'),
+      subtitle: subtitle,
+      status: _stringValue(item['status'], fallback: 'active'),
+      attachments: attachments,
+      createdAt: _dateValue(item['created_at']),
+      updatedAt: _dateValue(item['updated_at']),
       isLive: true,
     );
   }
@@ -1530,9 +1657,16 @@ class StaffRequestsRepository {
     ];
   }
 
-  Future<Response<dynamic>> _get(String path) async {
+  Future<Response<dynamic>> _get(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+  }) async {
     try {
-      return await _dio.get(path, options: await _authorizedOptions());
+      return await _dio.get(
+        path,
+        queryParameters: queryParameters,
+        options: await _authorizedOptions(),
+      );
     } on DioException catch (error) {
       throw Exception(
         _resolveRequestError(

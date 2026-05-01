@@ -1,6 +1,7 @@
 import 'dart:developer';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 import '../model/peer_exchange_models.dart';
 import '../repository/peer_exchange_repository.dart';
@@ -136,12 +137,14 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
   Future<PeerQuestion?> createQuestion({
     required String categoryUuid,
     required String content,
+    List<MultipartFile> attachments = const [],
   }) async {
     state = state.copyWith(isSubmitting: true, errorMessage: null);
     try {
       final question = await _repository.createQuestion(
         categoryUuid: categoryUuid,
         content: content,
+        attachments: attachments,
       );
       await loadAll();
       state = state.copyWith(isSubmitting: false);
@@ -195,7 +198,6 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
       state = state.copyWith(isSubmitting: false);
       return group;
     } catch (error) {
-      print(error);
       log(error.toString());
       state = state.copyWith(
         isSubmitting: false,
@@ -234,9 +236,8 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
   Future<List<PeerConversation>> _loadConversations(String searchQuery) async {
     try {
       return await _repository.fetchConversations(search: searchQuery);
-    } catch (error) {
+    } catch (_) {
       return [];
-      throw Exception(error.toString().replaceFirst('Exception: ', ''));
     }
   }
 
