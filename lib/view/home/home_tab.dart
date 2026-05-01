@@ -1,8 +1,12 @@
+import 'package:dio/dio.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../model/staff_request_models.dart';
+import '../../model/training_models.dart';
 import '../../view_model/providers.dart';
 import '../community/community_screen.dart';
 import '../requests/requests_screen.dart';
@@ -14,6 +18,28 @@ const _homeCard = Colors.white;
 const _homeText = Color(0xFF101828);
 const _homeMuted = Color(0xFF6B7280);
 const _homeBorder = Color(0xFFE8EEF6);
+
+void openAnnouncementDetailsScreen(
+  BuildContext context,
+  HomeAnnouncement announcement,
+) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => AnnouncementDetailsScreen(announcement: announcement),
+    ),
+  );
+}
+
+void openAnnouncementsScreen(
+  BuildContext context,
+  List<HomeAnnouncement> announcements,
+) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => AnnouncementsScreen(announcements: announcements),
+    ),
+  );
+}
 
 class HomeTab extends ConsumerWidget {
   const HomeTab({super.key});
@@ -76,16 +102,23 @@ class HomeTab extends ConsumerWidget {
                 const SizedBox(height: 20),
                 _SectionHeader(
                   title: 'Announcements',
-                  actionLabel: '',
-                  onTap: () {},
-                  showAction: false,
+                  actionLabel: 'See All',
+                  onTap: () => openAnnouncementsScreen(
+                    context,
+                    requestsState.announcements,
+                  ),
                 ),
                 const SizedBox(height: 12),
-                _AnnouncementCarousel(items: announcementItems),
+                _AnnouncementCarousel(
+                  items: announcementItems,
+                  isLoading:
+                      requestsState.isLoading &&
+                      requestsState.announcements.isEmpty,
+                ),
                 const SizedBox(height: 20),
                 _SectionHeader(
                   title: 'Approval Queue',
-                  actionLabel: 'Open Inbox',
+                  actionLabel: 'See more',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -204,24 +237,32 @@ class HomeTab extends ConsumerWidget {
               const SizedBox(height: 22),
               _SectionHeader(
                 title: 'Announcements',
-                actionLabel: '',
-                onTap: () {},
-                showAction: false,
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 142,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: announcementItems.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(width: 12),
-                  itemBuilder: (context, index) {
-                    final item = announcementItems[index];
-                    return _AnnouncementCard(item: item);
-                  },
+                actionLabel: 'See All',
+                onTap: () => openAnnouncementsScreen(
+                  context,
+                  requestsState.announcements,
                 ),
               ),
+              const SizedBox(height: 12),
+              if (requestsState.isLoading &&
+                  requestsState.announcements.isEmpty)
+                const _AnnouncementListShimmer()
+              else if (announcementItems.isEmpty)
+                const _EmptyActivityCard(message: 'No announcements found')
+              else
+                SizedBox(
+                  height: 142,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: announcementItems.length,
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final item = announcementItems[index];
+                      return _AnnouncementCard(item: item);
+                    },
+                  ),
+                ),
               const SizedBox(height: 22),
               _SectionHeader(
                 title: 'Community Overview',
@@ -491,9 +532,10 @@ class _ApproverMetricCell extends StatelessWidget {
 }
 
 class _AnnouncementCarousel extends StatefulWidget {
-  const _AnnouncementCarousel({required this.items});
+  const _AnnouncementCarousel({required this.items, this.isLoading = false});
 
   final List<HomeAnnouncement> items;
+  final bool isLoading;
 
   @override
   State<_AnnouncementCarousel> createState() => _AnnouncementCarouselState();
@@ -521,7 +563,9 @@ class _AnnouncementCarouselState extends State<_AnnouncementCarousel> {
 
     return Column(
       children: [
-        if (items.isEmpty)
+        if (widget.isLoading && items.isEmpty)
+          const _AnnouncementCarouselShimmer()
+        else if (items.isEmpty)
           const _EmptyActivityCard(message: 'No announcements found')
         else
           SizedBox(
@@ -570,115 +614,286 @@ class _CarouselAnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF6FAFF), Color(0xFFE3EEFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => openAnnouncementDetailsScreen(context, item),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD9E7FF)),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFF6FAFF), Color(0xFFE3EEFF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: const Color(0xFFD9E7FF)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        item.caption,
+                        style: _homeTextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: _homeBlue,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _homeTextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.subtitle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _homeTextStyle(
+                        fontSize: 11,
+                        color: _homeMuted,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned(
+                      top: 18,
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: const Color(0xFFFFD9D6),
+                        child: Icon(
+                          Icons.campaign_outlined,
+                          size: 16,
+                          color: const Color(0xFFD64545),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 18,
+                      left: 18,
+                      child: CircleAvatar(
+                        radius: 10,
+                        backgroundColor: const Color(0xFFEAF2FF),
+                        child: Icon(
+                          Icons.star_rounded,
+                          size: 12,
+                          color: _homeBlue,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 18,
+                      right: 18,
+                      child: CircleAvatar(
+                        radius: 10,
+                        backgroundColor: const Color(0xFFEAFBF1),
+                        child: Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: const Color(0xFF12B76A),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
+    );
+  }
+}
+
+class _AnnouncementCarouselShimmer extends StatelessWidget {
+  const _AnnouncementCarouselShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 140,
+          child: _HomeShimmer(
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: const Color(0xFFD9E7FF)),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(
+            3,
+            (_) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: _HomeShimmer(
+                child: Container(
+                  width: 10,
+                  height: 6,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: Text(
-                    item.caption,
-                    style: _homeTextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: _homeBlue,
-                    ),
-                  ),
                 ),
-                const Spacer(),
-                Text(
-                  item.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _homeTextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: _homeTextStyle(
-                    fontSize: 11,
-                    color: _homeMuted,
-                    height: 1.45,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(width: 12),
-          Container(
-            width: 88,
-            height: 88,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(24),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Positioned(
-                  top: 18,
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: const Color(0xFFFFD9D6),
-                    child: Icon(
-                      Icons.campaign_outlined,
-                      size: 16,
-                      color: const Color(0xFFD64545),
-                    ),
-                  ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnnouncementListShimmer extends StatelessWidget {
+  const _AnnouncementListShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 142,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: 3,
+        separatorBuilder: (context, index) => const SizedBox(width: 12),
+        itemBuilder: (context, index) => const SizedBox(
+          width: 280,
+          child: _HomeShimmer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.all(Radius.circular(22)),
+                border: Border.fromBorderSide(
+                  BorderSide(color: Color(0xFFD9E7FF)),
                 ),
-                Positioned(
-                  bottom: 18,
-                  left: 18,
-                  child: CircleAvatar(
-                    radius: 10,
-                    backgroundColor: const Color(0xFFEAF2FF),
-                    child: Icon(Icons.star_rounded, size: 12, color: _homeBlue),
-                  ),
-                ),
-                Positioned(
-                  bottom: 18,
-                  right: 18,
-                  child: CircleAvatar(
-                    radius: 10,
-                    backgroundColor: const Color(0xFFEAFBF1),
-                    child: Icon(
-                      Icons.check_rounded,
-                      size: 12,
-                      color: const Color(0xFF12B76A),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+class _AnnouncementFeedShimmer extends StatelessWidget {
+  const _AnnouncementFeedShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        6,
+        (index) => const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: SizedBox(
+            height: 96,
+            child: _HomeShimmer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(18)),
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Color(0xFFE8EEF6)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeShimmer extends StatefulWidget {
+  const _HomeShimmer({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_HomeShimmer> createState() => _HomeShimmerState();
+}
+
+class _HomeShimmerState extends State<_HomeShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      child: widget.child,
+      builder: (context, child) {
+        final offset = (_controller.value * 2) - 1;
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment(-1.2 + offset, -0.2),
+              end: Alignment(1.2 + offset, 0.2),
+              colors: const [
+                Color(0xFFE9EEF5),
+                Color(0xFFF8FBFF),
+                Color(0xFFE9EEF5),
+              ],
+              stops: const [0.1, 0.45, 0.9],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.srcATop,
+          child: child,
+        );
+      },
     );
   }
 }
@@ -1539,69 +1754,979 @@ class _AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 270,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFEFF5FF), Color(0xFFDCEBFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => openAnnouncementDetailsScreen(context, item),
         borderRadius: BorderRadius.circular(24),
+        child: Container(
+          width: 270,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFEFF5FF), Color(0xFFDCEBFF)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: -8,
+                top: -6,
+                child: CircleAvatar(
+                  radius: 34,
+                  backgroundColor: Colors.white.withValues(alpha: 0.5),
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      item.caption,
+                      style: _homeTextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: _homeBlue,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    item.title,
+                    style: _homeTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    item.subtitle,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: _homeTextStyle(
+                      fontSize: 12,
+                      color: _homeMuted,
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Stack(
+    );
+  }
+}
+
+class AnnouncementsScreen extends ConsumerStatefulWidget {
+  const AnnouncementsScreen({super.key, required this.announcements});
+
+  final List<HomeAnnouncement> announcements;
+
+  @override
+  ConsumerState<AnnouncementsScreen> createState() =>
+      _AnnouncementsScreenState();
+}
+
+class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(staffRequestsViewModelProvider);
+    final source = state.announcements.isNotEmpty
+        ? state.announcements
+        : widget.announcements;
+    final query = _query.trim().toLowerCase();
+    final items = source.where((item) {
+      if (query.isEmpty) return true;
+      return item.title.toLowerCase().contains(query) ||
+          item.subtitle.toLowerCase().contains(query) ||
+          item.caption.toLowerCase().contains(query) ||
+          item.type.toLowerCase().contains(query);
+    }).toList();
+
+    return Scaffold(
+      backgroundColor: _homeSurface,
+      appBar: AppBar(
+        backgroundColor: _homeSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'Announcements',
+          style: _homeTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
         children: [
-          Positioned(
-            right: -8,
-            top: -6,
-            child: CircleAvatar(
-              radius: 34,
-              backgroundColor: Colors.white.withValues(alpha: 0.5),
+          TextField(
+            onChanged: (value) => setState(() => _query = value),
+            style: _homeTextStyle(fontSize: 13),
+            decoration: _homeInputDecoration('Search announcements'),
+          ),
+          const SizedBox(height: 16),
+          if (state.isLoading && source.isEmpty)
+            const _AnnouncementFeedShimmer()
+          else if (items.isEmpty)
+            const _EmptyActivityCard(message: 'No announcements found')
+          else
+            ...items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _AnnouncementListTile(item: item),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class AnnouncementDetailsScreen extends ConsumerStatefulWidget {
+  const AnnouncementDetailsScreen({super.key, required this.announcement});
+
+  final HomeAnnouncement announcement;
+
+  @override
+  ConsumerState<AnnouncementDetailsScreen> createState() =>
+      _AnnouncementDetailsScreenState();
+}
+
+class _AnnouncementDetailsScreenState
+    extends ConsumerState<AnnouncementDetailsScreen> {
+  final TextEditingController _commentController = TextEditingController();
+  List<PlatformFile> _selectedCommentFiles = const [];
+  bool _isLoadingComments = false;
+  bool _isSubmittingComment = false;
+  String? _commentsError;
+  List<HomeAnnouncementComment> _comments = const [];
+
+  HomeAnnouncement get announcement => widget.announcement;
+
+  @override
+  void initState() {
+    super.initState();
+    if (announcement.supportsComments) {
+      Future<void>.microtask(_loadComments);
+    }
+  }
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadComments() async {
+    setState(() {
+      _isLoadingComments = true;
+      _commentsError = null;
+    });
+
+    try {
+      final comments = await ref
+          .read(staffRequestsRepositoryProvider)
+          .fetchAnnouncementComments(announcement);
+      if (!mounted) return;
+      setState(() {
+        _comments = comments;
+        _isLoadingComments = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingComments = false;
+        _commentsError = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _submitComment() async {
+    final message = _commentController.text.trim();
+    if ((message.isEmpty && _selectedCommentFiles.isEmpty) ||
+        _isSubmittingComment) {
+      return;
+    }
+
+    setState(() {
+      _isSubmittingComment = true;
+      _commentsError = null;
+    });
+
+    try {
+      final attachments = <MultipartFile>[];
+      for (final file in _selectedCommentFiles) {
+        final path = file.path?.trim() ?? '';
+        if (path.isEmpty) {
+          continue;
+        }
+        attachments.add(
+          await MultipartFile.fromFile(path, filename: file.name),
+        );
+      }
+      final comment = await ref
+          .read(staffRequestsRepositoryProvider)
+          .postAnnouncementComment(
+            announcement,
+            message: message,
+            attachments: attachments,
+          );
+      if (!mounted) return;
+      _commentController.clear();
+      setState(() {
+        _selectedCommentFiles = const [];
+        _comments = [comment, ..._comments];
+        _isSubmittingComment = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmittingComment = false;
+        _commentsError = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _pickCommentFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: false,
+    );
+    if (!mounted || result == null || result.files.isEmpty) {
+      return;
+    }
+
+    final nextFiles = <PlatformFile>[..._selectedCommentFiles];
+    for (final file in result.files) {
+      final alreadyAdded = nextFiles.any(
+        (existing) =>
+            existing.path == file.path && existing.name == file.name,
+      );
+      if (alreadyAdded) {
+        continue;
+      }
+      if (file.size > 4 * 1024 * 1024) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${file.name} is larger than 4MB.'),
+          ),
+        );
+        continue;
+      }
+      nextFiles.add(file);
+    }
+
+    setState(() {
+      _selectedCommentFiles = nextFiles;
+    });
+  }
+
+  void _removeCommentFile(PlatformFile file) {
+    setState(() {
+      _selectedCommentFiles = _selectedCommentFiles
+          .where(
+            (item) => !(item.path == file.path && item.name == file.name),
+          )
+          .toList();
+    });
+  }
+
+  Future<void> _openAttachment(HomeAnnouncementCommentAttachment attachment) async {
+    final url = attachment.attachmentUrl.trim();
+    if (url.isEmpty) {
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri == null) {
+      return;
+    }
+
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final trainingState = ref.watch(trainingViewModelProvider);
+    final isTrainingAnnouncement =
+        _normalizedAnnouncementKey(announcement.type) == 'training';
+    final matchedTraining = isTrainingAnnouncement
+        ? _matchAnnouncementTraining(
+            announcement,
+            trainingState.latestTrainings,
+          )
+        : null;
+    final resolvedTraining = matchedTraining == null
+        ? null
+        : trainingState.resolveProgram(matchedTraining);
+    final isApplicationReady =
+        resolvedTraining != null && resolvedTraining.canApplyLive;
+    final actionLabel = switch (resolvedTraining?.status) {
+      TrainingParticipationStatus.notApplied => isApplicationReady
+          ? 'Apply for Training'
+          : 'Application Setup Pending',
+      TrainingParticipationStatus.pending => 'Application Submitted',
+      TrainingParticipationStatus.approved => 'Training Approved',
+      TrainingParticipationStatus.rejected => 'Application Rejected',
+      TrainingParticipationStatus.completed => 'Training Completed',
+      null => 'Application Setup Pending',
+    };
+    final canApply =
+        resolvedTraining != null &&
+        resolvedTraining.status == TrainingParticipationStatus.notApplied &&
+        isApplicationReady &&
+        !trainingState.isSubmitting;
+
+    return Scaffold(
+      backgroundColor: _homeSurface,
+      appBar: AppBar(
+        backgroundColor: _homeSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'Announcement Details',
+          style: _homeTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFF6FAFF), Color(0xFFE3EEFF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: const Color(0xFFD9E7FF)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    announcement.caption,
+                    style: _homeTextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: _homeBlue,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  announcement.title,
+                  style: _homeTextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _AnnouncementMetric(label: 'Type', value: announcement.type),
+                const SizedBox(height: 10),
+                _AnnouncementMetric(
+                  label: 'Start Date',
+                  value: _formatAnnouncementDate(announcement.startsAt),
+                ),
+                const SizedBox(height: 10),
+                _AnnouncementMetric(
+                  label: 'End Date',
+                  value: _formatAnnouncementDate(announcement.endsAt),
+                ),
+              ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
+          const SizedBox(height: 20),
+          Text(
+            'Description',
+            style: _homeTextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: _homeMuted,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _homeCard,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: _homeBorder),
+            ),
+            child: Text(
+              announcement.subtitle,
+              style: _homeTextStyle(
+                fontSize: 14,
+                height: 1.55,
+                color: const Color(0xFF475467),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Comments',
+            style: _homeTextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: _homeMuted,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (!announcement.supportsComments)
+            _AnnouncementInfoCard(
+              message: 'Comments are not available for this announcement.',
+            )
+          else ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _homeCard,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: _homeBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: _commentController,
+                    minLines: 3,
+                    maxLines: 5,
+                    decoration: _homeInputDecoration(
+                      'Write a comment',
+                    ).copyWith(
+                      contentPadding: const EdgeInsets.all(14),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      OutlinedButton.icon(
+                        onPressed: _isSubmittingComment
+                            ? null
+                            : _pickCommentFiles,
+                        icon: const Icon(Icons.attach_file_rounded, size: 18),
+                        label: Text(
+                          _selectedCommentFiles.isEmpty
+                              ? 'Add Attachment'
+                              : 'Add More',
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_selectedCommentFiles.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _selectedCommentFiles
+                          .map(
+                            (file) => _SelectedAnnouncementAttachmentChip(
+                              fileName: file.name,
+                              fileSize: file.size,
+                              onRemoved: _isSubmittingComment
+                                  ? null
+                                  : () => _removeCommentFile(file),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: _isSubmittingComment ? null : _submitComment,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _homeBlue,
+                        disabledBackgroundColor: const Color(0xFFD9E6FF),
+                      ),
+                      child: _isSubmittingComment
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : Text(
+                              'Post Comment',
+                              style: _homeTextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_commentsError != null) ...[
+              const SizedBox(height: 12),
+              _AnnouncementInfoCard(message: _commentsError!),
+            ],
+            const SizedBox(height: 12),
+            if (_isLoadingComments)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: CircularProgressIndicator(),
                 ),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  item.caption,
-                  style: _homeTextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: _homeBlue,
+              )
+            else if (_comments.isEmpty)
+              const _EmptyActivityCard(message: 'No comments yet')
+            else
+              ..._comments.map(
+                (comment) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _AnnouncementCommentCard(
+                    comment: comment,
+                    onOpenAttachment: _openAttachment,
                   ),
                 ),
               ),
-              const Spacer(),
-              Text(
-                item.title,
-                style: _homeTextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+          ],
+          if (isTrainingAnnouncement && !isApplicationReady) ...[
+            const SizedBox(height: 16),
+            const _AnnouncementInfoCard(
+              message:
+                  'This announcement is marked as training, but its application setup is not complete yet.',
+            ),
+          ],
+        ],
+      ),
+      bottomNavigationBar: !isTrainingAnnouncement
+          ? null
+          : SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _homeBlue,
+                    disabledBackgroundColor: const Color(0xFFD9E6FF),
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: !canApply
+                      ? null
+                      : () async {
+                          final messenger = ScaffoldMessenger.of(context);
+                          try {
+                            await ref
+                                .read(trainingViewModelProvider.notifier)
+                                .applyForTraining(resolvedTraining);
+                            if (!context.mounted) return;
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Training request submitted successfully.',
+                                ),
+                              ),
+                            );
+                          } catch (_) {
+                            if (!context.mounted) return;
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  ref
+                                          .read(trainingViewModelProvider)
+                                          .errorMessage ??
+                                      'Unable to submit the training request.',
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                  child: trainingState.isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
+                          ),
+                        )
+                      : Text(
+                          actionLabel,
+                          style: _homeTextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
                 ),
               ),
-              const SizedBox(height: 6),
+            ),
+    );
+  }
+}
+
+class _AnnouncementCommentCard extends StatelessWidget {
+  const _AnnouncementCommentCard({
+    required this.comment,
+    required this.onOpenAttachment,
+  });
+
+  final HomeAnnouncementComment comment;
+  final Future<void> Function(HomeAnnouncementCommentAttachment attachment)
+      onOpenAttachment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _homeCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _homeBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  comment.authorName.isEmpty ? 'Unknown user' : comment.authorName,
+                  style: _homeTextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
               Text(
-                item.subtitle,
+                _formatAnnouncementDate(comment.createdAt),
                 style: _homeTextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
                   color: _homeMuted,
-                  height: 1.45,
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 10),
+          Text(
+            comment.comment,
+            style: _homeTextStyle(
+              fontSize: 13,
+              height: 1.5,
+              color: const Color(0xFF475467),
+            ),
+          ),
+          if (comment.attachments.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: comment.attachments
+                  .map(
+                    (attachment) => ActionChip(
+                      avatar: const Icon(
+                        Icons.attach_file_rounded,
+                        size: 16,
+                        color: _homeBlue,
+                      ),
+                      backgroundColor: const Color(0xFFEAF2FF),
+                      label: Text(
+                        attachment.originalFileName.isEmpty
+                            ? 'Attachment'
+                            : attachment.originalFileName,
+                        style: _homeTextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: _homeBlue,
+                        ),
+                      ),
+                      onPressed: () => onOpenAttachment(attachment),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _SelectedAnnouncementAttachmentChip extends StatelessWidget {
+  const _SelectedAnnouncementAttachmentChip({
+    required this.fileName,
+    required this.fileSize,
+    this.onRemoved,
+  });
+
+  final String fileName;
+  final int fileSize;
+  final VoidCallback? onRemoved;
+
+  @override
+  Widget build(BuildContext context) {
+    final sizeLabel = fileSize <= 0
+        ? ''
+        : '${(fileSize / 1024).toStringAsFixed(fileSize >= 1024 * 1024 ? 0 : 1)} KB';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFD8E7FF)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.insert_drive_file_outlined, size: 16, color: _homeBlue),
+          const SizedBox(width: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 170),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _homeTextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: _homeBlue,
+                  ),
+                ),
+                if (sizeLabel.isNotEmpty)
+                  Text(
+                    sizeLabel,
+                    style: _homeTextStyle(
+                      fontSize: 10,
+                      color: _homeMuted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          if (onRemoved != null) ...[
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onRemoved,
+              child: const Icon(
+                Icons.close_rounded,
+                size: 16,
+                color: _homeMuted,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AnnouncementInfoCard extends StatelessWidget {
+  const _AnnouncementInfoCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF6E0A6)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xFF9A6700),
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: _homeTextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: const Color(0xFF7A5300),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnnouncementListTile extends StatelessWidget {
+  const _AnnouncementListTile({required this.item});
+
+  final HomeAnnouncement item;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => openAnnouncementDetailsScreen(context, item),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _homeCard,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _homeBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.title,
+                    style: _homeTextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF2FF),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    item.type,
+                    style: _homeTextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: _homeBlue,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              item.subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: _homeTextStyle(
+                fontSize: 12,
+                color: _homeMuted,
+                height: 1.45,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              item.caption,
+              style: _homeTextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: _homeBlue,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+TrainingProgram? _matchAnnouncementTraining(
+  HomeAnnouncement announcement,
+  List<TrainingProgram> trainings,
+) {
+  final titleKey = _normalizedAnnouncementKey(announcement.title);
+  if (titleKey.isEmpty) return null;
+
+  for (final training in trainings) {
+    if (_normalizedAnnouncementKey(training.title) == titleKey) {
+      return training;
+    }
+  }
+
+  for (final training in trainings) {
+    final trainingTitle = _normalizedAnnouncementKey(training.title);
+    if (trainingTitle.contains(titleKey) || titleKey.contains(trainingTitle)) {
+      return training;
+    }
+  }
+
+  return null;
+}
+
+String _normalizedAnnouncementKey(String value) {
+  return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+class _AnnouncementMetric extends StatelessWidget {
+  const _AnnouncementMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
+            style: _homeTextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: _homeMuted,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: _homeTextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1683,95 +2808,102 @@ class _TrainingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _homeCard,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => openTrainingHubScreen(context),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _homeBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _homeCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _homeBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  item.title,
-                  style: _homeTextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.title,
+                      style: _homeTextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF2E8),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  item.tag,
-                  style: _homeTextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFE67E22),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF2E8),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      item.tag,
+                      style: _homeTextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFE67E22),
+                      ),
+                    ),
                   ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 14,
+                    color: _homeMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    item.dateLabel,
+                    style: _homeTextStyle(fontSize: 12, color: _homeMuted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.location_on_outlined,
+                    size: 14,
+                    color: _homeMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      item.location,
+                      style: _homeTextStyle(fontSize: 12, color: _homeMuted),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _homeBlue,
+                    minimumSize: const Size.fromHeight(42),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () => openTrainingHubScreen(context),
+                  child: const Text('View Details'),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Icon(
-                Icons.calendar_today_outlined,
-                size: 14,
-                color: _homeMuted,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                item.dateLabel,
-                style: _homeTextStyle(fontSize: 12, color: _homeMuted),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              const Icon(
-                Icons.location_on_outlined,
-                size: 14,
-                color: _homeMuted,
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  item.location,
-                  style: _homeTextStyle(fontSize: 12, color: _homeMuted),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: _homeBlue,
-                minimumSize: const Size.fromHeight(42),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              onPressed: () => openTrainingHubScreen(context),
-              child: const Text('View Details'),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -2013,6 +3145,11 @@ String _approvalDateLabel(ApprovalTask task) {
 
 String _formatCompactDate(DateTime value) {
   return '${value.day.toString().padLeft(2, '0')} ${_monthShort(value.month)} ${value.year}';
+}
+
+String _formatAnnouncementDate(DateTime? value) {
+  if (value == null) return 'Not specified';
+  return _formatCompactDate(value);
 }
 
 String _recentActivityTitle(StaffRequestRecord record) {

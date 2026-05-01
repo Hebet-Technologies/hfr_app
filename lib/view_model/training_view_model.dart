@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../model/staff_portal_access.dart';
@@ -16,6 +18,7 @@ class TrainingState {
     this.isSubmittingApproval = false,
     this.errorMessage,
     this.latestTrainings = const [],
+    this.myTrainingApplications = const [],
     this.myTrainings = const [],
     this.resources = const [],
     this.detailsById = const {},
@@ -29,6 +32,7 @@ class TrainingState {
   final bool isSubmittingApproval;
   final String? errorMessage;
   final List<TrainingProgram> latestTrainings;
+  final List<TrainingProgram> myTrainingApplications;
   final List<TrainingProgram> myTrainings;
   final List<TrainingResource> resources;
   final Map<String, TrainingProgram> detailsById;
@@ -41,6 +45,10 @@ class TrainingState {
     if (directDetail != null) return directDetail;
 
     for (final item in myTrainings) {
+      if (_programsMatch(item, training)) return item;
+    }
+
+    for (final item in myTrainingApplications) {
       if (_programsMatch(item, training)) return item;
     }
 
@@ -72,6 +80,7 @@ class TrainingState {
     bool? isSubmittingApproval,
     Object? errorMessage = _sentinel,
     List<TrainingProgram>? latestTrainings,
+    List<TrainingProgram>? myTrainingApplications,
     List<TrainingProgram>? myTrainings,
     List<TrainingResource>? resources,
     Map<String, TrainingProgram>? detailsById,
@@ -87,6 +96,8 @@ class TrainingState {
           ? this.errorMessage
           : errorMessage as String?,
       latestTrainings: latestTrainings ?? this.latestTrainings,
+      myTrainingApplications:
+          myTrainingApplications ?? this.myTrainingApplications,
       myTrainings: myTrainings ?? this.myTrainings,
       resources: resources ?? this.resources,
       detailsById: detailsById ?? this.detailsById,
@@ -120,64 +131,90 @@ class TrainingViewModel extends Notifier<TrainingState> {
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     List<TrainingProgram> myTrainings = const [];
+    List<TrainingProgram> myTrainingApplications = const [];
     List<TrainingProgram> latestTrainings = const [];
     List<TrainingResource> resources = const [];
     List<TrainingApprovalRecord> trainingRequests = const [];
     List<TrainingApprovalRecord> approvalQueue = const [];
     String? errorMessage;
 
+    Future<void> runSafely(
+      Future<void> Function() task, {
+      bool captureError = false,
+    }) async {
+      try {
+        await task();
+      } catch (error) {
+        if (captureError) {
+          errorMessage ??= _cleanMessage(error);
+        }
+      }
+    }
+
     if (user != null) {
       if (_access.hasEmployeeProfile) {
-        try {
-          myTrainings = await _repository.fetchMyTrainings(user);
-        } catch (error) {
-          errorMessage ??= _cleanMessage(error);
-        }
+        await Future.wait<void>([
+          runSafely(() async {
+            myTrainings = await _repository.fetchMyTrainings(user);
+          }, captureError: true),
+          runSafely(() async {
+            myTrainingApplications = await _repository
+                .fetchMyTrainingApplications(user);
+          }, captureError: true),
+        ]);
       }
 
-      try {
+      await runSafely(() async {
         latestTrainings = await _repository.fetchLatestTrainings(
-          myTrainings: myTrainings,
+          myTrainings: myTrainingApplications,
         );
-      } catch (_) {}
+      });
 
       if (_access.hasEmployeeProfile) {
-        try {
+        await runSafely(() async {
           resources = await _repository.fetchResources(user);
-        } catch (_) {}
+        });
       }
 
-      if (_access.canViewTrainingRequests) {
-        try {
-          trainingRequests = await _repository.fetchTrainingRequests(
-            publishedTrainings: latestTrainings,
-          );
-        } catch (error) {
-          errorMessage ??= _cleanMessage(error);
-        }
-      }
-
-      if (_access.canReviewTrainingRequests) {
-        try {
-          approvalQueue = await _repository.fetchApprovalQueue(
-            publishedTrainings: latestTrainings,
-          );
-        } catch (error) {
-          errorMessage ??= _cleanMessage(error);
-        }
-      }
+      await Future.wait<void>([
+        if (_access.canViewTrainingRequests)
+          runSafely(() async {
+            trainingRequests = await _repository.fetchTrainingRequests(
+              publishedTrainings: latestTrainings,
+            );
+          }, captureError: true),
+        if (_access.canReviewTrainingRequests)
+          runSafely(() async {
+            approvalQueue = await _repository.fetchApprovalQueue(
+              publishedTrainings: latestTrainings,
+            );
+          }, captureError: true),
+      ]);
     }
 
     state = state.copyWith(
       isLoading: false,
       errorMessage: errorMessage,
       latestTrainings: latestTrainings,
+      myTrainingApplications: myTrainingApplications,
       myTrainings: myTrainings,
       resources: resources,
       detailsById: const {},
       trainingRequests: trainingRequests,
       approvalQueue: approvalQueue,
       approvalDetailsById: const {},
+    );
+
+    log(
+      'TRAINING LOAD SUMMARY: '
+      'latest=${latestTrainings.length}, '
+      'applications=${myTrainingApplications.length}, '
+      'history=${myTrainings.length}, '
+      'resources=${resources.length}, '
+      'requests=${trainingRequests.length}, '
+      'approvalQueue=${approvalQueue.length}, '
+      'error=${errorMessage ?? 'none'}',
+      name: 'TRAINING',
     );
   }
 
@@ -200,7 +237,7 @@ class TrainingViewModel extends Notifier<TrainingState> {
 
     try {
       final detailed = await _repository.fetchTrainingDetails(current);
-      _upsertTraining(detailed, addToMyTrainings: true);
+      _upsertTraining(detailed, addToMyTrainingApplications: true);
       return detailed;
     } catch (error) {
       final message = _cleanMessage(error);
@@ -218,7 +255,7 @@ class TrainingViewModel extends Notifier<TrainingState> {
       final updated = user == null
           ? _repository.buildOptimisticAppliedProgram(current)
           : await _repository.applyForTraining(user: user, training: current);
-      _upsertTraining(updated, addToMyTrainings: true);
+      _upsertTraining(updated, addToMyTrainingApplications: true);
       state = state.copyWith(isSubmitting: false);
       return updated;
     } catch (error) {
@@ -294,23 +331,29 @@ class TrainingViewModel extends Notifier<TrainingState> {
 
   void _upsertTraining(
     TrainingProgram updated, {
-    required bool addToMyTrainings,
+    required bool addToMyTrainingApplications,
   }) {
     final nextLatest = _replaceOrInsert(
       state.latestTrainings,
       updated,
       insertIfMissing: false,
     );
+    final nextApplications = _replaceOrInsert(
+      state.myTrainingApplications,
+      updated,
+      insertIfMissing: addToMyTrainingApplications,
+    );
     final nextMine = _replaceOrInsert(
       state.myTrainings,
       updated,
-      insertIfMissing: addToMyTrainings,
+      insertIfMissing: false,
     );
     final nextDetails = Map<String, TrainingProgram>.from(state.detailsById)
       ..[updated.id] = updated;
 
     state = state.copyWith(
       latestTrainings: nextLatest,
+      myTrainingApplications: nextApplications,
       myTrainings: nextMine,
       detailsById: nextDetails,
     );

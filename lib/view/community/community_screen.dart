@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../model/peer_exchange_access.dart';
 import '../../model/peer_exchange_models.dart';
+import '../../services/realtime_service.dart';
 import '../../view_model/peer_exchange_view_model.dart';
 import '../../view_model/providers.dart';
 import '../../widget/app_svg_icon.dart';
@@ -3879,15 +3881,21 @@ class _ConversationDetailScreenState
   bool _isLoading = true;
   bool _isPosting = false;
   String? _error;
+  StreamSubscription<RealtimeEnvelope>? _realtimeSubscription;
 
   @override
   void initState() {
     super.initState();
+    unawaited(_bindRealtime());
     _loadConversation();
   }
 
   @override
   void dispose() {
+    unawaited(
+      RealtimeService.instance.unsubscribeConversation(widget.conversationUuid),
+    );
+    _realtimeSubscription?.cancel();
     _messageController.dispose();
     super.dispose();
   }
@@ -3931,10 +3939,14 @@ class _ConversationDetailScreenState
 
     try {
       final repository = ref.read(peerExchangeRepositoryProvider);
-      final conversation = widget.isGroup
+      final baseConversation = await repository.fetchConversationDetail(
+        widget.conversationUuid,
+      );
+      final shouldLoadGroupMembers = widget.isGroup || baseConversation.isGroup;
+      final conversation = shouldLoadGroupMembers
           ? await repository.fetchGroupDetail(widget.conversationUuid)
-          : await repository.fetchConversationDetail(widget.conversationUuid);
-      final members = widget.isGroup
+          : baseConversation;
+      final members = shouldLoadGroupMembers
           ? await repository.fetchGroupMembers(widget.conversationUuid)
           : conversation.users;
       final messages = [...conversation.recentMessages];
@@ -3954,6 +3966,8 @@ class _ConversationDetailScreenState
         _messages = messages;
         _isLoading = false;
       });
+
+      await _markConversationRead();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -3972,14 +3986,14 @@ class _ConversationDetailScreenState
     });
 
     try {
-      await ref
+      final sent = await ref
           .read(peerExchangeRepositoryProvider)
           .sendConversationMessage(
             conversationUuid: widget.conversationUuid,
             message: message,
           );
       _messageController.clear();
-      await _loadConversation();
+      _upsertMessage(sent);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -3997,6 +4011,124 @@ class _ConversationDetailScreenState
         });
       }
     }
+  }
+
+  Future<void> _bindRealtime() async {
+    try {
+      await RealtimeService.instance.subscribeConversation(
+        widget.conversationUuid,
+      );
+      _realtimeSubscription = RealtimeService.instance.events
+          .where(
+            (event) =>
+                event.channelName ==
+                'private-conversations.${widget.conversationUuid}',
+          )
+          .listen(_handleRealtimeEvent);
+    } catch (error) {
+      log(
+        'Conversation realtime subscription failed: $error',
+        name: 'REALTIME',
+      );
+    }
+  }
+
+  Future<void> _markConversationRead() async {
+    final currentUserId = ref.read(authViewModelProvider).user?.userId ?? '';
+    final hasIncomingUnread = _messages.any(
+      (message) =>
+          message.senderId.toString() != currentUserId && message.readAt == null,
+    );
+    if (!hasIncomingUnread) return;
+
+    try {
+      await ref
+          .read(peerExchangeRepositoryProvider)
+          .markConversationAsRead(widget.conversationUuid);
+      if (!mounted) return;
+      final now = DateTime.now().toUtc();
+      setState(() {
+        _messages = _messages.map((message) {
+          if (message.senderId.toString() == currentUserId ||
+              message.readAt != null) {
+            return message;
+          }
+          return message.copyWith(
+            deliveredAt: message.deliveredAt ?? now,
+            readAt: now,
+            status: 'read',
+          );
+        }).toList();
+      });
+    } catch (_) {}
+  }
+
+  void _handleRealtimeEvent(RealtimeEnvelope event) {
+    switch (event.eventName) {
+      case 'conversation.message.sent':
+        final conversation = event.payload['conversation'];
+        final message = event.payload['conversation_message'];
+        if (conversation is Map) {
+          _conversation = PeerConversation.fromJson(
+            conversation.map((key, value) => MapEntry(key.toString(), value)),
+          );
+        }
+        if (message is Map) {
+          final normalized = message.map(
+            (key, value) => MapEntry(key.toString(), value),
+          );
+          final peerMessage = PeerMessage.fromJson(normalized);
+          _upsertMessage(peerMessage);
+          final currentUserId =
+              ref.read(authViewModelProvider).user?.userId ?? '';
+          if (peerMessage.senderId.toString() != currentUserId) {
+            unawaited(_markConversationRead());
+          }
+        }
+        break;
+      case 'conversation.message.read':
+        final uuids = event.payload['message_uuids'];
+        final readAt = DateTime.tryParse(
+          event.payload['read_at']?.toString() ?? '',
+        );
+        if (uuids is List && readAt != null && mounted) {
+          final uuidSet = uuids.map((item) => item.toString()).toSet();
+          setState(() {
+            _messages = _messages.map((message) {
+              if (!uuidSet.contains(message.uuid)) return message;
+              return message.copyWith(
+                deliveredAt: message.deliveredAt ?? readAt,
+                readAt: readAt,
+                status: 'read',
+              );
+            }).toList();
+          });
+        }
+        break;
+      case 'conversation.group.member_added':
+      case 'conversation.group.member_removed':
+      case 'conversation.group.created':
+        unawaited(_loadConversation());
+        break;
+    }
+  }
+
+  void _upsertMessage(PeerMessage message) {
+    if (!mounted) return;
+
+    setState(() {
+      final index = _messages.indexWhere((item) => item.uuid == message.uuid);
+      if (index >= 0) {
+        _messages[index] = message;
+      } else {
+        _messages = [..._messages, message];
+      }
+      _messages.sort((left, right) {
+        final leftDate = left.sentAt ?? left.createdAt ?? DateTime(1970);
+        final rightDate = right.sentAt ?? right.createdAt ?? DateTime(1970);
+        return leftDate.compareTo(rightDate);
+      });
+    });
   }
 
   Future<List<PeerDirectoryPerson>?> _pickMembersForGroup() async {

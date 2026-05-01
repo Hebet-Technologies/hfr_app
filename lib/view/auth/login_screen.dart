@@ -23,10 +23,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   //   text: 'abdalla.khamis@mohz.go.tz',
   // );
   // final _passwordController = TextEditingController(text: 'Abdalla@2026');
-  final _emailController = TextEditingController(text: 'samira.ali@mohz.go.tz');
-  final _passwordController = TextEditingController(text: 'Samira@2026');
-  // final _emailController = TextEditingController(text: 'info@mohz.go.tz');
-  // final _passwordController = TextEditingController(text: '@dm1n@m0hz#321');
+  // final _emailController = TextEditingController(text: 'samira.ali@mohz.go.tz');
+  // final _passwordController = TextEditingController(text: 'Samira@2026');
+  final _emailController = TextEditingController(text: 'info@mohz.go.tz');
+  final _passwordController = TextEditingController(text: '@dm1n@m0hz#321');
   bool _obscurePassword = true;
   bool _rememberMe = false;
 

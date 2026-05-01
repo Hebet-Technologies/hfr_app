@@ -253,6 +253,44 @@ class PeerMessage {
 
   bool get hasMessage => message.trim().isNotEmpty;
 
+  PeerMessage copyWith({
+    String? uuid,
+    int? conversationId,
+    int? senderId,
+    String? messageType,
+    String? status,
+    String? message,
+    DateTime? sentAt,
+    DateTime? deliveredAt,
+    DateTime? readAt,
+    String? replyToUuid,
+    bool? isEdited,
+    DateTime? editedAt,
+    PeerMember? sender,
+    List<PeerAttachment>? attachments,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return PeerMessage(
+      uuid: uuid ?? this.uuid,
+      conversationId: conversationId ?? this.conversationId,
+      senderId: senderId ?? this.senderId,
+      messageType: messageType ?? this.messageType,
+      status: status ?? this.status,
+      message: message ?? this.message,
+      sentAt: sentAt ?? this.sentAt,
+      deliveredAt: deliveredAt ?? this.deliveredAt,
+      readAt: readAt ?? this.readAt,
+      replyToUuid: replyToUuid ?? this.replyToUuid,
+      isEdited: isEdited ?? this.isEdited,
+      editedAt: editedAt ?? this.editedAt,
+      sender: sender ?? this.sender,
+      attachments: attachments ?? this.attachments,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
   String get preview {
     if (hasMessage) {
       return message.trim();

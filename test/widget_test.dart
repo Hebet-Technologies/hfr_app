@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:staffportal/model/staff_portal_access.dart';
 import 'package:staffportal/model/user_model.dart';
+import 'package:staffportal/view/requests/loan_request_form.dart';
 import 'package:staffportal/view/requests/requests_screen.dart';
 import 'package:staffportal/view/training/training_screen.dart';
 import 'package:staffportal/view_model/providers.dart';
@@ -77,7 +78,6 @@ void main() {
       );
       final approverAccess = StaffPortalAccess.fromUser(
         approverUser,
-        preferredMode: StaffPortalMode.approver,
       );
 
       await tester.pumpWidget(

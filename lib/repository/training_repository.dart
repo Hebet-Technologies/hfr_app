@@ -3,13 +3,14 @@ import 'package:dio/dio.dart';
 import '../data/network/api_service.dart';
 import '../model/training_models.dart';
 import '../model/user_model.dart';
+import '../services/app_session_store.dart';
 import 'auth_repository.dart';
 
 class TrainingRepository {
   TrainingRepository(this._authRepository);
 
   final AuthRepository _authRepository;
-  final Dio _dio = Dio(
+  final Dio _dio = createLoggedDio(
     BaseOptions(
       baseUrl: ApiService.baseUrl,
       connectTimeout: const Duration(seconds: 30),
@@ -45,20 +46,17 @@ class TrainingRepository {
           byDevelopmentPlanVendorId[developmentPlanVendorId];
       final availableSlots = _intValue(item['quantity']);
       final educationLevelName = _stringValue(item['education_level_name']);
-      final caderName = _stringValue(item['cader_name'], fallback: 'Staff');
+      final caderName = _stringValue(item['cader_name']);
       final trainingType = _boolValue(item['is_short_course'])
           ? 'Short Course'
-          : _stringValue(item['training_name'], fallback: 'Training');
+          : _stringValue(item['training_name']);
       final title = matchedTraining?.title.isNotEmpty == true
           ? matchedTraining!.title
           : _compact([trainingType, caderName, educationLevelName]).join(' - ');
-      final organizer = _stringValue(
-        item['vendor_name'],
-        fallback: 'Ministry of Health Zanzibar',
-      );
+      final organizer = _stringValue(item['vendor_name']);
       final location = matchedTraining?.location.isNotEmpty == true
           ? matchedTraining!.location
-          : _stringValue(item['institute_name'], fallback: organizer);
+          : _stringValue(item['institute_name']);
 
       programs.add(
         TrainingProgram(
@@ -135,23 +133,14 @@ class TrainingRepository {
       final matchedTraining = myByShortCourseId[shortCourseId];
       final startDate = _dateValue(item['start_date']);
       final endDate = _dateValue(item['end_date']);
-      final title = _stringValue(
-        item['program_name'],
-        fallback: _stringValue(item['training_name'], fallback: 'Short Course'),
-      );
-      final venue = _stringValue(
-        item['venue_place'],
-        fallback: 'Training Venue',
-      );
+      final title = _stringValue(item['program_name']);
+      final venue = _stringValue(item['venue_place']);
 
       return TrainingProgram(
         id: 'short-course-$shortCourseId',
         title: title,
         trainingType: 'Short Course',
-        organizer: _stringValue(
-          item['vendor_name'],
-          fallback: 'Ministry of Health Zanzibar',
-        ),
+        organizer: _stringValue(item['vendor_name']),
         location: venue,
         description:
             'Short course scheduled for staff development and practical capacity building.',
@@ -163,7 +152,7 @@ class TrainingRepository {
         badge: 'Short Course',
         status:
             matchedTraining?.status ?? TrainingParticipationStatus.notApplied,
-        availableSlots: _intValue(item['quantity'], fallback: 1),
+        availableSlots: _intValue(item['quantity']),
         participantCount: matchedTraining?.participantCount ?? 0,
         resources: matchedTraining?.resources ?? const [],
         startDate: startDate,
@@ -178,7 +167,9 @@ class TrainingRepository {
     }).toList();
   }
 
-  Future<List<TrainingProgram>> fetchMyTrainings(UserModel user) async {
+  Future<List<TrainingProgram>> fetchMyTrainingApplications(
+    UserModel user,
+  ) async {
     if (user.personalInformationId.trim().isEmpty) {
       return const [];
     }
@@ -195,24 +186,11 @@ class TrainingRepository {
     final programs = items
         .map(
           (item) => TrainingProgram(
-            id: 'my-${_stringValue(item['training_application_id'], fallback: _stringValue(item['development_plan_vendor_id']))}',
-            title: _stringValue(
-              item['training_name'],
-              fallback:
-                  '${_stringValue(item['cader_name'], fallback: 'Staff')} Training',
-            ),
-            trainingType: _stringValue(
-              item['education_level_name'],
-              fallback: 'Internal Training',
-            ),
-            organizer: _stringValue(
-              item['vendor_name'],
-              fallback: 'Ministry of Health Zanzibar',
-            ),
-            location: _stringValue(
-              item['institute_name'],
-              fallback: 'Training Institute',
-            ),
+            id: 'my-${_stringValue(item['training_application_id'])}',
+            title: _stringValue(item['training_name']),
+            trainingType: _stringValue(item['education_level_name']),
+            organizer: _stringValue(item['vendor_name']),
+            location: _stringValue(item['institute_name']),
             description:
                 'Training application submitted through the staff portal and awaiting the next workflow action.',
             targetCadres: _compact([
@@ -249,6 +227,56 @@ class TrainingRepository {
     try {
       programs.addAll(await fetchMyShortCourseRequests(user));
     } catch (_) {}
+
+    programs.sort(_sortProgramsByDate);
+    return programs;
+  }
+
+  Future<List<TrainingProgram>> fetchMyTrainings(UserModel user) async {
+    if (user.personalInformationId.trim().isEmpty) {
+      return const [];
+    }
+
+    final response = await _postJson(
+      '/getTrainingStudentIndividual',
+      data: {'personal_information_id': user.personalInformationId},
+    );
+    final items = _extractList(response.data);
+    if (items.isEmpty) {
+      return const [];
+    }
+
+    final programs = items
+        .map(
+          (item) => TrainingProgram(
+            id: 'student-${_stringValue(item['training_student_id'])}',
+            title: _compact([
+              _stringValue(item['cader_name']),
+              _stringValue(item['education_level_name']),
+            ]).join(' - '),
+            trainingType: _stringValue(item['education_level_name']),
+            organizer: _stringValue(item['vendor_name']),
+            location: _stringValue(item['institute_name']),
+            description:
+                'Training history record from the active batch year for an admitted training participant.',
+            targetCadres: _compact([
+              _stringValue(item['cader_name']),
+              _stringValue(item['education_level_name']),
+              user.workingStationName,
+            ]),
+            badge: 'History',
+            status: TrainingParticipationStatus.approved,
+            availableSlots: 0,
+            participantCount: 1,
+            resources: const [],
+            batchYear: _stringValue(item['batch_year']),
+            educationLevelName: _stringValue(item['education_level_name']),
+            workingStationName: user.workingStationName,
+            isLive: true,
+            canApplyLive: false,
+          ),
+        )
+        .toList();
 
     programs.sort(_sortProgramsByDate);
     return programs;
@@ -701,7 +729,9 @@ class TrainingRepository {
     }
 
     return Options(
-      headers: {'Authorization': 'Bearer $token', ...?extraHeaders},
+      headers: await AppSessionStore.authorizedHeaders(
+        extraHeaders: extraHeaders,
+      ),
     );
   }
 

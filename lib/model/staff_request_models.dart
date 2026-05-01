@@ -322,6 +322,8 @@ class ApprovalTask {
 class HomeAnnouncement {
   const HomeAnnouncement({
     this.id,
+    this.trainingAnnouncementId,
+    this.announcementUuid,
     required this.title,
     required this.subtitle,
     required this.caption,
@@ -330,9 +332,12 @@ class HomeAnnouncement {
     this.startsAt,
     this.endsAt,
     this.isLive = false,
+    this.commentsCount,
   });
 
   final String? id;
+  final String? trainingAnnouncementId;
+  final String? announcementUuid;
   final String title;
   final String subtitle;
   final String caption;
@@ -341,6 +346,44 @@ class HomeAnnouncement {
   final DateTime? startsAt;
   final DateTime? endsAt;
   final bool isLive;
+  final int? commentsCount;
+
+  bool get supportsComments {
+    return (trainingAnnouncementId != null && trainingAnnouncementId!.isNotEmpty) ||
+        (announcementUuid != null && announcementUuid!.isNotEmpty);
+  }
+}
+
+class HomeAnnouncementComment {
+  const HomeAnnouncementComment({
+    required this.uuid,
+    required this.comment,
+    required this.authorName,
+    required this.createdAt,
+    this.attachments = const [],
+  });
+
+  final String uuid;
+  final String comment;
+  final String authorName;
+  final DateTime? createdAt;
+  final List<HomeAnnouncementCommentAttachment> attachments;
+}
+
+class HomeAnnouncementCommentAttachment {
+  const HomeAnnouncementCommentAttachment({
+    required this.uuid,
+    required this.originalFileName,
+    required this.attachmentUrl,
+    required this.mimeType,
+    required this.fileSize,
+  });
+
+  final String uuid;
+  final String originalFileName;
+  final String attachmentUrl;
+  final String mimeType;
+  final int? fileSize;
 }
 
 class HomeTrainingItem {

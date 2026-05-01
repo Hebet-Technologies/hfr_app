@@ -5,13 +5,14 @@ import 'package:dio/dio.dart';
 import '../data/network/api_service.dart';
 import '../model/staff_request_models.dart';
 import '../model/user_model.dart';
+import '../services/app_session_store.dart';
 import 'auth_repository.dart';
 
 class StaffRequestsRepository {
   StaffRequestsRepository(this._authRepository);
 
   final AuthRepository _authRepository;
-  final Dio _dio = Dio(
+  final Dio _dio = createLoggedDio(
     BaseOptions(
       baseUrl: ApiService.baseUrl,
       connectTimeout: const Duration(seconds: 30),
@@ -576,22 +577,13 @@ class StaffRequestsRepository {
     return items
         .map(
           (item) => HomeTrainingItem(
-            title: _stringValue(
-              item['training_name'],
-              fallback: 'Training programme',
-            ),
-            location: _stringValue(
-              item['institute_name'],
-              fallback: _stringValue(item['vendor_name'], fallback: 'TBD'),
-            ),
+            title: _stringValue(item['training_name']),
+            location: _stringValue(item['institute_name']),
             dateLabel: _dateRangeLabel(
               _dateValue(item['start_date']),
               _dateValue(item['end_date']),
             ),
-            tag: _stringValue(
-              item['training_app_status'],
-              fallback: 'Internal',
-            ).replaceAll('_', ' '),
+            tag: _stringValue(item['training_app_status']).replaceAll('_', ' '),
           ),
         )
         .toList();
@@ -601,7 +593,7 @@ class StaffRequestsRepository {
     final response = await _get('/trainingAnnouncements');
     final items = _extractList(response.data);
     if (items.isEmpty) {
-      return buildAnnouncements(null);
+      return const [];
     }
 
     return items.map(_announcementFromApi).toList()..sort((first, second) {
@@ -611,25 +603,76 @@ class StaffRequestsRepository {
     });
   }
 
+  Future<List<HomeAnnouncementComment>> fetchAnnouncementComments(
+    HomeAnnouncement announcement,
+  ) async {
+    final path = _announcementCommentsPath(announcement);
+    if (path == null) {
+      return const [];
+    }
+
+    final response = await _get(path);
+    final payload = response.data;
+    if (payload is Map<String, dynamic>) {
+      return _extractListByKey(payload, 'comments')
+          .map(_announcementCommentFromApi)
+          .toList();
+    }
+
+    return const [];
+  }
+
+  Future<HomeAnnouncementComment> postAnnouncementComment(
+    HomeAnnouncement announcement, {
+    required String message,
+    List<MultipartFile> attachments = const [],
+  }) async {
+    final path = _announcementCommentsPath(announcement);
+    if (path == null) {
+      throw Exception('Comments are not available for this announcement.');
+    }
+
+    final response = attachments.isEmpty
+        ? await _postJson(path, data: {'message': message})
+        : await _postForm(
+            path,
+            data: {
+              'message': message,
+              'attachments': attachments,
+            },
+          );
+    final payload = response.data;
+    if (payload is Map<String, dynamic>) {
+      final comment = payload['comment'];
+      if (comment is Map<String, dynamic>) {
+        return _announcementCommentFromApi(comment);
+      }
+      if (comment is Map) {
+        return _announcementCommentFromApi(
+          comment.map((key, value) => MapEntry(key.toString(), value)),
+        );
+      }
+    }
+
+    throw Exception('Unable to read the posted comment.');
+  }
+
   Future<List<RequestLookupOption>> fetchLeaveTypes(UserModel user) async {
     if (user.personalInformationId.trim().isEmpty) {
-      return buildMockLeaveTypes();
+      return const [];
     }
 
     final response = await _get('/getLeaveType/${user.personalInformationId}');
     final items = _extractList(response.data);
     if (items.isEmpty) {
-      return buildMockLeaveTypes();
+      return const [];
     }
 
     return items
         .map(
           (item) => RequestLookupOption(
             id: _stringValue(item['employement_status_id']),
-            label: _stringValue(
-              item['employement_status_name'],
-              fallback: 'Leave',
-            ),
+            label: _stringValue(item['employement_status_name']),
             requiresAttachment: _boolValue(item['need_upload']),
             requiresDayCount: _boolValue(item['need_end_date']),
           ),
@@ -641,7 +684,7 @@ class StaffRequestsRepository {
     final response = await _get('/getRepresentative');
     final items = _extractList(response.data);
     if (items.isEmpty) {
-      return buildMockRepresentatives();
+      return const [];
     }
 
     return items
@@ -663,17 +706,14 @@ class StaffRequestsRepository {
     final response = await _get('/staffTransferReasons');
     final items = _extractList(response.data);
     if (items.isEmpty) {
-      return buildMockTransferReasons();
+      return const [];
     }
 
     return items
         .map(
           (item) => RequestLookupOption(
             id: _stringValue(item['transfer_reason_id']),
-            label: _stringValue(
-              item['transfer_reason_name'],
-              fallback: 'Transfer',
-            ),
+            label: _stringValue(item['transfer_reason_name']),
             requiresAttachment: _boolValue(item['need_upload']),
           ),
         )
@@ -693,7 +733,7 @@ class StaffRequestsRepository {
         options.add(
           RequestLookupOption(
             id: id,
-            label: _stringValue(item['activity_name'], fallback: 'Activity'),
+            label: _stringValue(item['activity_name']),
             subtitle: [
               _stringValue(item['activity_code']),
               _stringValue(item['type']),
@@ -731,7 +771,7 @@ class StaffRequestsRepository {
         .map(
           (item) => RequestLookupOption(
             id: _stringValue(item['bank_id']),
-            label: _stringValue(item['bank_name'], fallback: 'Bank'),
+            label: _stringValue(item['bank_name']),
             subtitle: _stringValue(item['abraviation']),
           ),
         )
@@ -744,7 +784,10 @@ class StaffRequestsRepository {
     final items = _extractList(response.data);
 
     if (items.isEmpty) {
-      return buildMockFacilityDirectory();
+      return const FacilityDirectory(
+        facilities: [],
+        departmentsByFacilityId: {},
+      );
     }
 
     final facilities = <RequestLookupOption>[];
@@ -752,10 +795,7 @@ class StaffRequestsRepository {
 
     for (final item in items) {
       final facilityId = _stringValue(item['working_station_id']);
-      final facilityLabel = _stringValue(
-        item['working_station_name'],
-        fallback: 'Facility',
-      );
+      final facilityLabel = _stringValue(item['working_station_name']);
       facilities.add(RequestLookupOption(id: facilityId, label: facilityLabel));
 
       final workingPositions = item['working_positions'];
@@ -769,10 +809,7 @@ class StaffRequestsRepository {
           departments.add(
             RequestLookupOption(
               id: _stringValue(normalized['working_position_id']),
-              label: _stringValue(
-                normalized['department_name'],
-                fallback: 'Department',
-              ),
+              label: _stringValue(normalized['department_name']),
             ),
           );
         }
@@ -1232,55 +1269,71 @@ class StaffRequestsRepository {
     );
   }
 
-  List<HomeAnnouncement> buildAnnouncements(UserModel? user) {
-    return const [];
-  }
-
   HomeAnnouncement _announcementFromApi(Map<String, dynamic> item) {
-    final title = _stringValue(
-      item['title'],
-      fallback: _stringValue(
-        item['training_name'],
-        fallback: 'Training Announcement',
-      ),
-    );
-    final description = _stringValue(
-      item['body'],
-      fallback: _stringValue(
-        item['text'],
-        fallback: _stringValue(
-          item['discription'],
-          fallback: 'Announcement details are available.',
-        ),
-      ),
-    );
-    final startsAt = _dateValue(
-      item['starts_at'],
-      fallback: _dateValue(item['announce_start_date']),
-    );
-    final endsAt = _dateValue(
-      item['ends_at'],
-      fallback: _dateValue(item['announce_end_date']),
-    );
-    final type = _stringValue(item['type'], fallback: 'Training');
+    final description = _stringValue(item['discription']);
+    final title = _announcementTitleFromDescription(description);
+    final startsAt = _dateValue(item['announce_start_date']);
+    final endsAt = _dateValue(item['announce_end_date']);
+    final type = 'training';
     final caption = endsAt == null
         ? type
         : '$type • Ends ${_displayDate(endsAt)}';
 
     return HomeAnnouncement(
-      id: _stringValue(
-        item['announcement_id'],
-        fallback: _stringValue(item['training_announcement_id']),
-      ),
+      id: _stringValue(item['training_announcement_id']),
+      trainingAnnouncementId: _stringValue(item['training_announcement_id']),
       title: title,
       subtitle: description,
       caption: caption,
       type: type,
-      externalLink: _stringValue(item['external_link']),
+      externalLink: '',
       startsAt: startsAt,
       endsAt: endsAt,
       isLive: true,
     );
+  }
+
+  HomeAnnouncementComment _announcementCommentFromApi(
+    Map<String, dynamic> item,
+  ) {
+    final author = item['author'];
+    String authorName = '';
+
+    if (author is Map<String, dynamic>) {
+      authorName = _stringValue(author['full_name']);
+    } else if (author is Map) {
+      authorName = _stringValue(author['full_name']);
+    }
+
+    return HomeAnnouncementComment(
+      uuid: _stringValue(item['uuid']),
+      comment: _stringValue(item['comment']),
+      authorName: authorName,
+      createdAt: _dateValue(item['created_at']),
+      attachments: _extractListByKey(item, 'attachments')
+          .map(
+            (attachment) => HomeAnnouncementCommentAttachment(
+              uuid: _stringValue(attachment['uuid']),
+              originalFileName: _stringValue(
+                attachment['original_file_name'],
+              ),
+              attachmentUrl: _stringValue(attachment['attachment_url']),
+              mimeType: _stringValue(attachment['mime_type']),
+              fileSize: _intValue(attachment['file_size']),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  String _announcementTitleFromDescription(String description) {
+    final text = description.trim();
+    if (text.isEmpty) {
+      return '';
+    }
+
+    final firstSentence = text.split('.').first.trim();
+    return firstSentence.isNotEmpty ? firstSentence : text;
   }
 
   List<RequestLookupOption> buildMockLeaveTypes() {
@@ -1532,6 +1585,20 @@ class StaffRequestsRepository {
     }
   }
 
+  String? _announcementCommentsPath(HomeAnnouncement announcement) {
+    final trainingAnnouncementId = announcement.trainingAnnouncementId?.trim();
+    if (trainingAnnouncementId != null && trainingAnnouncementId.isNotEmpty) {
+      return '/trainingAnnouncements/$trainingAnnouncementId/comments';
+    }
+
+    final announcementUuid = announcement.announcementUuid?.trim();
+    if (announcementUuid != null && announcementUuid.isNotEmpty) {
+      return '/announcements/$announcementUuid/comments';
+    }
+
+    return null;
+  }
+
   Future<Options> _authorizedOptions({
     Map<String, String>? extraHeaders,
   }) async {
@@ -1541,7 +1608,9 @@ class StaffRequestsRepository {
     }
 
     return Options(
-      headers: {'Authorization': 'Bearer $token', ...?extraHeaders},
+      headers: await AppSessionStore.authorizedHeaders(
+        extraHeaders: extraHeaders,
+      ),
     );
   }
 

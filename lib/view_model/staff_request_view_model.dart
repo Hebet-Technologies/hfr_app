@@ -147,7 +147,7 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
 
   Future<void> load() async {
     final user = await _resolveCurrentUser();
-    var announcements = _repository.buildAnnouncements(user);
+    var announcements = const <HomeAnnouncement>[];
 
     state = state.copyWith(
       isLoading: true,
@@ -157,88 +157,96 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
 
     List<StaffRequestRecord> leaveRecords = [];
     List<StaffRequestRecord> transferRecords = [];
+    List<StaffRequestRecord> sickLeaveRecords = const [];
+    List<StaffRequestRecord> loanRequestRecords = const [];
     List<HomeTrainingItem> trainings = const [];
-    List<RequestLookupOption> leaveTypes = _repository.buildMockLeaveTypes();
-    List<RequestLookupOption> representatives = _repository
-        .buildMockRepresentatives();
-    List<RequestLookupOption> transferReasons = _repository
-        .buildMockTransferReasons();
+    List<RequestLookupOption> leaveTypes = const [];
+    List<RequestLookupOption> representatives = const [];
+    List<RequestLookupOption> transferReasons = const [];
     List<RequestLookupOption> activityOptions = const [];
     List<RequestLookupOption> loanBanks = const [];
-    final mockDirectory = _repository.buildMockFacilityDirectory();
-    List<RequestLookupOption> facilities = mockDirectory.facilities;
-    Map<String, List<RequestLookupOption>> departmentsByFacilityId =
-        mockDirectory.departmentsByFacilityId;
+    List<RequestLookupOption> facilities = const [];
+    Map<String, List<RequestLookupOption>> departmentsByFacilityId = const {};
     List<ApprovalTask> leaveApprovalTasks = const [];
     List<ApprovalTask> transferApprovalTasks = const [];
     String? errorMessage;
 
+    Future<void> runSafely(
+      Future<void> Function() task, {
+      bool captureError = false,
+    }) async {
+      try {
+        await task();
+      } catch (error) {
+        if (captureError) {
+          errorMessage ??= error.toString().replaceAll('Exception: ', '');
+        }
+      }
+    }
+
     if (user != null) {
       final canLoadSelfServiceRequests = _currentAccess.hasEmployeeProfile;
 
-      try {
-        announcements = await _repository.fetchAnnouncements();
-      } catch (_) {}
-
       if (canLoadSelfServiceRequests) {
-        try {
-          leaveRecords = await _repository.fetchLeaveRequests(user);
-        } catch (error) {
-          errorMessage ??= error.toString().replaceAll('Exception: ', '');
-        }
+        await Future.wait<void>([
+          runSafely(() async {
+            announcements = await _repository.fetchAnnouncements();
+          }),
+          runSafely(() async {
+            leaveRecords = await _repository.fetchLeaveRequests(user);
+          }, captureError: true),
+          runSafely(() async {
+            transferRecords = await _repository.fetchTransferRequests(user);
+          }),
+          runSafely(() async {
+            trainings = await _repository.fetchUpcomingTraining(user);
+          }),
+          runSafely(() async {
+            leaveTypes = await _repository.fetchLeaveTypes(user);
+          }),
+          runSafely(() async {
+            representatives = await _repository.fetchRepresentatives();
+          }),
+          runSafely(() async {
+            transferReasons = await _repository.fetchTransferReasons();
+          }),
+          // runSafely(() async {
+          //   activityOptions = await _repository.fetchActivityOptions();
+          // }),
+          runSafely(() async {
+            loanBanks = await _repository.fetchLoanBanks();
+          }),
+          runSafely(() async {
+            final directory = await _repository.fetchFacilityDirectory();
+            facilities = directory.facilities;
+            departmentsByFacilityId = directory.departmentsByFacilityId;
+          }),
+          runSafely(() async {
+            sickLeaveRecords = await _repository.fetchSickSheets(user);
+          }),
+          runSafely(() async {
+            loanRequestRecords = await _repository.fetchLoanRequests(user);
+          }),
+        ]);
 
-        try {
-          transferRecords = await _repository.fetchTransferRequests(user);
-        } catch (_) {}
-
-        try {
-          trainings = await _repository.fetchUpcomingTraining(user);
-        } catch (_) {}
-
-        try {
-          leaveTypes = await _repository.fetchLeaveTypes(user);
-        } catch (_) {}
-
-        try {
-          representatives = await _repository.fetchRepresentatives();
-        } catch (_) {}
-
-        try {
-          transferReasons = await _repository.fetchTransferReasons();
-        } catch (_) {}
-
-        // try {
-        //   activityOptions = await _repository.fetchActivityOptions();
-        // } catch (_) {}
-
-        try {
-          loanBanks = await _repository.fetchLoanBanks();
-        } catch (_) {}
-
-        try {
-          final directory = await _repository.fetchFacilityDirectory();
-          facilities = directory.facilities;
-          departmentsByFacilityId = directory.departmentsByFacilityId;
-        } catch (_) {}
-
-        try {
-          leaveRecords.addAll(await _repository.fetchSickSheets(user));
-        } catch (_) {}
-
-        try {
-          transferRecords.addAll(await _repository.fetchLoanRequests(user));
-        } catch (_) {}
+        leaveRecords = [...leaveRecords, ...sickLeaveRecords];
+        transferRecords = [...transferRecords, ...loanRequestRecords];
+      } else {
+        await runSafely(() async {
+          announcements = await _repository.fetchAnnouncements();
+        });
       }
 
       if (_currentAccess.hasRequestApproverAccess) {
-        try {
-          leaveApprovalTasks = await _repository.fetchLeaveApprovalTasks();
-        } catch (_) {}
-
-        try {
-          transferApprovalTasks = await _repository
-              .fetchTransferApprovalTasks();
-        } catch (_) {}
+        await Future.wait<void>([
+          runSafely(() async {
+            leaveApprovalTasks = await _repository.fetchLeaveApprovalTasks();
+          }),
+          runSafely(() async {
+            transferApprovalTasks = await _repository
+                .fetchTransferApprovalTasks();
+          }),
+        ]);
       }
     }
 

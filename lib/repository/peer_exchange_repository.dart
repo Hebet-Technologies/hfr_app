@@ -6,10 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/network/api_service.dart';
 import '../model/peer_exchange_models.dart';
+import '../services/app_session_store.dart';
 
 class PeerExchangeRepository {
   PeerExchangeRepository()
-    : _dio = Dio(
+    : _dio = createLoggedDio(
         BaseOptions(
           baseUrl: ApiService.baseUrl,
           connectTimeout: const Duration(seconds: 30),
@@ -69,6 +70,13 @@ class PeerExchangeRepository {
         response.data['conversation_message'],
         'conversation_message',
       ),
+    );
+  }
+
+  Future<void> markConversationAsRead(String conversationUuid) async {
+    await _postJson(
+      '/conversations/$conversationUuid/read',
+      data: const <String, dynamic>{},
     );
   }
 
@@ -560,7 +568,9 @@ class PeerExchangeRepository {
     }
 
     return Options(
-      headers: {'Authorization': 'Bearer $token', ...?extraHeaders},
+      headers: await AppSessionStore.authorizedHeaders(
+        extraHeaders: extraHeaders,
+      ),
     );
   }
 
@@ -803,5 +813,4 @@ class PeerExchangeRepository {
 
     return const [];
   }
-
 }

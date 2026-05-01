@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../view_model/providers.dart';
 import 'home/home_tab.dart';
 import 'requests/requests_screen.dart';
 import 'training/training_screen.dart';
@@ -20,19 +21,43 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
   static const _mutedColor = Color(0xFF98A2B3);
 
   int _currentIndex = 0;
+  int _profileReloadVersion = 0;
 
-  final List<Widget> _screens = [
+  List<Widget> get _screens => [
     const HomeTab(),
     const RequestsScreen(),
     const TrainingScreen(),
     const CommunityScreen(),
-    const ProfileScreen(),
+    ProfileScreen(key: ValueKey(_profileReloadVersion)),
   ];
+
+  void _reloadTabData(int index) {
+    switch (index) {
+      case 0:
+        ref.read(staffRequestsViewModelProvider.notifier).refresh();
+        ref.read(peerExchangeViewModelProvider.notifier).loadAll();
+        break;
+      case 1:
+        ref.read(staffRequestsViewModelProvider.notifier).refresh();
+        break;
+      case 2:
+        ref.read(trainingViewModelProvider.notifier).refresh();
+        break;
+      case 3:
+        ref.read(peerExchangeViewModelProvider.notifier).loadAll();
+        break;
+      case 4:
+        setState(() {
+          _profileReloadVersion++;
+        });
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
+      body: IndexedStack(index: _currentIndex, children: _screens),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -53,6 +78,7 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
               setState(() {
                 _currentIndex = index;
               });
+              _reloadTabData(index);
             },
             type: BottomNavigationBarType.fixed,
             backgroundColor: Colors.white,

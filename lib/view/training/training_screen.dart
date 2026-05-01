@@ -23,6 +23,14 @@ void openTrainingHubScreen(BuildContext context) {
   );
 }
 
+void openTrainingDetailsScreen(BuildContext context, TrainingProgram program) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => TrainingDetailsScreen(training: program),
+    ),
+  );
+}
+
 class TrainingScreen extends ConsumerStatefulWidget {
   const TrainingScreen({super.key, this.standalone = false});
 
@@ -58,6 +66,10 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
 
     final state = ref.watch(trainingViewModelProvider);
     final latest = _filterPrograms(state.latestTrainings, _query);
+    final myApplications = _filterPrograms(
+      state.myTrainingApplications,
+      _query,
+    );
     final myTrainings = _filterPrograms(state.myTrainings, _query);
     final resources = _filterResources(state.resources, _query);
 
@@ -106,7 +118,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
               ),
               const SizedBox(height: 20),
               _SectionHeader(
-                title: 'Latest Trainings',
+                title: 'Announcements',
                 actionLabel: 'See All',
                 onTap: () {
                   Navigator.of(context).push(
@@ -168,7 +180,34 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
               ],
               const SizedBox(height: 22),
               _SectionHeader(
-                title: 'My Trainings',
+                title: 'My Applications',
+                actionLabel: 'See All',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const MyTrainingApplicationsScreen(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              if (myApplications.isEmpty)
+                const _EmptyCard(message: 'No training applications yet')
+              else
+                ...myApplications
+                    .take(3)
+                    .map(
+                      (item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _TrainingStatusTile(
+                          program: item,
+                          onTap: () => _openTrainingDetails(context, item),
+                        ),
+                      ),
+                    ),
+              const SizedBox(height: 22),
+              _SectionHeader(
+                title: 'My Training',
                 actionLabel: 'See All',
                 onTap: () {
                   Navigator.of(context).push(
@@ -180,7 +219,7 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
               ),
               const SizedBox(height: 12),
               if (myTrainings.isEmpty)
-                const _EmptyCard(message: 'No training applications yet')
+                const _EmptyCard(message: 'No training history found')
               else
                 ...myTrainings
                     .take(3)
@@ -732,7 +771,7 @@ class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen> {
 
     return Scaffold(
       backgroundColor: _trainingSurface,
-      appBar: _TrainingAppBar(title: 'Latest Trainings'),
+      appBar: _TrainingAppBar(title: 'Announcements'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
         children: [
@@ -747,7 +786,7 @@ class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (items.isEmpty)
-            const _EmptyCard(message: 'No trainings match your search')
+            const _EmptyCard(message: 'No announcements match your search')
           else
             ...items.map(
               (item) => Padding(
@@ -773,19 +812,66 @@ class MyTrainingsScreen extends ConsumerStatefulWidget {
 
 class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
   String _query = '';
-  TrainingParticipationStatus? _selectedStatus;
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(trainingViewModelProvider);
     final searched = _filterPrograms(state.myTrainings, _query);
+    final items = searched;
+
+    return Scaffold(
+      backgroundColor: _trainingSurface,
+      appBar: _TrainingAppBar(title: 'My Training'),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+        children: [
+          _SearchToolbar(
+            hintText: 'Search...',
+            onChanged: (value) => setState(() => _query = value),
+          ),
+          const SizedBox(height: 16),
+          if (items.isEmpty)
+            const _EmptyCard(message: 'No training history found')
+          else
+            ...items.map(
+              (item) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _TrainingStatusTile(
+                  program: item,
+                  onTap: () => _openTrainingDetails(context, item),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class MyTrainingApplicationsScreen extends ConsumerStatefulWidget {
+  const MyTrainingApplicationsScreen({super.key});
+
+  @override
+  ConsumerState<MyTrainingApplicationsScreen> createState() =>
+      _MyTrainingApplicationsScreenState();
+}
+
+class _MyTrainingApplicationsScreenState
+    extends ConsumerState<MyTrainingApplicationsScreen> {
+  String _query = '';
+  TrainingParticipationStatus? _selectedStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(trainingViewModelProvider);
+    final searched = _filterPrograms(state.myTrainingApplications, _query);
     final items = _selectedStatus == null
         ? searched
         : searched.where((item) => item.status == _selectedStatus).toList();
 
     return Scaffold(
       backgroundColor: _trainingSurface,
-      appBar: _TrainingAppBar(title: 'My Trainings'),
+      appBar: _TrainingAppBar(title: 'My Applications'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
         children: [
@@ -927,7 +1013,9 @@ class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen> {
         ? program.targetCadres
         : const ['Staff Members'];
     final actionLabel = switch (program.status) {
-      TrainingParticipationStatus.notApplied => 'Apply for Training',
+      TrainingParticipationStatus.notApplied => program.canApplyLive
+          ? 'Apply for Training'
+          : 'Application Not Available',
       TrainingParticipationStatus.pending => 'Application Submitted',
       TrainingParticipationStatus.approved => 'Training Approved',
       TrainingParticipationStatus.rejected => 'Application Rejected',
@@ -935,6 +1023,7 @@ class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen> {
     };
     final canApply =
         program.status == TrainingParticipationStatus.notApplied &&
+        program.canApplyLive &&
         !state.isSubmitting;
 
     return Scaffold(
@@ -2431,11 +2520,7 @@ class _TrainingApprovalActionSheetState
 }
 
 void _openTrainingDetails(BuildContext context, TrainingProgram program) {
-  Navigator.of(context).push(
-    MaterialPageRoute<void>(
-      builder: (_) => TrainingDetailsScreen(training: program),
-    ),
-  );
+  openTrainingDetailsScreen(context, program);
 }
 
 Future<void> _openResource(

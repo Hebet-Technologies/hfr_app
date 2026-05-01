@@ -9,6 +9,8 @@ import '../model/profile_details.dart';
 import '../model/staff_portal_access.dart';
 import '../model/user_model.dart';
 import '../model/registration_model.dart';
+import '../services/app_session_store.dart';
+import '../services/device_metadata_service.dart';
 import '../utils/api_call.dart';
 
 class AuthRepository {
@@ -31,10 +33,12 @@ class AuthRepository {
     'permission_ids',
     'is_logged_in',
     _activePortalModeKey,
+    AppSessionStore.deviceUuidKey,
+    AppSessionStore.sessionUuidKey,
   ];
 
   final ApiService _apiService;
-  final Dio _authorizedDio = Dio(
+  final Dio _authorizedDio = createLoggedDio(
     BaseOptions(
       baseUrl: ApiService.baseUrl,
       connectTimeout: const Duration(seconds: 30),
@@ -47,11 +51,16 @@ class AuthRepository {
 
   Future<UserModel> login(String email, String password) async {
     try {
-      final response = await _apiService.login(email, password);
+      final payload = await DeviceMetadataService.instance.buildLoginPayload(
+        email: email,
+        password: password,
+      );
+      final response = await _apiService.login(payload);
       log(response.data.toString());
       if (response.statusCode == 200 && response.data['data'] != null) {
         final userData = UserModel.fromJson(response.data['data']);
         await _saveUserData(userData);
+        await AppSessionStore.saveLoginPayload(_asMap(response.data['data']));
         return userData;
       } else {
         throw Exception('Login failed');
@@ -274,6 +283,33 @@ class AuthRepository {
 
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+    final deviceUuid = prefs.getString(AppSessionStore.deviceUuidKey);
+    final fcmToken = prefs.getString(AppSessionStore.fcmTokenKey);
+
+    if (token != null && token.trim().isNotEmpty) {
+      try {
+        await _authorizedDio.post(
+          '/logout',
+          data: {
+            if (deviceUuid != null && deviceUuid.trim().isNotEmpty)
+              'device_uuid': deviceUuid,
+            if ((deviceUuid ?? '').trim().isEmpty &&
+                fcmToken != null &&
+                fcmToken.trim().isNotEmpty)
+              'fcm_token': fcmToken,
+          },
+          options: Options(
+            headers: {
+              ...await AppSessionStore.authorizedHeaders(),
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+          ),
+        );
+      } catch (_) {}
+    }
+
     await _clearAuthStorage(prefs);
   }
 
@@ -302,9 +338,9 @@ class AuthRepository {
       throw Exception('Authentication token not found. Please sign in again.');
     }
 
-    return Options(
-      headers: {'Authorization': 'Bearer $token', ...?extraHeaders},
-    );
+    return Options(headers: await AppSessionStore.authorizedHeaders(
+      extraHeaders: extraHeaders,
+    ));
   }
 
   Map<String, dynamic> _asMap(dynamic value) {
