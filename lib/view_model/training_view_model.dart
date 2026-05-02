@@ -220,6 +220,84 @@ class TrainingViewModel extends Notifier<TrainingState> {
 
   Future<void> refresh() => load();
 
+  Future<void> refreshLatestTrainings() async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final latestTrainings = await _repository.fetchLatestTrainings(
+        myTrainings: state.myTrainingApplications,
+      );
+      state = state.copyWith(
+        isLoading: false,
+        latestTrainings: latestTrainings,
+        detailsById: const {},
+      );
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: _cleanMessage(error),
+      );
+    }
+  }
+
+  Future<void> refreshApprovalRequests() async {
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      var latestTrainings = state.latestTrainings;
+      if (latestTrainings.isEmpty) {
+        latestTrainings = await _repository.fetchLatestTrainings(
+          myTrainings: state.myTrainingApplications,
+        );
+      }
+
+      List<TrainingApprovalRecord> trainingRequests = state.trainingRequests;
+      List<TrainingApprovalRecord> approvalQueue = state.approvalQueue;
+
+      await Future.wait<void>([
+        if (_access.canViewTrainingRequests)
+          (() async {
+            trainingRequests = await _repository.fetchTrainingRequests(
+              publishedTrainings: latestTrainings,
+            );
+          })(),
+        if (_access.canReviewTrainingRequests)
+          (() async {
+            approvalQueue = await _repository.fetchApprovalQueue(
+              publishedTrainings: latestTrainings,
+            );
+          })(),
+      ]);
+
+      state = state.copyWith(
+        isLoading: false,
+        latestTrainings: latestTrainings,
+        trainingRequests: trainingRequests,
+        approvalQueue: approvalQueue,
+        approvalDetailsById: const {},
+      );
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: _cleanMessage(error),
+      );
+    }
+  }
+
+  Future<void> refreshResources() async {
+    final user = _currentUser ?? await _authRepository.getSavedUser();
+    if (user == null || !_access.hasEmployeeProfile) return;
+
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final resources = await _repository.fetchResources(user);
+      state = state.copyWith(isLoading: false, resources: resources);
+    } catch (error) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: _cleanMessage(error),
+      );
+    }
+  }
+
   void clearError() {
     state = state.copyWith(errorMessage: null);
   }

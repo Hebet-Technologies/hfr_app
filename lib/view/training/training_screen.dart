@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../model/staff_portal_access.dart';
+import '../../model/staff_request_models.dart';
 import '../../model/training_models.dart';
 import '../../view_model/providers.dart';
 
@@ -44,6 +45,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
   late final PageController _pageController;
   int _currentPage = 0;
   String _query = '';
+  TrainingParticipationStatus? _selectedStatus;
+  DateTimeRange? _dateRange;
 
   @override
   void initState() {
@@ -65,13 +68,35 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     }
 
     final state = ref.watch(trainingViewModelProvider);
-    final latest = _filterPrograms(state.latestTrainings, _query);
+    final sharedState = ref.watch(staffRequestsViewModelProvider);
+    final latestTrainings = _mergeTrainingPrograms(
+      state.latestTrainings,
+      _programsFromHomeAnnouncements(sharedState.announcements),
+    );
+    final trainingResources = _mergeTrainingResources(
+      state.resources,
+      _resourcesFromHomeResources(sharedState.resources),
+    );
+    final latest = _filterPrograms(
+      latestTrainings,
+      _query,
+      status: _selectedStatus,
+      dateRange: _dateRange,
+    );
     final myApplications = _filterPrograms(
       state.myTrainingApplications,
       _query,
+      status: _selectedStatus,
+      dateRange: _dateRange,
     );
-    final myTrainings = _filterPrograms(state.myTrainings, _query);
-    final resources = _filterResources(state.resources, _query);
+    final myTrainings = _filterPrograms(
+      state.myTrainings,
+      _query,
+      status: _selectedStatus,
+      dateRange: _dateRange,
+    );
+    final resources = _filterResources(trainingResources, _query);
+    final isLoading = state.isLoading || sharedState.isLoading;
 
     return Scaffold(
       backgroundColor: _trainingSurface,
@@ -115,6 +140,12 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
               _SearchToolbar(
                 hintText: 'Search...',
                 onChanged: (value) => setState(() => _query = value),
+                filterCount: _trainingFilterCount(
+                  status: _selectedStatus,
+                  dateRange: _dateRange,
+                ),
+                onFilterPressed: _openStatusFilter,
+                onCalendarPressed: _openDateFilter,
               ),
               const SizedBox(height: 20),
               _SectionHeader(
@@ -129,11 +160,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                 },
               ),
               const SizedBox(height: 12),
-              if (state.isLoading && state.latestTrainings.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 48),
-                  child: Center(child: CircularProgressIndicator()),
-                )
+              if (isLoading && latestTrainings.isEmpty)
+                const _TrainingCarouselShimmer()
               else if (latest.isEmpty)
                 const _EmptyCard(message: 'No trainings found')
               else ...[
@@ -245,7 +273,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
                 },
               ),
               const SizedBox(height: 12),
-              if (resources.isEmpty)
+              if (isLoading && trainingResources.isEmpty)
+                const _TrainingListShimmer()
+              else if (resources.isEmpty)
                 const _EmptyCard(message: 'No resources available')
               else
                 ...resources
@@ -265,6 +295,23 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
       ),
     );
   }
+
+  Future<void> _openStatusFilter() async {
+    final result = await showModalBottomSheet<_TrainingStatusFilterResult>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _TrainingStatusFilterSheet(selectedStatus: _selectedStatus),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _selectedStatus = result.status);
+  }
+
+  Future<void> _openDateFilter() async {
+    final range = await _pickTrainingDateRange(context, _dateRange);
+    if (!mounted || range == _dateRange) return;
+    setState(() => _dateRange = range);
+  }
 }
 
 enum _ApproverTrainingTab { allTrainings, applications, resources }
@@ -282,23 +329,45 @@ class _ApproverTrainingHub extends ConsumerStatefulWidget {
 class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
   _ApproverTrainingTab _selectedTab = _ApproverTrainingTab.applications;
   String _query = '';
+  TrainingParticipationStatus? _selectedStatus;
+  DateTimeRange? _dateRange;
 
   @override
   Widget build(BuildContext context) {
     final access = ref.watch(staffPortalAccessProvider);
     final state = ref.watch(trainingViewModelProvider);
-    final trainings = _filterPrograms(state.latestTrainings, _query);
+    final sharedState = ref.watch(staffRequestsViewModelProvider);
+    final latestTrainings = _mergeTrainingPrograms(
+      state.latestTrainings,
+      _programsFromHomeAnnouncements(sharedState.announcements),
+    );
+    final trainingResources = _mergeTrainingResources(
+      state.resources,
+      _resourcesFromHomeResources(sharedState.resources),
+    );
+    final trainings = _filterPrograms(
+      latestTrainings,
+      _query,
+      status: _selectedStatus,
+      dateRange: _dateRange,
+    );
     final requestRecords = state.trainingRequests.isNotEmpty
         ? state.trainingRequests
         : state.approvalQueue;
-    final approvals = _filterApprovalRecords(requestRecords, _query);
+    final approvals = _filterApprovalRecords(
+      requestRecords,
+      _query,
+      status: _selectedStatus,
+      dateRange: _dateRange,
+    );
     final actionableCount = approvals
         .where(
           (record) =>
               _findActionableApproval(state.approvalQueue, record) != null,
         )
         .length;
-    final resources = _filterResources(state.resources, _query);
+    final resources = _filterResources(trainingResources, _query);
+    final isLoading = state.isLoading || sharedState.isLoading;
     final actionLabel = _trainingApprovalActionLabel(access);
     final resolvedActionLabel = actionLabel ?? 'Approve';
 
@@ -343,20 +412,23 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
               ],
               _ApproverTabSelector(
                 selectedTab: _selectedTab,
-                onSelected: (tab) => setState(() => _selectedTab = tab),
+                onSelected: _selectApproverTab,
               ),
               const SizedBox(height: 16),
               _SearchToolbar(
                 hintText: 'Search...',
                 onChanged: (value) => setState(() => _query = value),
+                filterCount: _trainingFilterCount(
+                  status: _selectedStatus,
+                  dateRange: _dateRange,
+                ),
+                onFilterPressed: _openStatusFilter,
+                onCalendarPressed: _openDateFilter,
               ),
               const SizedBox(height: 18),
               if (_selectedTab == _ApproverTrainingTab.allTrainings) ...[
-                if (state.isLoading && state.latestTrainings.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
+                if (isLoading && latestTrainings.isEmpty)
+                  const _TrainingListShimmer()
                 else if (trainings.isEmpty)
                   const _EmptyCard(message: 'No trainings found')
                 else
@@ -378,10 +450,7 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
                 if (state.isLoading &&
                     state.approvalQueue.isEmpty &&
                     state.trainingRequests.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
+                  const _TrainingApprovalShimmer()
                 else if (approvals.isEmpty)
                   const _EmptyCard(
                     message: 'No training applications are waiting for review.',
@@ -415,7 +484,9 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
                     );
                   }),
               ] else ...[
-                if (resources.isEmpty)
+                if (isLoading && trainingResources.isEmpty)
+                  const _TrainingListShimmer()
+                else if (resources.isEmpty)
                   const _EmptyCard(message: 'No resources found')
                 else
                   ...resources.map(
@@ -457,6 +528,41 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
         context,
       ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {}
+  }
+
+  void _selectApproverTab(_ApproverTrainingTab tab) {
+    if (_selectedTab == tab) return;
+    setState(() => _selectedTab = tab);
+
+    final notifier = ref.read(trainingViewModelProvider.notifier);
+    switch (tab) {
+      case _ApproverTrainingTab.allTrainings:
+        notifier.refreshLatestTrainings();
+        break;
+      case _ApproverTrainingTab.applications:
+        notifier.refreshApprovalRequests();
+        break;
+      case _ApproverTrainingTab.resources:
+        notifier.refreshResources();
+        break;
+    }
+  }
+
+  Future<void> _openStatusFilter() async {
+    final result = await showModalBottomSheet<_TrainingStatusFilterResult>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _TrainingStatusFilterSheet(selectedStatus: _selectedStatus),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _selectedStatus = result.status);
+  }
+
+  Future<void> _openDateFilter() async {
+    final range = await _pickTrainingDateRange(context, _dateRange);
+    if (!mounted || range == _dateRange) return;
+    setState(() => _dateRange = range);
   }
 }
 
@@ -763,11 +869,24 @@ class LatestTrainingsScreen extends ConsumerStatefulWidget {
 
 class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen> {
   String _query = '';
+  TrainingParticipationStatus? _selectedStatus;
+  DateTimeRange? _dateRange;
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(trainingViewModelProvider);
-    final items = _filterPrograms(state.latestTrainings, _query);
+    final sharedState = ref.watch(staffRequestsViewModelProvider);
+    final latestTrainings = _mergeTrainingPrograms(
+      state.latestTrainings,
+      _programsFromHomeAnnouncements(sharedState.announcements),
+    );
+    final items = _filterPrograms(
+      latestTrainings,
+      _query,
+      status: _selectedStatus,
+      dateRange: _dateRange,
+    );
+    final isLoading = state.isLoading || sharedState.isLoading;
 
     return Scaffold(
       backgroundColor: _trainingSurface,
@@ -778,13 +897,16 @@ class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen> {
           _SearchToolbar(
             hintText: 'Search...',
             onChanged: (value) => setState(() => _query = value),
+            filterCount: _trainingFilterCount(
+              status: _selectedStatus,
+              dateRange: _dateRange,
+            ),
+            onFilterPressed: _openStatusFilter,
+            onCalendarPressed: _openDateFilter,
           ),
           const SizedBox(height: 16),
-          if (state.isLoading && state.latestTrainings.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 80),
-              child: Center(child: CircularProgressIndicator()),
-            )
+          if (isLoading && latestTrainings.isEmpty)
+            const _TrainingListShimmer()
           else if (items.isEmpty)
             const _EmptyCard(message: 'No announcements match your search')
           else
@@ -801,6 +923,23 @@ class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen> {
       ),
     );
   }
+
+  Future<void> _openStatusFilter() async {
+    final result = await showModalBottomSheet<_TrainingStatusFilterResult>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _TrainingStatusFilterSheet(selectedStatus: _selectedStatus),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _selectedStatus = result.status);
+  }
+
+  Future<void> _openDateFilter() async {
+    final range = await _pickTrainingDateRange(context, _dateRange);
+    if (!mounted || range == _dateRange) return;
+    setState(() => _dateRange = range);
+  }
 }
 
 class MyTrainingsScreen extends ConsumerStatefulWidget {
@@ -812,11 +951,18 @@ class MyTrainingsScreen extends ConsumerStatefulWidget {
 
 class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
   String _query = '';
+  TrainingParticipationStatus? _selectedStatus;
+  DateTimeRange? _dateRange;
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(trainingViewModelProvider);
-    final searched = _filterPrograms(state.myTrainings, _query);
+    final searched = _filterPrograms(
+      state.myTrainings,
+      _query,
+      status: _selectedStatus,
+      dateRange: _dateRange,
+    );
     final items = searched;
 
     return Scaffold(
@@ -828,6 +974,12 @@ class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
           _SearchToolbar(
             hintText: 'Search...',
             onChanged: (value) => setState(() => _query = value),
+            filterCount: _trainingFilterCount(
+              status: _selectedStatus,
+              dateRange: _dateRange,
+            ),
+            onFilterPressed: _openStatusFilter,
+            onCalendarPressed: _openDateFilter,
           ),
           const SizedBox(height: 16),
           if (items.isEmpty)
@@ -846,6 +998,23 @@ class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
       ),
     );
   }
+
+  Future<void> _openStatusFilter() async {
+    final result = await showModalBottomSheet<_TrainingStatusFilterResult>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _TrainingStatusFilterSheet(selectedStatus: _selectedStatus),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _selectedStatus = result.status);
+  }
+
+  Future<void> _openDateFilter() async {
+    final range = await _pickTrainingDateRange(context, _dateRange);
+    if (!mounted || range == _dateRange) return;
+    setState(() => _dateRange = range);
+  }
 }
 
 class MyTrainingApplicationsScreen extends ConsumerStatefulWidget {
@@ -860,14 +1029,17 @@ class _MyTrainingApplicationsScreenState
     extends ConsumerState<MyTrainingApplicationsScreen> {
   String _query = '';
   TrainingParticipationStatus? _selectedStatus;
+  DateTimeRange? _dateRange;
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(trainingViewModelProvider);
-    final searched = _filterPrograms(state.myTrainingApplications, _query);
-    final items = _selectedStatus == null
-        ? searched
-        : searched.where((item) => item.status == _selectedStatus).toList();
+    final items = _filterPrograms(
+      state.myTrainingApplications,
+      _query,
+      status: _selectedStatus,
+      dateRange: _dateRange,
+    );
 
     return Scaffold(
       backgroundColor: _trainingSurface,
@@ -920,6 +1092,12 @@ class _MyTrainingApplicationsScreenState
           _SearchToolbar(
             hintText: 'Search...',
             onChanged: (value) => setState(() => _query = value),
+            filterCount: _trainingFilterCount(
+              status: _selectedStatus,
+              dateRange: _dateRange,
+            ),
+            onFilterPressed: _openStatusFilter,
+            onCalendarPressed: _openDateFilter,
           ),
           const SizedBox(height: 16),
           if (items.isEmpty)
@@ -938,6 +1116,23 @@ class _MyTrainingApplicationsScreenState
       ),
     );
   }
+
+  Future<void> _openStatusFilter() async {
+    final result = await showModalBottomSheet<_TrainingStatusFilterResult>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _TrainingStatusFilterSheet(selectedStatus: _selectedStatus),
+    );
+    if (!mounted || result == null) return;
+    setState(() => _selectedStatus = result.status);
+  }
+
+  Future<void> _openDateFilter() async {
+    final range = await _pickTrainingDateRange(context, _dateRange);
+    if (!mounted || range == _dateRange) return;
+    setState(() => _dateRange = range);
+  }
 }
 
 class TrainingResourcesScreen extends ConsumerStatefulWidget {
@@ -955,7 +1150,13 @@ class _TrainingResourcesScreenState
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(trainingViewModelProvider);
-    final items = _filterResources(state.resources, _query);
+    final sharedState = ref.watch(staffRequestsViewModelProvider);
+    final trainingResources = _mergeTrainingResources(
+      state.resources,
+      _resourcesFromHomeResources(sharedState.resources),
+    );
+    final items = _filterResources(trainingResources, _query);
+    final isLoading = state.isLoading || sharedState.isLoading;
 
     return Scaffold(
       backgroundColor: _trainingSurface,
@@ -966,9 +1167,12 @@ class _TrainingResourcesScreenState
           _SearchToolbar(
             hintText: 'Search...',
             onChanged: (value) => setState(() => _query = value),
+            showFilterActions: false,
           ),
           const SizedBox(height: 16),
-          if (items.isEmpty)
+          if (isLoading && trainingResources.isEmpty)
+            const _TrainingListShimmer()
+          else if (items.isEmpty)
             const _EmptyCard(message: 'No resources found')
           else
             ...items.map(
@@ -1013,9 +1217,10 @@ class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen> {
         ? program.targetCadres
         : const ['Staff Members'];
     final actionLabel = switch (program.status) {
-      TrainingParticipationStatus.notApplied => program.canApplyLive
-          ? 'Apply for Training'
-          : 'Application Not Available',
+      TrainingParticipationStatus.notApplied =>
+        program.canApplyLive
+            ? 'Apply for Training'
+            : 'Application Not Available',
       TrainingParticipationStatus.pending => 'Application Submitted',
       TrainingParticipationStatus.approved => 'Training Approved',
       TrainingParticipationStatus.rejected => 'Application Rejected',
@@ -1286,10 +1491,21 @@ class _TrainingAppBar extends StatelessWidget implements PreferredSizeWidget {
 }
 
 class _SearchToolbar extends StatelessWidget {
-  const _SearchToolbar({required this.hintText, required this.onChanged});
+  const _SearchToolbar({
+    required this.hintText,
+    required this.onChanged,
+    this.filterCount = 0,
+    this.onFilterPressed,
+    this.onCalendarPressed,
+    this.showFilterActions = true,
+  });
 
   final String hintText;
   final ValueChanged<String> onChanged;
+  final int filterCount;
+  final VoidCallback? onFilterPressed;
+  final VoidCallback? onCalendarPressed;
+  final bool showFilterActions;
 
   @override
   Widget build(BuildContext context) {
@@ -1324,19 +1540,35 @@ class _SearchToolbar extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        _ToolbarButton(icon: Icons.tune_rounded),
-        const SizedBox(width: 8),
-        _ToolbarButton(icon: Icons.calendar_month_outlined),
+        if (showFilterActions) ...[
+          const SizedBox(width: 8),
+          _ToolbarButton(
+            icon: Icons.tune_rounded,
+            onPressed: onFilterPressed,
+            isActive: filterCount > 0,
+          ),
+          const SizedBox(width: 8),
+          _ToolbarButton(
+            icon: Icons.calendar_month_outlined,
+            onPressed: onCalendarPressed,
+            isActive: filterCount > 0,
+          ),
+        ],
       ],
     );
   }
 }
 
 class _ToolbarButton extends StatelessWidget {
-  const _ToolbarButton({required this.icon});
+  const _ToolbarButton({
+    required this.icon,
+    required this.onPressed,
+    required this.isActive,
+  });
 
   final IconData icon;
+  final VoidCallback? onPressed;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
@@ -1346,14 +1578,200 @@ class _ToolbarButton extends StatelessWidget {
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
-          backgroundColor: const Color(0xFFF8FAFC),
-          side: const BorderSide(color: _trainingBorder),
+          backgroundColor: isActive
+              ? const Color(0xFFE9F2FF)
+              : const Color(0xFFF8FAFC),
+          side: BorderSide(color: isActive ? _trainingBlue : _trainingBorder),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        onPressed: () {},
-        child: Icon(icon, size: 19, color: _trainingMuted),
+        onPressed: onPressed,
+        child: Icon(
+          icon,
+          size: 19,
+          color: isActive ? _trainingBlue : _trainingMuted,
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingCarouselShimmer extends StatelessWidget {
+  const _TrainingCarouselShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 320,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: 2,
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
+        itemBuilder: (_, _) => const SizedBox(
+          width: 280,
+          child: _TrainingSkeletonCard(tall: true),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingListShimmer extends StatelessWidget {
+  const _TrainingListShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        4,
+        (index) => Padding(
+          padding: EdgeInsets.only(bottom: index == 3 ? 0 : 14),
+          child: const _TrainingSkeletonCard(),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingApprovalShimmer extends StatelessWidget {
+  const _TrainingApprovalShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        3,
+        (index) => Padding(
+          padding: EdgeInsets.only(bottom: index == 2 ? 0 : 12),
+          child: const _TrainingSkeletonCard(compact: true),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingSkeletonCard extends StatelessWidget {
+  const _TrainingSkeletonCard({this.tall = false, this.compact = false});
+
+  final bool tall;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return _TrainingShimmer(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: _trainingCard,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: _trainingBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (tall) ...[
+              const _TrainingSkeletonBox(height: 104, radius: 18),
+              const SizedBox(height: 12),
+            ],
+            const _TrainingSkeletonBox(width: 86, height: 22, radius: 999),
+            const SizedBox(height: 12),
+            const _TrainingSkeletonBox(height: 16, radius: 8),
+            const SizedBox(height: 8),
+            const _TrainingSkeletonBox(width: 190, height: 14, radius: 8),
+            if (!compact) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: const [
+                  Expanded(child: _TrainingSkeletonBox(height: 12, radius: 8)),
+                  SizedBox(width: 18),
+                  _TrainingSkeletonBox(width: 82, height: 32, radius: 12),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingShimmer extends StatefulWidget {
+  const _TrainingShimmer({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_TrainingShimmer> createState() => _TrainingShimmerState();
+}
+
+class _TrainingShimmerState extends State<_TrainingShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final position = -1.0 + (_controller.value * 2.0);
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment(position - 1, 0),
+              end: Alignment(position + 1, 0),
+              colors: const [
+                Color(0xFFE7ECF3),
+                Color(0xFFF7FAFE),
+                Color(0xFFE7ECF3),
+              ],
+              stops: const [0.25, 0.5, 0.75],
+            ).createShader(bounds);
+          },
+          child: child,
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _TrainingSkeletonBox extends StatelessWidget {
+  const _TrainingSkeletonBox({
+    this.width,
+    required this.height,
+    required this.radius,
+  });
+
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE7ECF3),
+        borderRadius: BorderRadius.circular(radius),
       ),
     );
   }
@@ -1994,6 +2412,128 @@ class _FilterChipButton extends StatelessWidget {
   }
 }
 
+class _TrainingStatusFilterResult {
+  const _TrainingStatusFilterResult(this.status);
+
+  final TrainingParticipationStatus? status;
+}
+
+class _TrainingStatusFilterSheet extends StatefulWidget {
+  const _TrainingStatusFilterSheet({required this.selectedStatus});
+
+  final TrainingParticipationStatus? selectedStatus;
+
+  @override
+  State<_TrainingStatusFilterSheet> createState() =>
+      _TrainingStatusFilterSheetState();
+}
+
+class _TrainingStatusFilterSheetState
+    extends State<_TrainingStatusFilterSheet> {
+  late TrainingParticipationStatus? _selectedStatus = widget.selectedStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD7DEE8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Filter Training',
+              style: _trainingTextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Status',
+              style: _trainingTextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _trainingMuted,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _FilterChipButton(
+                  label: 'All',
+                  isSelected: _selectedStatus == null,
+                  onTap: () => setState(() => _selectedStatus = null),
+                ),
+                ...TrainingParticipationStatus.values.map(
+                  (status) => _FilterChipButton(
+                    label: status.label,
+                    isSelected: _selectedStatus == status,
+                    onTap: () => setState(() => _selectedStatus = status),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pop(const _TrainingStatusFilterResult(null)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _trainingMuted,
+                      side: const BorderSide(color: _trainingBorder),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text('Clear'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _trainingBlue,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: () => Navigator.of(
+                      context,
+                    ).pop(_TrainingStatusFilterResult(_selectedStatus)),
+                    child: const Text('Apply'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _ApproverTabSelector extends StatelessWidget {
   const _ApproverTabSelector({
     required this.selectedTab,
@@ -2553,14 +3093,128 @@ Future<void> _openResource(
   }
 }
 
+List<TrainingProgram> _programsFromHomeAnnouncements(
+  List<HomeAnnouncement> announcements,
+) {
+  return announcements
+      .where((item) => _normalizedTrainingKey(item.type) == 'training')
+      .map(
+        (item) => TrainingProgram(
+          id: 'announcement-${item.id ?? item.trainingAnnouncementId ?? item.title}',
+          title: item.title,
+          trainingType: 'Training Announcement',
+          organizer: item.caption,
+          location: '',
+          description: item.subtitle,
+          targetCadres: const ['Staff Members'],
+          badge: 'Announcement',
+          status: TrainingParticipationStatus.notApplied,
+          availableSlots: 0,
+          participantCount: 0,
+          resources: const [],
+          startDate: item.startsAt,
+          endDate: item.endsAt,
+          isLive: item.isLive,
+          canApplyLive: false,
+        ),
+      )
+      .toList();
+}
+
+List<TrainingResource> _resourcesFromHomeResources(
+  List<HomeResource> resources,
+) {
+  final converted = <TrainingResource>[];
+  for (final resource in resources) {
+    if (resource.attachments.isEmpty) {
+      converted.add(
+        TrainingResource(
+          id: 'resource-${resource.uuid}',
+          title: resource.title,
+          sizeLabel: resource.status,
+          fileName: resource.subtitle,
+          filePath: '',
+          fileType: 'resource',
+          isLive: resource.isLive,
+        ),
+      );
+      continue;
+    }
+
+    for (final attachment in resource.attachments) {
+      converted.add(
+        TrainingResource(
+          id: 'resource-${resource.uuid}-${attachment.uuid}',
+          title: attachment.label.trim().isEmpty
+              ? resource.title
+              : attachment.label,
+          sizeLabel: resource.status,
+          fileName: attachment.originalFileName,
+          filePath: attachment.attachmentUrl,
+          fileType: _fileTypeFromName(attachment.originalFileName),
+          isLive: resource.isLive,
+        ),
+      );
+    }
+  }
+  return converted;
+}
+
+List<TrainingProgram> _mergeTrainingPrograms(
+  List<TrainingProgram> primary,
+  List<TrainingProgram> secondary,
+) {
+  final byKey = <String, TrainingProgram>{};
+  for (final item in [...secondary, ...primary]) {
+    byKey[_normalizedTrainingKey(item.title)] = item;
+  }
+  return byKey.values.toList()..sort(_sortTrainingProgramsByDate);
+}
+
+List<TrainingResource> _mergeTrainingResources(
+  List<TrainingResource> primary,
+  List<TrainingResource> secondary,
+) {
+  final byKey = <String, TrainingResource>{};
+  for (final item in [...secondary, ...primary]) {
+    final key = item.filePath.trim().isNotEmpty
+        ? item.filePath.trim().toLowerCase()
+        : '${item.title}-${item.fileName}'.toLowerCase();
+    byKey[key] = item;
+  }
+  return byKey.values.toList()
+    ..sort((first, second) => first.title.compareTo(second.title));
+}
+
+int _sortTrainingProgramsByDate(TrainingProgram first, TrainingProgram second) {
+  final firstDate = first.startDate ?? DateTime(1970);
+  final secondDate = second.startDate ?? DateTime(1970);
+  return secondDate.compareTo(firstDate);
+}
+
+String _normalizedTrainingKey(String value) {
+  return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
+}
+
+String _fileTypeFromName(String fileName) {
+  final extension = fileName.split('.').last.toLowerCase();
+  if (extension == fileName.toLowerCase()) return 'file';
+  return extension;
+}
+
 List<TrainingProgram> _filterPrograms(
   List<TrainingProgram> programs,
-  String query,
-) {
+  String query, {
+  TrainingParticipationStatus? status,
+  DateTimeRange? dateRange,
+}) {
   final normalizedQuery = query.trim().toLowerCase();
-  if (normalizedQuery.isEmpty) return programs;
-
   return programs.where((item) {
+    if (status != null && item.status != status) return false;
+    if (!_isTrainingInDateRange(item.startDate, item.endDate, dateRange)) {
+      return false;
+    }
+    if (normalizedQuery.isEmpty) return true;
     return [
       item.title,
       item.organizer,
@@ -2589,12 +3243,17 @@ List<TrainingResource> _filterResources(
 
 List<TrainingApprovalRecord> _filterApprovalRecords(
   List<TrainingApprovalRecord> records,
-  String query,
-) {
+  String query, {
+  TrainingParticipationStatus? status,
+  DateTimeRange? dateRange,
+}) {
   final normalizedQuery = query.trim().toLowerCase();
-  if (normalizedQuery.isEmpty) return records;
-
   return records.where((item) {
+    if (status != null && item.status != status) return false;
+    if (!_isTrainingInDateRange(item.startDate, item.endDate, dateRange)) {
+      return false;
+    }
+    if (normalizedQuery.isEmpty) return true;
     return [
       item.title,
       item.applicantName,
@@ -2604,6 +3263,49 @@ List<TrainingApprovalRecord> _filterApprovalRecords(
       item.rawStatus,
     ].any((value) => value.toLowerCase().contains(normalizedQuery));
   }).toList();
+}
+
+bool _isTrainingInDateRange(
+  DateTime? startDate,
+  DateTime? endDate,
+  DateTimeRange? range,
+) {
+  if (range == null) return true;
+  final start = startDate;
+  final end = endDate ?? startDate;
+  if (start == null && end == null) return false;
+
+  final rangeStart = DateUtils.dateOnly(range.start);
+  final rangeEnd = DateUtils.dateOnly(range.end);
+  final itemStart = DateUtils.dateOnly(start ?? end!);
+  final itemEnd = DateUtils.dateOnly(end ?? start!);
+
+  return !itemEnd.isBefore(rangeStart) && !itemStart.isAfter(rangeEnd);
+}
+
+int _trainingFilterCount({
+  required TrainingParticipationStatus? status,
+  required DateTimeRange? dateRange,
+}) {
+  var count = 0;
+  if (status != null) count++;
+  if (dateRange != null) count++;
+  return count;
+}
+
+Future<DateTimeRange?> _pickTrainingDateRange(
+  BuildContext context,
+  DateTimeRange? currentRange,
+) {
+  final now = DateTime.now();
+  return showDateRangePicker(
+    context: context,
+    initialDateRange: currentRange,
+    firstDate: DateTime(now.year - 5),
+    lastDate: DateTime(now.year + 5),
+    helpText: 'Filter by training date',
+    saveText: 'Apply',
+  );
 }
 
 String? _trainingApprovalActionLabel(StaffPortalAccess access) {

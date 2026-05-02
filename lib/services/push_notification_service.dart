@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../data/network/api_service.dart';
+import '../firebase_options.dart';
 import '../model/user_model.dart';
 import 'app_navigation_service.dart';
 import 'app_session_store.dart';
@@ -15,7 +16,7 @@ import 'device_metadata_service.dart';
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   try {
-    await Firebase.initializeApp();
+    await _ensureFirebaseInitialized();
   } catch (_) {}
 
   final normalized = PushNotificationService.normalizeData(message.data);
@@ -27,7 +28,6 @@ class PushNotificationService {
 
   static final PushNotificationService instance = PushNotificationService._();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
   final Dio _dio = createLoggedDio(
@@ -43,6 +43,11 @@ class PushNotificationService {
   bool _firebaseReady = false;
   String? _registeredBearerToken;
 
+  FirebaseMessaging? get _messaging {
+    if (!_firebaseReady) return null;
+    return FirebaseMessaging.instance;
+  }
+
   Future<void> initialize() async {
     if (_initialized) {
       await _consumePendingLaunchPayload();
@@ -52,7 +57,7 @@ class PushNotificationService {
     await _initializeLocalNotifications();
 
     try {
-      await Firebase.initializeApp();
+      await _ensureFirebaseInitialized();
       _firebaseReady = true;
     } catch (error) {
       log(
@@ -65,21 +70,28 @@ class PushNotificationService {
     }
 
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-    await _messaging.requestPermission();
-    await _messaging.setForegroundNotificationPresentationOptions(
+    final messaging = _messaging;
+    if (messaging == null) {
+      _initialized = true;
+      await _consumePendingLaunchPayload();
+      return;
+    }
+
+    await messaging.requestPermission();
+    await messaging.setForegroundNotificationPresentationOptions(
       alert: true,
       badge: true,
       sound: true,
     );
 
-    final token = await _messaging.getToken();
+    final token = await messaging.getToken();
     if (token != null && token.trim().isNotEmpty) {
       await AppSessionStore.saveFcmToken(token);
     }
 
     FirebaseMessaging.onMessage.listen(_handleForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen(_handleNotificationOpen);
-    _messaging.onTokenRefresh.listen((token) async {
+    messaging.onTokenRefresh.listen((token) async {
       if (token.trim().isEmpty) return;
       await AppSessionStore.saveFcmToken(token);
       final bearerToken = await AppSessionStore.getToken();
@@ -223,7 +235,10 @@ class PushNotificationService {
       return;
     }
 
-    final initialMessage = await _messaging.getInitialMessage();
+    final messaging = _messaging;
+    if (messaging == null) return;
+
+    final initialMessage = await messaging.getInitialMessage();
     if (initialMessage != null) {
       await _openNormalizedPayload(normalizeData(initialMessage.data));
       return;
@@ -292,4 +307,9 @@ class PushNotificationService {
     }
     return const <Map<String, dynamic>>[];
   }
+}
+
+Future<void> _ensureFirebaseInitialized() async {
+  if (Firebase.apps.isNotEmpty) return;
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 }

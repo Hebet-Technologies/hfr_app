@@ -143,12 +143,11 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
 
     if (!_hasRequestFilters) return ordered;
 
-    return ordered.where((type) {
-      if (_requestFilterType != null && type != _requestFilterType) {
-        return false;
-      }
-      return _filteredRecordsForType(state, type).isNotEmpty;
-    }).toList();
+    if (_requestFilterType != null) return [_requestFilterType!];
+
+    return ordered
+        .where((type) => _filteredRecordsForType(state, type).isNotEmpty)
+        .toList();
   }
 
   List<String> _activeFilterLabels(bool showApprovals) {
@@ -179,6 +178,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
       floatingActionButton: access.hasRequestApproverAccess && showApprovals
           ? null
           : FloatingActionButton(
+              heroTag: 'requests-create-fab',
               backgroundColor: _requestBlue,
               onPressed: () => showRequestComposerSheet(context),
               child: const Icon(Icons.add_rounded, color: Colors.white),
@@ -259,10 +259,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
               if (showApprovals)
                 ..._buildApproverContent(context, state)
               else if (state.isLoading && state.records.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 80),
-                  child: Center(child: CircularProgressIndicator()),
-                )
+                const _RequestOverviewShimmer()
               else ...[
                 if (visibleRequestTypes.isEmpty)
                   const _ApprovalEmptyState(
@@ -305,12 +302,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     if (state.isLoading &&
         state.leaveApprovalTasks.isEmpty &&
         state.transferApprovalTasks.isEmpty) {
-      return const [
-        Padding(
-          padding: EdgeInsets.only(top: 80),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ];
+      return const [_ApprovalInboxShimmer()];
     }
 
     return [
@@ -583,10 +575,8 @@ class _RequestFilterSheetState extends State<_RequestFilterSheet> {
                   onTap: () => setState(() {
                     if (widget.showApprovals) {
                       _approvalType = null;
-                      _approvalStatus = null;
                     } else {
                       _requestType = null;
-                      _requestStatus = null;
                     }
                   }),
                 ),
@@ -629,10 +619,8 @@ class _RequestFilterSheetState extends State<_RequestFilterSheet> {
                       : _requestStatus == null,
                   onTap: () => setState(() {
                     if (widget.showApprovals) {
-                      _approvalType = null;
                       _approvalStatus = null;
                     } else {
-                      _requestType = null;
                       _requestStatus = null;
                     }
                   }),
@@ -1749,6 +1737,7 @@ class _RequestCategoryListScreenState
       floatingActionButton: widget.type == StaffRequestType.sickLeave
           ? null
           : FloatingActionButton(
+              heroTag: 'request-list-${widget.type.name}-fab',
               backgroundColor: _requestBlue,
               mini: true,
               onPressed: () => openRequestFormScreen(context, widget.type),
@@ -2056,6 +2045,7 @@ class RequestSubmissionSuccessScreen extends StatelessWidget {
     );
   }
 }
+
 class _NewRequestSheet extends StatelessWidget {
   const _NewRequestSheet({required this.parentContext});
 
@@ -2116,6 +2106,165 @@ class _NewRequestSheet extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _RequestOverviewShimmer extends StatelessWidget {
+  const _RequestOverviewShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        4,
+        (index) => Padding(
+          padding: EdgeInsets.only(bottom: index == 3 ? 0 : 14),
+          child: const _RequestSkeletonCard(),
+        ),
+      ),
+    );
+  }
+}
+
+class _ApprovalInboxShimmer extends StatelessWidget {
+  const _ApprovalInboxShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        4,
+        (index) => Padding(
+          padding: EdgeInsets.only(bottom: index == 3 ? 0 : 12),
+          child: const _RequestSkeletonCard(compact: true),
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestSkeletonCard extends StatelessWidget {
+  const _RequestSkeletonCard({this.compact = false});
+
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RequestShimmer(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _requestCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _requestBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _SkeletonBox(width: 42, height: 42, radius: 12),
+                const SizedBox(width: 10),
+                Expanded(child: _SkeletonBox(height: 16, radius: 8)),
+                const SizedBox(width: 18),
+                _SkeletonBox(width: 28, height: 28, radius: 999),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _SkeletonBox(width: double.infinity, height: 12, radius: 8),
+            if (!compact) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: const [
+                  Expanded(child: _SkeletonBox(height: 54, radius: 14)),
+                  SizedBox(width: 8),
+                  Expanded(child: _SkeletonBox(height: 54, radius: 14)),
+                  SizedBox(width: 8),
+                  Expanded(child: _SkeletonBox(height: 54, radius: 14)),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RequestShimmer extends StatefulWidget {
+  const _RequestShimmer({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_RequestShimmer> createState() => _RequestShimmerState();
+}
+
+class _RequestShimmerState extends State<_RequestShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final position = -1.0 + (_controller.value * 2.0);
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment(position - 1, 0),
+              end: Alignment(position + 1, 0),
+              colors: const [
+                Color(0xFFE8EEF6),
+                Color(0xFFF7FAFE),
+                Color(0xFFE8EEF6),
+              ],
+              stops: const [0.25, 0.5, 0.75],
+            ).createShader(bounds);
+          },
+          child: child,
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _SkeletonBox extends StatelessWidget {
+  const _SkeletonBox({this.width, required this.height, required this.radius});
+
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8EEF6),
+        borderRadius: BorderRadius.circular(radius),
       ),
     );
   }
@@ -2621,289 +2770,6 @@ class _ComposerOptionTile extends StatelessWidget {
   }
 }
 
-class _ParticipantsSelector extends StatelessWidget {
-  const _ParticipantsSelector({required this.value, required this.onChanged});
-
-  final String value;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Participants',
-              style: _requestTextStyle(fontSize: 12, color: _requestMuted),
-            ),
-            const SizedBox(height: 8),
-            _ParticipantOption(
-              label: 'Individual Activity',
-              selected: value == 'Individual Activity',
-              onTap: () => onChanged('Individual Activity'),
-            ),
-            const SizedBox(height: 8),
-            _ParticipantOption(
-              label: 'Group Activity',
-              selected: value == 'Group Activity',
-              onTap: () => onChanged('Group Activity'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _UploadPlaceholder extends StatelessWidget {
-  const _UploadPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _requestBorder),
-      ),
-      child: Column(
-        children: [
-          const Icon(Icons.cloud_upload_outlined, color: _requestMuted),
-          const SizedBox(height: 10),
-          Text(
-            'Upload Documents',
-            style: _requestTextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '.JPEG, PNG, PDF and MP4 formats, up to 50 MB.',
-            textAlign: TextAlign.center,
-            style: _requestTextStyle(fontSize: 11, color: _requestMuted),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () {},
-            style: OutlinedButton.styleFrom(
-              foregroundColor: _requestMuted,
-              side: const BorderSide(color: _requestBorder),
-            ),
-            child: const Text('Browse File'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ParticipantOption extends StatelessWidget {
-  const _ParticipantOption({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Icon(
-              selected
-                  ? Icons.radio_button_checked_rounded
-                  : Icons.radio_button_off_rounded,
-              color: selected ? _requestBlue : _requestMuted,
-              size: 20,
-            ),
-            const SizedBox(width: 10),
-            Text(
-              label,
-              style: _requestTextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AppTextField extends StatelessWidget {
-  const _AppTextField({
-    required this.label,
-    required this.controller,
-    required this.hintText,
-    this.maxLines = 1,
-    this.keyboardType,
-    this.validator,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final String hintText;
-  final int maxLines;
-  final TextInputType? keyboardType;
-  final String? Function(String?)? validator;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: _requestTextStyle(fontSize: 12, color: _requestMuted),
-          ),
-          const SizedBox(height: 6),
-          TextFormField(
-            controller: controller,
-            keyboardType: keyboardType,
-            maxLines: maxLines,
-            validator:
-                validator ??
-                (value) {
-                  if ((value ?? '').trim().isEmpty) {
-                    return 'This field is required';
-                  }
-                  return null;
-                },
-            style: _requestTextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-            decoration: _inputDecoration(hintText),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AppDropdownField extends StatelessWidget {
-  const _AppDropdownField({
-    required this.label,
-    required this.value,
-    required this.hintText,
-    required this.items,
-    required this.onChanged,
-    this.validator,
-  });
-
-  final String label;
-  final String? value;
-  final String hintText;
-  final List<RequestLookupOption> items;
-  final ValueChanged<String?> onChanged;
-  final String? Function(String?)? validator;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: _requestTextStyle(fontSize: 12, color: _requestMuted),
-          ),
-          const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            value: value,
-            isExpanded: true,
-            decoration: _inputDecoration(hintText),
-            items: items
-                .map(
-                  (item) => DropdownMenuItem<String>(
-                    value: item.id,
-                    child: Text(
-                      item.label,
-                      style: _requestTextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-            onChanged: onChanged,
-            validator: validator,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SimpleDropdownField extends StatelessWidget {
-  const _SimpleDropdownField({
-    required this.label,
-    required this.value,
-    required this.hintText,
-    required this.items,
-    required this.onChanged,
-  });
-
-  final String label;
-  final String? value;
-  final String hintText;
-  final List<String> items;
-  final ValueChanged<String?> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: _requestTextStyle(fontSize: 12, color: _requestMuted),
-          ),
-          const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            value: value,
-            isExpanded: true,
-            decoration: _inputDecoration(hintText),
-            items: items
-                .map(
-                  (item) => DropdownMenuItem<String>(
-                    value: item,
-                    child: Text(
-                      item,
-                      style: _requestTextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-            onChanged: onChanged,
-            validator: (selected) =>
-                selected == null ? 'This field is required' : null,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _DateInputField extends StatelessWidget {
   const _DateInputField({
     required this.label,
@@ -2954,6 +2820,49 @@ class _DateInputField extends StatelessWidget {
   }
 }
 
+class _AppTextField extends StatelessWidget {
+  const _AppTextField({
+    required this.label,
+    required this.controller,
+    required this.hintText,
+    this.maxLines = 1,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final String hintText;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: _requestTextStyle(fontSize: 12, color: _requestMuted),
+          ),
+          const SizedBox(height: 6),
+          TextFormField(
+            controller: controller,
+            maxLines: maxLines,
+            validator: (value) {
+              if ((value ?? '').trim().isEmpty) {
+                return 'This field is required';
+              }
+              return null;
+            },
+            style: _requestTextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            decoration: _inputDecoration(hintText),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InlineBanner extends StatelessWidget {
   const _InlineBanner({required this.message, required this.onClose});
 
@@ -2988,27 +2897,6 @@ class _InlineBanner extends StatelessWidget {
             icon: const Icon(Icons.close_rounded, size: 18),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _InlineErrorText extends StatelessWidget {
-  const _InlineErrorText({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        message,
-        style: _requestTextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: const Color(0xFFD14343),
-        ),
       ),
     );
   }

@@ -19,8 +19,6 @@ class _SickSheetFormScreenState extends ConsumerState<SickSheetFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _contactController = TextEditingController();
   final _noteController = TextEditingController();
-  String? _leaveTypeId;
-  DateTime? _sickSheetDate;
   PlatformFile? _selectedFile;
 
   @override
@@ -33,13 +31,6 @@ class _SickSheetFormScreenState extends ConsumerState<SickSheetFormScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(staffRequestsViewModelProvider);
-    final sickLeaveTypes = state.leaveTypes.where((item) {
-      final label = item.label.toLowerCase();
-      return label.contains('sick') || label.contains('medical');
-    }).toList();
-    final leaveTypes = sickLeaveTypes.isEmpty
-        ? state.leaveTypes
-        : sickLeaveTypes;
 
     return Scaffold(
       backgroundColor: requestSurface,
@@ -145,25 +136,12 @@ class _SickSheetFormScreenState extends ConsumerState<SickSheetFormScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    /* if (_sickSheetDate == null) {
-      _showError('Choose the sick sheet date.');
-      return;
-    } */
     final file = _selectedFile;
     final filePath = file?.path;
     if (file == null || filePath == null || filePath.trim().isEmpty) {
       _showError('Upload the sick sheet document before submitting.');
       return;
     }
-
-    final state = ref.read(staffRequestsViewModelProvider);
-    /* final leaveType = state.leaveTypes.firstWhereOrNull(
-      (item) => item.id == _leaveTypeId,
-    );
-    if (leaveType == null) {
-      _showError('Sick leave type is unavailable. Refresh and try again.');
-      return;
-    } */
 
     try {
       final record = await ref

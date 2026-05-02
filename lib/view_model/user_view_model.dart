@@ -115,7 +115,7 @@ class UserViewModel with ChangeNotifier {
           notifyListeners();
 
           if (_msgStation == "error") {
-            getStations(context);
+            getStations();
           }
         })
         .onError((error, stackTrace) {
@@ -145,7 +145,7 @@ class UserViewModel with ChangeNotifier {
         });
   }
 
-  Future<dynamic> getStations(BuildContext context) async {
+  Future<dynamic> getStations() async {
     if (_stations.isNotEmpty) return;
 
     _msgStation = "";

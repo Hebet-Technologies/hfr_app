@@ -40,6 +40,120 @@ enum _CommunitySection {
 
 enum _ItemMenuAction { edit, delete }
 
+class _CommunityLoadingShimmer extends StatelessWidget {
+  const _CommunityLoadingShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return _CommunityShimmer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _CommunitySkeletonBox(width: 160, height: 24, radius: 8),
+          const SizedBox(height: 14),
+          const _CommunitySkeletonBox(height: 46, radius: 14),
+          const SizedBox(height: 16),
+          Row(
+            children: const [
+              Expanded(child: _CommunitySkeletonBox(height: 82, radius: 14)),
+              SizedBox(width: 10),
+              Expanded(child: _CommunitySkeletonBox(height: 82, radius: 14)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ...List.generate(
+            4,
+            (index) => Padding(
+              padding: EdgeInsets.only(bottom: index == 3 ? 0 : 12),
+              child: const _CommunitySkeletonBox(height: 88, radius: 16),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommunityShimmer extends StatefulWidget {
+  const _CommunityShimmer({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_CommunityShimmer> createState() => _CommunityShimmerState();
+}
+
+class _CommunityShimmerState extends State<_CommunityShimmer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final position = -1.0 + (_controller.value * 2.0);
+        return ShaderMask(
+          blendMode: BlendMode.srcATop,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment(position - 1, 0),
+              end: Alignment(position + 1, 0),
+              colors: const [
+                Color(0xFFE9EEF5),
+                Color(0xFFF8FBFF),
+                Color(0xFFE9EEF5),
+              ],
+              stops: const [0.25, 0.5, 0.75],
+            ).createShader(bounds);
+          },
+          child: child,
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+class _CommunitySkeletonBox extends StatelessWidget {
+  const _CommunitySkeletonBox({
+    this.width,
+    required this.height,
+    required this.radius,
+  });
+
+  final double? width;
+  final double height;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE9EEF5),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+    );
+  }
+}
+
 class CommunityScreen extends ConsumerStatefulWidget {
   const CommunityScreen({super.key});
 
@@ -115,8 +229,11 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         state.conversations.isEmpty) {
       return Scaffold(
         backgroundColor: _peerBackground,
-        body: Center(
-          child: CircularProgressIndicator(color: _peerPrimary, strokeWidth: 3),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            child: const _CommunityLoadingShimmer(),
+          ),
         ),
       );
     }
@@ -148,6 +265,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
       floatingActionButton:
           !isQuestionSection && _canPerformPrimaryAction(access)
           ? FloatingActionButton(
+              heroTag: 'community-${_section.name}-fab',
               onPressed: () => _handlePrimaryAction(state),
               backgroundColor: _peerPrimary,
               foregroundColor: Colors.white,
@@ -5586,7 +5704,8 @@ class _DropdownField<T> extends StatelessWidget {
         const SizedBox(height: 8),
         DropdownButtonFormField<T>(
           key: ValueKey('$label::$value'),
-          initialValue: value,
+          // ignore: deprecated_member_use
+          value: value,
           isExpanded: true,
           items: items,
           onChanged: onChanged,

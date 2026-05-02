@@ -19,7 +19,7 @@ class LoginView extends ConsumerWidget {
     double width = MediaQuery.of(context).size.width;
     return PopScope(
       canPop: false,
-      onPopInvoked: (bool shouldPop) {
+      onPopInvokedWithResult: (bool shouldPop, Object? result) {
         SystemNavigator.pop();
       },
       child: Scaffold(
@@ -35,7 +35,7 @@ class LoginView extends ConsumerWidget {
                     Image.asset('assets/images/logo.png', fit: BoxFit.contain),
                     Container(
                       height: width - 100,
-                      color: blue.withOpacity(0.9),
+                      color: blue.withValues(alpha: 0.9),
                     ),
                   ],
                 ),

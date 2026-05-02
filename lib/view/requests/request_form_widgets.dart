@@ -145,6 +145,10 @@ class AppDropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final selectedLabel = items
+        .firstWhereOrNull((item) => item.id == value)
+        ?.label;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -155,26 +159,29 @@ class AppDropdownField extends StatelessWidget {
             style: requestTextStyle(fontSize: 12, color: requestMuted),
           ),
           const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            value: value,
-            isExpanded: true,
-            decoration: inputDecoration(hintText),
-            items: items
-                .map(
-                  (item) => DropdownMenuItem<String>(
-                    value: item.id,
-                    child: Text(
-                      item.label,
-                      style: requestTextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-            onChanged: onChanged,
+          FormField<String>(
+            key: ValueKey(value),
+            initialValue: value,
             validator: validator,
+            builder: (field) => _PickerField(
+              fieldKey: ValueKey('request-picker-$label'),
+              text: selectedLabel,
+              hintText: hintText,
+              errorText: field.errorText,
+              onTap: () async {
+                final selected = await _showOptionPicker<RequestLookupOption>(
+                  context: context,
+                  title: label,
+                  items: items,
+                  itemLabel: (item) => item.label,
+                  selectedId: value,
+                  itemId: (item) => item.id,
+                );
+                if (selected == null) return;
+                field.didChange(selected.id);
+                onChanged(selected.id);
+              },
+            ),
           ),
         ],
       ),
@@ -210,29 +217,229 @@ class SimpleDropdownField extends StatelessWidget {
             style: requestTextStyle(fontSize: 12, color: requestMuted),
           ),
           const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            value: value,
-            isExpanded: true,
-            decoration: inputDecoration(hintText),
-            items: items
-                .map(
-                  (item) => DropdownMenuItem<String>(
-                    value: item,
-                    child: Text(
-                      item,
-                      style: requestTextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
-            onChanged: onChanged,
+          FormField<String>(
+            key: ValueKey(value),
+            initialValue: value,
             validator: (selected) =>
                 selected == null ? 'This field is required' : null,
+            builder: (field) => _PickerField(
+              fieldKey: ValueKey('request-picker-$label'),
+              text: value,
+              hintText: hintText,
+              errorText: field.errorText,
+              onTap: () async {
+                final selected = await _showOptionPicker<String>(
+                  context: context,
+                  title: label,
+                  items: items,
+                  itemLabel: (item) => item,
+                  selectedId: value,
+                  itemId: (item) => item,
+                );
+                if (selected == null) return;
+                field.didChange(selected);
+                onChanged(selected);
+              },
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PickerField extends StatelessWidget {
+  const _PickerField({
+    required this.text,
+    required this.hintText,
+    required this.errorText,
+    required this.onTap,
+    this.fieldKey,
+  });
+
+  final Key? fieldKey;
+  final String? text;
+  final String hintText;
+  final String? errorText;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasValue = text != null && text!.trim().isNotEmpty;
+
+    return GestureDetector(
+      key: fieldKey,
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: InputDecorator(
+        decoration: inputDecoration(hintText).copyWith(
+          errorText: errorText,
+          suffixIcon: Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: requestMuted,
+          ),
+        ),
+        child: Text(
+          hasValue ? text! : hintText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: requestTextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: hasValue ? requestText : const Color(0xFF9CA3AF),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<T?> _showOptionPicker<T>({
+  required BuildContext context,
+  required String title,
+  required List<T> items,
+  required String Function(T item) itemLabel,
+  required String Function(T item) itemId,
+  required String? selectedId,
+}) {
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _OptionPickerSheet<T>(
+      title: title,
+      items: items,
+      itemLabel: itemLabel,
+      itemId: itemId,
+      selectedId: selectedId,
+    ),
+  );
+}
+
+class _OptionPickerSheet<T> extends StatefulWidget {
+  const _OptionPickerSheet({
+    required this.title,
+    required this.items,
+    required this.itemLabel,
+    required this.itemId,
+    required this.selectedId,
+  });
+
+  final String title;
+  final List<T> items;
+  final String Function(T item) itemLabel;
+  final String Function(T item) itemId;
+  final String? selectedId;
+
+  @override
+  State<_OptionPickerSheet<T>> createState() => _OptionPickerSheetState<T>();
+}
+
+class _OptionPickerSheetState<T> extends State<_OptionPickerSheet<T>> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedQuery = _query.trim().toLowerCase();
+    final filtered = normalizedQuery.isEmpty
+        ? widget.items
+        : widget.items
+              .where(
+                (item) => widget
+                    .itemLabel(item)
+                    .toLowerCase()
+                    .contains(normalizedQuery),
+              )
+              .toList();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.72,
+      minChildSize: 0.42,
+      maxChildSize: 0.92,
+      builder: (context, scrollController) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 44,
+              height: 4,
+              decoration: BoxDecoration(
+                color: const Color(0xFFD7DEE8),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.title,
+                    style: requestTextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    onChanged: (value) => setState(() => _query = value),
+                    style: requestTextStyle(fontSize: 14),
+                    decoration: inputDecoration('Search ${widget.title}'),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No options found',
+                        style: requestTextStyle(
+                          fontSize: 13,
+                          color: requestMuted,
+                        ),
+                      ),
+                    )
+                  : ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
+                      itemBuilder: (context, index) {
+                        final item = filtered[index];
+                        final id = widget.itemId(item);
+                        final selected = id == widget.selectedId;
+                        return ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          title: Text(
+                            widget.itemLabel(item),
+                            style: requestTextStyle(
+                              fontSize: 14,
+                              fontWeight: selected
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
+                              color: selected ? requestBlue : requestText,
+                            ),
+                          ),
+                          trailing: selected
+                              ? const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: requestBlue,
+                                )
+                              : null,
+                          onTap: () => Navigator.of(context).pop(item),
+                        );
+                      },
+                      separatorBuilder: (_, _) => const SizedBox(height: 2),
+                      itemCount: filtered.length,
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -314,9 +521,7 @@ class FileUploadField extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: hasFile
-              ? requestBlue.withValues(alpha: 0.35)
-              : requestBorder,
+          color: hasFile ? requestBlue.withValues(alpha: 0.35) : requestBorder,
         ),
       ),
       child: Column(

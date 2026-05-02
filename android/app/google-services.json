@@ -1,0 +1,124 @@
+{
+  "project_info": {
+    "project_number": "765543409928",
+    "project_id": "gbv-znz-app",
+    "storage_bucket": "gbv-znz-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765543409928:android:11a3ac8225659c2dfda4bd",
+        "android_client_info": {
+          "package_name": "ccom.gbv.client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOVrEoXY4osqDPg4N8lrJNVPjqeddqPtA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765543409928:android:dcd4b8f45a7a970ffda4bd",
+        "android_client_info": {
+          "package_name": "com.example.gbv_provider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOVrEoXY4osqDPg4N8lrJNVPjqeddqPtA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765543409928:android:c3c270b6c0c5fccffda4bd",
+        "android_client_info": {
+          "package_name": "com.gbv.client"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOVrEoXY4osqDPg4N8lrJNVPjqeddqPtA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765543409928:android:da6b6c326676dbd5fda4bd",
+        "android_client_info": {
+          "package_name": "com.gbv.provider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOVrEoXY4osqDPg4N8lrJNVPjqeddqPtA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765543409928:android:73556b76c8a3ab0ffda4bd",
+        "android_client_info": {
+          "package_name": "com.hrhs.mhz"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOVrEoXY4osqDPg4N8lrJNVPjqeddqPtA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765543409928:android:8c56eb3b0ef09a4bfda4bd",
+        "android_client_info": {
+          "package_name": "com.zn.gbv_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBOVrEoXY4osqDPg4N8lrJNVPjqeddqPtA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

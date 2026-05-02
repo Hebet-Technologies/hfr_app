@@ -287,7 +287,7 @@ class HomeTab extends ConsumerWidget {
                 const _EmptyActivityCard(message: 'No announcements found')
               else
                 SizedBox(
-                  height: 142,
+                  height: 158,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: announcementItems.length,
@@ -1890,18 +1890,21 @@ class _AnnouncementCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const Spacer(),
+                  const SizedBox(height: 18),
                   Text(
                     item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: _homeTextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.w800,
+                      height: 1.18,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     item.subtitle,
-                    maxLines: 3,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: _homeTextStyle(
                       fontSize: 12,
@@ -1999,7 +2002,9 @@ class _ResourcesScreenState extends ConsumerState<ResourcesScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(staffRequestsViewModelProvider);
-    final source = state.resources.isNotEmpty ? state.resources : widget.resources;
+    final source = state.resources.isNotEmpty
+        ? state.resources
+        : widget.resources;
     final query = _query.trim().toLowerCase();
     final items = source.where((item) {
       if (query.isEmpty) return true;
@@ -2062,10 +2067,7 @@ class AnnouncementDetailsScreen extends ConsumerStatefulWidget {
 
 class _AnnouncementDetailsScreenState
     extends ConsumerState<AnnouncementDetailsScreen> {
-  final TextEditingController _commentController = TextEditingController();
-  List<PlatformFile> _selectedCommentFiles = const [];
   bool _isLoadingComments = false;
-  bool _isSubmittingComment = false;
   String? _commentsError;
   List<HomeAnnouncementComment> _comments = const [];
 
@@ -2077,12 +2079,6 @@ class _AnnouncementDetailsScreenState
     if (announcement.supportsComments) {
       Future<void>.microtask(_loadComments);
     }
-  }
-
-  @override
-  void dispose() {
-    _commentController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadComments() async {
@@ -2109,97 +2105,9 @@ class _AnnouncementDetailsScreenState
     }
   }
 
-  Future<void> _submitComment() async {
-    final message = _commentController.text.trim();
-    if ((message.isEmpty && _selectedCommentFiles.isEmpty) ||
-        _isSubmittingComment) {
-      return;
-    }
-
-    setState(() {
-      _isSubmittingComment = true;
-      _commentsError = null;
-    });
-
-    try {
-      final attachments = <MultipartFile>[];
-      for (final file in _selectedCommentFiles) {
-        final path = file.path?.trim() ?? '';
-        if (path.isEmpty) {
-          continue;
-        }
-        attachments.add(
-          await MultipartFile.fromFile(path, filename: file.name),
-        );
-      }
-      final comment = await ref
-          .read(staffRequestsRepositoryProvider)
-          .postAnnouncementComment(
-            announcement,
-            message: message,
-            attachments: attachments,
-          );
-      if (!mounted) return;
-      _commentController.clear();
-      setState(() {
-        _selectedCommentFiles = const [];
-        _comments = [comment, ..._comments];
-        _isSubmittingComment = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _isSubmittingComment = false;
-        _commentsError = error.toString().replaceFirst('Exception: ', '');
-      });
-    }
-  }
-
-  Future<void> _pickCommentFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      withData: false,
-    );
-    if (!mounted || result == null || result.files.isEmpty) {
-      return;
-    }
-
-    final nextFiles = <PlatformFile>[..._selectedCommentFiles];
-    for (final file in result.files) {
-      final alreadyAdded = nextFiles.any(
-        (existing) =>
-            existing.path == file.path && existing.name == file.name,
-      );
-      if (alreadyAdded) {
-        continue;
-      }
-      if (file.size > 4 * 1024 * 1024) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${file.name} is larger than 4MB.'),
-          ),
-        );
-        continue;
-      }
-      nextFiles.add(file);
-    }
-
-    setState(() {
-      _selectedCommentFiles = nextFiles;
-    });
-  }
-
-  void _removeCommentFile(PlatformFile file) {
-    setState(() {
-      _selectedCommentFiles = _selectedCommentFiles
-          .where(
-            (item) => !(item.path == file.path && item.name == file.name),
-          )
-          .toList();
-    });
-  }
-
-  Future<void> _openAttachment(HomeAnnouncementCommentAttachment attachment) async {
+  Future<void> _openAttachment(
+    HomeAnnouncementCommentAttachment attachment,
+  ) async {
     final url = attachment.attachmentUrl.trim();
     if (url.isEmpty) {
       return;
@@ -2211,6 +2119,21 @@ class _AnnouncementDetailsScreenState
     }
 
     await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _openCommentComposer() async {
+    final comment = await showModalBottomSheet<HomeAnnouncementComment>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _AnnouncementCommentComposerSheet(announcement: announcement),
+    );
+    if (!mounted || comment == null) return;
+    setState(() {
+      _commentsError = null;
+      _comments = [comment, ..._comments];
+    });
   }
 
   Future<void> _openAnnouncementLink() async {
@@ -2244,9 +2167,8 @@ class _AnnouncementDetailsScreenState
     final isApplicationReady =
         resolvedTraining != null && resolvedTraining.canApplyLive;
     final actionLabel = switch (resolvedTraining?.status) {
-      TrainingParticipationStatus.notApplied => isApplicationReady
-          ? 'Apply for Training'
-          : 'Application Setup Pending',
+      TrainingParticipationStatus.notApplied =>
+        isApplicationReady ? 'Apply for Training' : 'Application Setup Pending',
       TrainingParticipationStatus.pending => 'Application Submitted',
       TrainingParticipationStatus.approved => 'Training Approved',
       TrainingParticipationStatus.rejected => 'Application Rejected',
@@ -2381,93 +2303,7 @@ class _AnnouncementDetailsScreenState
               message: 'Comments are not available for this announcement.',
             )
           else ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _homeCard,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: _homeBorder),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextField(
-                    controller: _commentController,
-                    minLines: 3,
-                    maxLines: 5,
-                    decoration: _homeInputDecoration(
-                      'Write a comment',
-                    ).copyWith(
-                      contentPadding: const EdgeInsets.all(14),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: _isSubmittingComment
-                            ? null
-                            : _pickCommentFiles,
-                        icon: const Icon(Icons.attach_file_rounded, size: 18),
-                        label: Text(
-                          _selectedCommentFiles.isEmpty
-                              ? 'Add Attachment'
-                              : 'Add More',
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (_selectedCommentFiles.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: _selectedCommentFiles
-                          .map(
-                            (file) => _SelectedAnnouncementAttachmentChip(
-                              fileName: file.name,
-                              fileSize: file.size,
-                              onRemoved: _isSubmittingComment
-                                  ? null
-                                  : () => _removeCommentFile(file),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: FilledButton(
-                      onPressed: _isSubmittingComment ? null : _submitComment,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _homeBlue,
-                        disabledBackgroundColor: const Color(0xFFD9E6FF),
-                      ),
-                      child: _isSubmittingComment
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  Colors.white,
-                                ),
-                              ),
-                            )
-                          : Text(
-                              'Post Comment',
-                              style: _homeTextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _AnnouncementCommentPrompt(onTap: _openCommentComposer),
             if (_commentsError != null) ...[
               const SizedBox(height: 12),
               _AnnouncementInfoCard(message: _commentsError!),
@@ -2576,7 +2412,7 @@ class _AnnouncementCommentCard extends StatelessWidget {
 
   final HomeAnnouncementComment comment;
   final Future<void> Function(HomeAnnouncementCommentAttachment attachment)
-      onOpenAttachment;
+  onOpenAttachment;
 
   @override
   Widget build(BuildContext context) {
@@ -2594,7 +2430,9 @@ class _AnnouncementCommentCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  comment.authorName.isEmpty ? 'Unknown user' : comment.authorName,
+                  comment.authorName.isEmpty
+                      ? 'Unknown user'
+                      : comment.authorName,
                   style: _homeTextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
@@ -2657,6 +2495,295 @@ class _AnnouncementCommentCard extends StatelessWidget {
   }
 }
 
+class _AnnouncementCommentPrompt extends StatelessWidget {
+  const _AnnouncementCommentPrompt({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: _homeCard,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _homeBorder),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.mode_comment_outlined,
+                color: _homeBlue,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Add a comment',
+                    style: _homeTextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Share feedback or attach a supporting file.',
+                    style: _homeTextStyle(fontSize: 12, color: _homeMuted),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Icon(Icons.add_rounded, color: _homeBlue),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementCommentComposerSheet extends ConsumerStatefulWidget {
+  const _AnnouncementCommentComposerSheet({required this.announcement});
+
+  final HomeAnnouncement announcement;
+
+  @override
+  ConsumerState<_AnnouncementCommentComposerSheet> createState() =>
+      _AnnouncementCommentComposerSheetState();
+}
+
+class _AnnouncementCommentComposerSheetState
+    extends ConsumerState<_AnnouncementCommentComposerSheet> {
+  final _commentController = TextEditingController();
+  List<PlatformFile> _selectedFiles = const [];
+  bool _isSubmitting = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      withData: false,
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+
+    final nextFiles = <PlatformFile>[..._selectedFiles];
+    for (final file in result.files) {
+      final alreadyAdded = nextFiles.any(
+        (existing) => existing.path == file.path && existing.name == file.name,
+      );
+      if (alreadyAdded) continue;
+      if (file.size > 4 * 1024 * 1024) {
+        setState(() => _errorMessage = '${file.name} is larger than 4MB.');
+        continue;
+      }
+      nextFiles.add(file);
+    }
+
+    setState(() {
+      _errorMessage = null;
+      _selectedFiles = nextFiles;
+    });
+  }
+
+  void _removeFile(PlatformFile file) {
+    setState(() {
+      _selectedFiles = _selectedFiles
+          .where((item) => !(item.path == file.path && item.name == file.name))
+          .toList();
+    });
+  }
+
+  Future<void> _submit() async {
+    final message = _commentController.text.trim();
+    if (message.isEmpty && _selectedFiles.isEmpty) {
+      setState(() => _errorMessage = 'Write a comment or attach a file.');
+      return;
+    }
+    if (_isSubmitting) return;
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final attachments = <MultipartFile>[];
+      for (final file in _selectedFiles) {
+        final path = file.path?.trim() ?? '';
+        if (path.isEmpty) continue;
+        attachments.add(
+          await MultipartFile.fromFile(path, filename: file.name),
+        );
+      }
+      final comment = await ref
+          .read(staffRequestsRepositoryProvider)
+          .postAnnouncementComment(
+            widget.announcement,
+            message: message,
+            attachments: attachments,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop(comment);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 20),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 46,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD1D5DB),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Comment on Announcement',
+                  style: _homeTextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  widget.announcement.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _homeTextStyle(fontSize: 12, color: _homeMuted),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _commentController,
+                  minLines: 4,
+                  maxLines: 7,
+                  autofocus: true,
+                  decoration: _homeInputDecoration(
+                    'Write your comment',
+                  ).copyWith(contentPadding: const EdgeInsets.all(14)),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _isSubmitting ? null : _pickFiles,
+                  icon: const Icon(Icons.attach_file_rounded, size: 18),
+                  label: Text(
+                    _selectedFiles.isEmpty ? 'Add Attachment' : 'Add More',
+                  ),
+                ),
+                if (_selectedFiles.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _selectedFiles
+                        .map(
+                          (file) => _SelectedAnnouncementAttachmentChip(
+                            fileName: file.name,
+                            fileSize: file.size,
+                            onRemoved: _isSubmitting
+                                ? null
+                                : () => _removeFile(file),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 12),
+                  _AnnouncementInfoCard(message: _errorMessage!),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => Navigator.of(context).pop(),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _isSubmitting ? null : _submit,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _homeBlue,
+                          minimumSize: const Size.fromHeight(48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.white,
+                                  ),
+                                ),
+                              )
+                            : const Text('Post Comment'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _SelectedAnnouncementAttachmentChip extends StatelessWidget {
   const _SelectedAnnouncementAttachmentChip({
     required this.fileName,
@@ -2684,7 +2811,11 @@ class _SelectedAnnouncementAttachmentChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.insert_drive_file_outlined, size: 16, color: _homeBlue),
+          const Icon(
+            Icons.insert_drive_file_outlined,
+            size: 16,
+            color: _homeBlue,
+          ),
           const SizedBox(width: 8),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 170),
@@ -2705,10 +2836,7 @@ class _SelectedAnnouncementAttachmentChip extends StatelessWidget {
                 if (sizeLabel.isNotEmpty)
                   Text(
                     sizeLabel,
-                    style: _homeTextStyle(
-                      fontSize: 10,
-                      color: _homeMuted,
-                    ),
+                    style: _homeTextStyle(fontSize: 10, color: _homeMuted),
                   ),
               ],
             ),
@@ -2824,7 +2952,9 @@ class _ResourceDetailsScreenState extends ConsumerState<ResourceDetailsScreen> {
     }
   }
 
-  Future<void> _openResourceAttachment(HomeResourceAttachment attachment) async {
+  Future<void> _openResourceAttachment(
+    HomeResourceAttachment attachment,
+  ) async {
     final url = attachment.attachmentUrl.trim();
     if (url.isEmpty) {
       return;
@@ -3035,10 +3165,7 @@ class _ResourceListTile extends StatelessWidget {
                 color: const Color(0xFFEAF2FF),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(
-                Icons.folder_outlined,
-                color: _homeBlue,
-              ),
+              child: const Icon(Icons.folder_outlined, color: _homeBlue),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -3114,10 +3241,7 @@ class _ResourceAttachmentTile extends StatelessWidget {
                 color: const Color(0xFFEAF2FF),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: const Icon(
-                Icons.attach_file_rounded,
-                color: _homeBlue,
-              ),
+              child: const Icon(Icons.attach_file_rounded, color: _homeBlue),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -3141,10 +3265,7 @@ class _ResourceAttachmentTile extends StatelessWidget {
                     ].where((item) => item.trim().isNotEmpty).join(' • '),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: _homeTextStyle(
-                      fontSize: 11,
-                      color: _homeMuted,
-                    ),
+                    style: _homeTextStyle(fontSize: 11, color: _homeMuted),
                   ),
                 ],
               ),

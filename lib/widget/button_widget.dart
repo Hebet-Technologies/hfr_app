@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 
 class ButtonWidget extends StatelessWidget {
-   ButtonWidget(
-      {
-        Key? key,
-        required this.title,
-        required this.color,
-        required this.textColor,
-        required this.onPressed,
-        this.isLoading = false
-      }
-      ):super(key: key);
+  const ButtonWidget({
+    super.key,
+    required this.title,
+    required this.color,
+    required this.textColor,
+    required this.onPressed,
+    this.isLoading = false,
+  });
   
   final String? title;
   final Color? color;
@@ -31,11 +29,12 @@ class ButtonWidget extends StatelessWidget {
           borderRadius: BorderRadius.circular(15.0), // Add border radius here
         ),
         child: Center(
-          child: isLoading? CircularProgressIndicator(color:textColor,)
-              :Text(
-                title.toString(),
-                style: TextStyle(fontSize: 20, color: textColor),
-              ),
+          child: isLoading
+              ? CircularProgressIndicator(color: textColor)
+              : Text(
+                  title.toString(),
+                  style: TextStyle(fontSize: 20, color: textColor),
+                ),
         ),
       ),
     );

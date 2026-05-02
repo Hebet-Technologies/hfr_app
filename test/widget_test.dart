@@ -40,10 +40,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final dropdowns = find.byType(DropdownButtonFormField<String>);
-      expect(dropdowns, findsNWidgets(2));
+      expect(find.text('Repayment Period'), findsOneWidget);
+      expect(find.text('Select'), findsWidgets);
 
-      await tester.tap(dropdowns.at(1));
+      await tester.tap(
+        find.byKey(const ValueKey('request-picker-Repayment Period')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('12 Months').last);
       await tester.pumpAndSettle();
@@ -70,9 +72,7 @@ void main() {
         roles: const [],
         permissions: const ['approve training'],
       );
-      final approverAccess = StaffPortalAccess.fromUser(
-        approverUser,
-      );
+      final approverAccess = StaffPortalAccess.fromUser(approverUser);
 
       await tester.pumpWidget(
         ProviderScope(

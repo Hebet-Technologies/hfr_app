@@ -606,7 +606,9 @@ class StaffRequestsRepository {
     });
   }
 
-  Future<HomeAnnouncement?> fetchAnnouncementDetail(String announcementUuid) async {
+  Future<HomeAnnouncement?> fetchAnnouncementDetail(
+    String announcementUuid,
+  ) async {
     final normalizedUuid = announcementUuid.trim();
     if (normalizedUuid.isEmpty) {
       return null;
@@ -680,9 +682,10 @@ class StaffRequestsRepository {
     final response = await _get(path);
     final payload = response.data;
     if (payload is Map<String, dynamic>) {
-      return _extractListByKey(payload, 'comments')
-          .map(_announcementCommentFromApi)
-          .toList();
+      return _extractListByKey(
+        payload,
+        'comments',
+      ).map(_announcementCommentFromApi).toList();
     }
 
     return const [];
@@ -702,10 +705,7 @@ class StaffRequestsRepository {
         ? await _postJson(path, data: {'message': message})
         : await _postForm(
             path,
-            data: {
-              'message': message,
-              'attachments': attachments,
-            },
+            data: {'message': message, 'attachments': attachments},
           );
     final payload = response.data;
     if (payload is Map<String, dynamic>) {
@@ -1336,9 +1336,8 @@ class StaffRequestsRepository {
   }
 
   HomeAnnouncement _announcementFromApi(Map<String, dynamic> item) {
-    final description = _stringValue(
-      item['text'],
-      fallback: _stringValue(item['discription']),
+    final description = _stripHtml(
+      _stringValue(item['text'], fallback: _stringValue(item['discription'])),
     );
     final title = _stringValue(
       item['title'],
@@ -1441,9 +1440,7 @@ class StaffRequestsRepository {
           .map(
             (attachment) => HomeAnnouncementCommentAttachment(
               uuid: _stringValue(attachment['uuid']),
-              originalFileName: _stringValue(
-                attachment['original_file_name'],
-              ),
+              originalFileName: _stringValue(attachment['original_file_name']),
               attachmentUrl: _stringValue(attachment['attachment_url']),
               mimeType: _stringValue(attachment['mime_type']),
               fileSize: _intValue(attachment['file_size']),
@@ -1454,13 +1451,30 @@ class StaffRequestsRepository {
   }
 
   String _announcementTitleFromDescription(String description) {
-    final text = description.trim();
+    final text = _stripHtml(description).trim();
     if (text.isEmpty) {
       return '';
     }
 
     final firstSentence = text.split('.').first.trim();
     return firstSentence.isNotEmpty ? firstSentence : text;
+  }
+
+  String _stripHtml(String value) {
+    if (value.trim().isEmpty) return '';
+    return value
+        .replaceAll(RegExp(r'<\s*br\s*/?\s*>', caseSensitive: false), '\n')
+        .replaceAll(RegExp(r'</\s*p\s*>', caseSensitive: false), '\n\n')
+        .replaceAll(RegExp(r'<[^>]+>'), '')
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&#39;', "'")
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
   }
 
   List<RequestLookupOption> buildMockLeaveTypes() {

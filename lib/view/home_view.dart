@@ -22,7 +22,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       final userViewModel = ref.read(userViewModelProvider);
       userViewModel.getDashboard(context);
-      userViewModel.getStations(context);
+      userViewModel.getStations();
     });
   }
 
@@ -161,7 +161,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                           if (dash.selectedStationId == null)
                             DashboardCard(
                               count: dash.dashboard.isNotEmpty
-                                  ? dash.dashboard.first.allMedical!
+                                  ? dash.dashboard.first.allMedical
                                   : 0,
                               title: 'Medical',
                               onPressed: () {},
@@ -169,7 +169,7 @@ class _HomeViewState extends ConsumerState<HomeView> {
                           if (dash.selectedStationId == null)
                             DashboardCard(
                               count: dash.dashboard.isNotEmpty
-                                  ? dash.dashboard.first.allNonMedical!
+                                  ? dash.dashboard.first.allNonMedical
                                   : 0,
                               title: 'Non Medical',
                               onPressed: () {},
