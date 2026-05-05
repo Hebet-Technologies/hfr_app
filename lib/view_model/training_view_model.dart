@@ -216,6 +216,21 @@ class TrainingViewModel extends Notifier<TrainingState> {
       'error=${errorMessage ?? 'none'}',
       name: 'TRAINING',
     );
+
+    if (latestTrainings.isNotEmpty) {
+      final sample = latestTrainings
+          .take(5)
+          .map((item) {
+            return '${item.title} | vendor=${item.developmentPlanVendorId ?? '-'} '
+                '| level=${item.educationLevelId ?? '-'} '
+                '| start=${item.startDate?.toIso8601String() ?? '-'} '
+                '| end=${item.endDate?.toIso8601String() ?? '-'} '
+                '| canApply=${item.canApplyLive} '
+                '| status=${item.status.name}';
+          })
+          .join('\n');
+      log('TRAINING LATEST SAMPLE:\n$sample', name: 'TRAINING');
+    }
   }
 
   Future<void> refresh() => load();

@@ -3,13 +3,9 @@ import 'package:dio/dio.dart';
 import '../data/network/api_service.dart';
 import '../model/training_models.dart';
 import '../model/user_model.dart';
-import '../services/app_session_store.dart';
-import 'auth_repository.dart';
 
 class TrainingRepository {
-  TrainingRepository(this._authRepository);
-
-  final AuthRepository _authRepository;
+  TrainingRepository();
   final Dio _dio = createLoggedDio(
     BaseOptions(
       baseUrl: ApiService.baseUrl,
@@ -47,7 +43,8 @@ class TrainingRepository {
       final availableSlots = _intValue(item['quantity']);
       final educationLevelName = _stringValue(item['education_level_name']);
       final caderName = _stringValue(item['cader_name']);
-      final trainingType = _boolValue(item['is_short_course'])
+      final isShortCourse = _boolValue(item['is_short_course']);
+      final trainingType = isShortCourse
           ? 'Short Course'
           : _stringValue(item['training_name']);
       final title = matchedTraining?.title.isNotEmpty == true
@@ -86,7 +83,10 @@ class TrainingRepository {
           trainingApplicationId: matchedTraining?.trainingApplicationId,
           developmentPlanVendorId: developmentPlanVendorId,
           instituteId: matchedTraining?.instituteId,
-          educationLevelId: matchedTraining?.educationLevelId,
+          educationLevelId:
+              matchedTraining?.educationLevelId?.isNotEmpty == true
+              ? matchedTraining!.educationLevelId
+              : _stringValue(item['education_level_id']),
           educationLevelName: educationLevelName.isNotEmpty
               ? educationLevelName
               : null,
@@ -94,7 +94,12 @@ class TrainingRepository {
           batchYear: _stringValue(item['batch_year']),
           workingExperienceLabel: _stringValue(item['working_expirience']),
           isLive: true,
-          canApplyLive: false,
+          canApplyLive:
+              matchedTraining == null &&
+              !isShortCourse &&
+              developmentPlanVendorId.isNotEmpty &&
+              _dateValue(item['start_date']) != null &&
+              _dateValue(item['end_date']) != null,
         ),
       );
     }
@@ -379,6 +384,42 @@ class TrainingRepository {
 
     resources.sort((first, second) => first.title.compareTo(second.title));
     return resources;
+  }
+
+  Future<List<TrainingCountry>> fetchTrainingCountries() async {
+    final response = await _get('/getCountries');
+    final items = _extractList(response.data);
+    return items
+        .map(
+          (item) => TrainingCountry(
+            code: _stringValue(item['country_code']),
+            name: _stringValue(item['country_name']),
+          ),
+        )
+        .where((item) => item.code.isNotEmpty && item.name.isNotEmpty)
+        .toList()
+      ..sort((first, second) => first.name.compareTo(second.name));
+  }
+
+  Future<List<TrainingInstitute>> fetchInstitutes({
+    required String countryCode,
+    required String educationLevelId,
+  }) async {
+    final response = await _get(
+      '/getInstitutes/$countryCode/$educationLevelId',
+    );
+    final items = _extractList(response.data);
+    return items
+        .map(
+          (item) => TrainingInstitute(
+            id: _stringValue(item['institute_id']),
+            name: _stringValue(item['institute_name']),
+            countryName: _stringValue(item['country_name']),
+          ),
+        )
+        .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
+        .toList()
+      ..sort((first, second) => first.name.compareTo(second.name));
   }
 
   Future<TrainingProgram> fetchTrainingDetails(TrainingProgram training) async {
@@ -723,16 +764,7 @@ class TrainingRepository {
   Future<Options> _authorizedOptions({
     Map<String, String>? extraHeaders,
   }) async {
-    final token = await _authRepository.getToken();
-    if (token == null || token.trim().isEmpty) {
-      throw Exception('Authentication token not found. Please sign in again.');
-    }
-
-    return Options(
-      headers: await AppSessionStore.authorizedHeaders(
-        extraHeaders: extraHeaders,
-      ),
-    );
+    return requireAuth(headers: extraHeaders);
   }
 
   List<Map<String, dynamic>> _extractList(dynamic responseData) {

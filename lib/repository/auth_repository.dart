@@ -15,27 +15,6 @@ import '../utils/api_call.dart';
 
 class AuthRepository {
   static const _activePortalModeKey = 'active_portal_mode';
-  static const _authStorageKeys = <String>[
-    'token',
-    'user_id',
-    'email',
-    'full_name',
-    'login_status',
-    'working_station_id',
-    'working_station_name',
-    'working_station_type',
-    'personal_information_id',
-    'employment_information_id',
-    'payroll',
-    'roles',
-    'role_ids',
-    'permissions',
-    'permission_ids',
-    'is_logged_in',
-    _activePortalModeKey,
-    AppSessionStore.deviceUuidKey,
-    AppSessionStore.sessionUuidKey,
-  ];
 
   final ApiService _apiService;
   final Dio _authorizedDio = createLoggedDio(
@@ -314,7 +293,7 @@ class AuthRepository {
   }
 
   Future<void> _clearAuthStorage(SharedPreferences prefs) async {
-    for (final key in _authStorageKeys) {
+    for (final key in AppSessionStore.authStorageKeys) {
       await prefs.remove(key);
     }
   }
@@ -332,15 +311,7 @@ class AuthRepository {
   Future<Options> _authorizedOptions({
     Map<String, String>? extraHeaders,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token == null || token.trim().isEmpty) {
-      throw Exception('Authentication token not found. Please sign in again.');
-    }
-
-    return Options(headers: await AppSessionStore.authorizedHeaders(
-      extraHeaders: extraHeaders,
-    ));
+    return requireAuth(headers: extraHeaders);
   }
 
   Map<String, dynamic> _asMap(dynamic value) {

@@ -52,6 +52,17 @@ void openResourcesScreen(
   );
 }
 
+void openCommunityScreen(
+  BuildContext context, {
+  CommunityInitialSection initialSection = CommunityInitialSection.overview,
+}) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => CommunityScreen(initialSection: initialSection),
+    ),
+  );
+}
+
 class HomeTab extends ConsumerWidget {
   const HomeTab({super.key});
 
@@ -60,6 +71,10 @@ class HomeTab extends ConsumerWidget {
     final authState = ref.watch(authViewModelProvider);
     final requestsState = ref.watch(staffRequestsViewModelProvider);
     final communityState = ref.watch(peerExchangeViewModelProvider);
+    final hasCommunityOverviewData =
+        communityState.groups.isNotEmpty ||
+        communityState.topics.isNotEmpty ||
+        communityState.questions.isNotEmpty;
     final access = ref.watch(staffPortalAccessProvider);
     final user = authState.user;
     final displayName = (user?.fullName.trim().isNotEmpty ?? false)
@@ -322,51 +337,58 @@ class HomeTab extends ConsumerWidget {
                         child: _ResourceListTile(resource: resource),
                       ),
                     ),
-              const SizedBox(height: 22),
-              _SectionHeader(
-                title: 'Community Overview',
-                actionLabel: 'See All',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const CommunityScreen(),
+              if (communityState.isLoading || hasCommunityOverviewData) ...[
+                const SizedBox(height: 22),
+                _SectionHeader(
+                  title: 'Community Overview',
+                  actionLabel: 'See All',
+                  onTap: () => openCommunityScreen(context),
+                ),
+                const SizedBox(height: 12),
+                if (communityState.isLoading && !hasCommunityOverviewData)
+                  const _CommunitySummaryShimmer()
+                else ...[
+                  if (communityState.groups.isNotEmpty) ...[
+                    _CommunitySummaryCard(
+                      title: 'My Groups',
+                      subtitle: communityState.groups.first.title,
+                      meta: '${communityState.groups.first.usersCount} members',
+                      icon: Icons.groups_rounded,
+                      onTap: () => openCommunityScreen(
+                        context,
+                        initialSection: CommunityInitialSection.groups,
+                      ),
                     ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              _CommunitySummaryCard(
-                title: 'My Groups',
-                subtitle: communityState.groups.isNotEmpty
-                    ? communityState.groups.first.title
-                    : 'Infection Prevention Team',
-                meta: communityState.groups.isNotEmpty
-                    ? '${communityState.groups.first.usersCount} members'
-                    : '18 Members',
-                icon: Icons.groups_rounded,
-              ),
-              const SizedBox(height: 12),
-              _CommunitySummaryCard(
-                title: 'My Topics',
-                subtitle: communityState.topics.isNotEmpty
-                    ? communityState.topics.first.name
-                    : 'Malaria Control Strategy',
-                meta: communityState.topics.isNotEmpty
-                    ? '${communityState.topics.first.commentsCount} posts'
-                    : '14 posts',
-                icon: Icons.topic_outlined,
-              ),
-              const SizedBox(height: 12),
-              _CommunitySummaryCard(
-                title: 'My Questions',
-                subtitle: communityState.questions.isNotEmpty
-                    ? communityState.questions.first.content
-                    : 'How Can I Register A Group Activity?',
-                meta: communityState.questions.isNotEmpty
-                    ? '${communityState.questions.first.commentsCount} replies'
-                    : '5 replies',
-                icon: Icons.help_outline_rounded,
-              ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (communityState.topics.isNotEmpty) ...[
+                    _CommunitySummaryCard(
+                      title: 'My Topics',
+                      subtitle: communityState.topics.first.name,
+                      meta:
+                          '${communityState.topics.first.commentsCount} posts',
+                      icon: Icons.topic_outlined,
+                      onTap: () => openCommunityScreen(
+                        context,
+                        initialSection: CommunityInitialSection.topics,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (communityState.questions.isNotEmpty)
+                    _CommunitySummaryCard(
+                      title: 'My Questions',
+                      subtitle: communityState.questions.first.content,
+                      meta:
+                          '${communityState.questions.first.commentsCount} replies',
+                      icon: Icons.help_outline_rounded,
+                      onTap: () => openCommunityScreen(
+                        context,
+                        initialSection: CommunityInitialSection.questions,
+                      ),
+                    ),
+                ],
+              ],
               const SizedBox(height: 22),
               _SectionHeader(
                 title: 'Upcoming Training',
@@ -918,6 +940,36 @@ class _ResourceListShimmer extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.all(Radius.circular(18)),
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Color(0xFFE8EEF6)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CommunitySummaryShimmer extends StatelessWidget {
+  const _CommunitySummaryShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: List.generate(
+        3,
+        (index) => const Padding(
+          padding: EdgeInsets.only(bottom: 12),
+          child: SizedBox(
+            height: 76,
+            child: _HomeShimmer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(Radius.circular(20)),
                   border: Border.fromBorderSide(
                     BorderSide(color: Color(0xFFE8EEF6)),
                   ),
@@ -2167,13 +2219,12 @@ class _AnnouncementDetailsScreenState
     final isApplicationReady =
         resolvedTraining != null && resolvedTraining.canApplyLive;
     final actionLabel = switch (resolvedTraining?.status) {
-      TrainingParticipationStatus.notApplied =>
-        isApplicationReady ? 'Apply for Training' : 'Application Setup Pending',
+      TrainingParticipationStatus.notApplied => 'Apply for Training',
       TrainingParticipationStatus.pending => 'Application Submitted',
       TrainingParticipationStatus.approved => 'Training Approved',
       TrainingParticipationStatus.rejected => 'Application Rejected',
       TrainingParticipationStatus.completed => 'Training Completed',
-      null => 'Application Setup Pending',
+      null => 'Apply for Training',
     };
     final canApply =
         resolvedTraining != null &&
@@ -2957,15 +3008,31 @@ class _ResourceDetailsScreenState extends ConsumerState<ResourceDetailsScreen> {
   ) async {
     final url = attachment.attachmentUrl.trim();
     if (url.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This resource does not have a link.')),
+      );
       return;
     }
 
     final uri = Uri.tryParse(url);
-    if (uri == null) {
+    if (uri == null || !uri.hasScheme) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This resource link is not valid.')),
+      );
       return;
     }
 
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
+    var opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!opened) {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+    if (!opened && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open this document.')),
+      );
+    }
   }
 
   @override
@@ -3344,65 +3411,151 @@ class _CommunitySummaryCard extends StatelessWidget {
     required this.subtitle,
     required this.meta,
     required this.icon,
+    required this.onTap,
   });
 
   final String title;
   final String subtitle;
   final String meta;
   final IconData icon;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _homeCard,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _homeBorder),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _homeCard,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _homeBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF2FF),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: _homeBlue, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: _homeTextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: _homeMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _homeTextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      meta,
+                      style: _homeTextStyle(fontSize: 11, color: _homeMuted),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: _homeMuted,
+                size: 20,
+              ),
+            ],
+          ),
+        ),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF2FF),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: _homeBlue, size: 20),
+    );
+  }
+}
+
+void _openStaffRequestRecord(BuildContext context, StaffRequestRecord record) {
+  Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => RequestDetailScreen(request: record),
+    ),
+  );
+}
+
+class _RecentActivityTile extends StatelessWidget {
+  const _RecentActivityTile({required this.record});
+
+  final StaffRequestRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openStaffRequestRecord(context, record),
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _homeCard,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _homeBorder),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: _homeTextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: _homeMuted,
-                  ),
+          child: Row(
+            children: [
+              Icon(_iconFor(record.type), color: _homeBlue, size: 18),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      record.title,
+                      style: _homeTextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      record.summary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: _homeTextStyle(fontSize: 11, color: _homeMuted),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _homeTextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  meta,
-                  style: _homeTextStyle(fontSize: 11, color: _homeMuted),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                _relativeLabel(record.submittedAt),
+                style: _homeTextStyle(fontSize: 11, color: _homeMuted),
+              ),
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: _homeMuted,
+                size: 18,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -3511,56 +3664,6 @@ class _TrainingCard extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _RecentActivityTile extends StatelessWidget {
-  const _RecentActivityTile({required this.record});
-
-  final StaffRequestRecord record;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _homeCard,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _homeBorder),
-      ),
-      child: Row(
-        children: [
-          Icon(_iconFor(record.type), color: _homeBlue, size: 18),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  record.title,
-                  style: _homeTextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  record.summary,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _homeTextStyle(fontSize: 11, color: _homeMuted),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            _relativeLabel(record.submittedAt),
-            style: _homeTextStyle(fontSize: 11, color: _homeMuted),
-          ),
-        ],
       ),
     );
   }

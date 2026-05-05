@@ -25,6 +25,11 @@ class RealtimeService {
   RealtimeService._();
 
   static final RealtimeService instance = RealtimeService._();
+  static const String _defaultReverbKey = 'VoiUz8527kEv5w9pSSqtaaz';
+  static const String _defaultReverbHost = 'hris-api.hezo.co.tz';
+  static const String _defaultReverbScheme = 'https';
+  static const int _defaultReverbPort = 443;
+  static const String _defaultAuthEndpoint = '/broadcasting/auth';
 
   final Dio _dio = createLoggedDio(
     BaseOptions(
@@ -62,13 +67,15 @@ class RealtimeService {
     await disconnect();
 
     final config = await _fetchConfig(user.token);
-    final appKey = (config['key']?.toString() ?? '').trim();
-    final host = (config['host']?.toString() ?? '').trim();
-    final scheme = (config['scheme']?.toString() ?? 'https').trim();
+    final appKey = (config['key']?.toString() ?? _defaultReverbKey).trim();
+    final host = (config['host']?.toString() ?? _defaultReverbHost).trim();
+    final scheme = (config['scheme']?.toString() ?? _defaultReverbScheme)
+        .trim();
     final port =
         int.tryParse(config['port']?.toString() ?? '') ??
-        (scheme == 'https' ? 443 : 80);
-    final authEndpoint = (config['auth_endpoint']?.toString() ?? '').trim();
+        (scheme == 'https' ? _defaultReverbPort : 80);
+    final authEndpoint =
+        (config['auth_endpoint']?.toString() ?? _defaultAuthEndpoint).trim();
 
     if (appKey.isEmpty || host.isEmpty || authEndpoint.isEmpty) {
       throw Exception('Realtime configuration is incomplete.');
@@ -157,49 +164,56 @@ class RealtimeService {
     final authPayload = channelName.startsWith('private-')
         ? await _authorizeChannel(channelName)
         : const <String, dynamic>{};
-    final data = <String, dynamic>{
-      'channel': channelName,
-      ...authPayload,
-    };
-    _socket!.add(jsonEncode({
-      'event': 'pusher:subscribe',
-      'data': data,
-    }));
+    final data = <String, dynamic>{'channel': channelName, ...authPayload};
+    _socket!.add(jsonEncode({'event': 'pusher:subscribe', 'data': data}));
     _subscribedChannels.add(channelName);
   }
 
   Future<void> unsubscribe(String channelName) async {
     if (_socket == null || !_subscribedChannels.contains(channelName)) return;
-    _socket?.add(jsonEncode({
-      'event': 'pusher:unsubscribe',
-      'data': {'channel': channelName},
-    }));
+    _socket?.add(
+      jsonEncode({
+        'event': 'pusher:unsubscribe',
+        'data': {'channel': channelName},
+      }),
+    );
     _subscribedChannels.remove(channelName);
   }
 
   Future<Map<String, dynamic>> _fetchConfig(String token) async {
-    final response = await _dio.get(
-      '/realtime/config',
-      options: Options(
-        headers: {
-          ...await AppSessionStore.authorizedHeaders(),
-          'Authorization': 'Bearer $token',
-        },
-      ),
-    );
+    try {
+      final response = await _dio.get(
+        '/realtime/config',
+        options: Options(
+          headers: {
+            ...await AppSessionStore.authorizedHeaders(),
+            'Authorization': 'Bearer $token',
+          },
+        ),
+      );
 
-    final data = response.data;
-    if (data is Map<String, dynamic>) {
-      final payload = data['data'];
-      if (payload is Map<String, dynamic>) {
-        final reverb = payload['reverb'];
-        if (reverb is Map<String, dynamic>) return reverb;
-        if (reverb is Map) {
-          return reverb.map((key, value) => MapEntry(key.toString(), value));
+      final data = response.data;
+      if (data is Map<String, dynamic>) {
+        final payload = data['data'];
+        if (payload is Map<String, dynamic>) {
+          final reverb = payload['reverb'];
+          if (reverb is Map<String, dynamic>) return reverb;
+          if (reverb is Map) {
+            return reverb.map((key, value) => MapEntry(key.toString(), value));
+          }
         }
       }
+    } catch (error) {
+      log('Using default realtime config: $error', name: 'REALTIME');
     }
-    throw Exception('Realtime configuration payload is invalid.');
+
+    return const {
+      'key': _defaultReverbKey,
+      'host': _defaultReverbHost,
+      'scheme': _defaultReverbScheme,
+      'port': _defaultReverbPort,
+      'auth_endpoint': _defaultAuthEndpoint,
+    };
   }
 
   Map<String, dynamic> _decodePayload(dynamic raw) {
@@ -235,10 +249,7 @@ class RealtimeService {
 
     final response = await _dio.post(
       '/broadcasting/auth',
-      data: {
-        'socket_id': socketId,
-        'channel_name': channelName,
-      },
+      data: {'socket_id': socketId, 'channel_name': channelName},
       options: Options(headers: await AppSessionStore.authorizedHeaders()),
     );
 
@@ -262,10 +273,9 @@ class RealtimeService {
     }
 
     if (eventName == 'pusher:ping') {
-      _socket?.add(jsonEncode({
-        'event': 'pusher:pong',
-        'data': const <String, dynamic>{},
-      }));
+      _socket?.add(
+        jsonEncode({'event': 'pusher:pong', 'data': const <String, dynamic>{}}),
+      );
       return;
     }
 

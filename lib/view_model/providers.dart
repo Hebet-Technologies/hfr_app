@@ -25,11 +25,11 @@ final peerExchangeRepositoryProvider = Provider<PeerExchangeRepository>(
 );
 
 final staffRequestsRepositoryProvider = Provider<StaffRequestsRepository>(
-  (ref) => StaffRequestsRepository(ref.watch(authRepositoryProvider)),
+  (_) => StaffRequestsRepository(),
 );
 
 final trainingRepositoryProvider = Provider<TrainingRepository>(
-  (ref) => TrainingRepository(ref.watch(authRepositoryProvider)),
+  (_) => TrainingRepository(),
 );
 
 final authViewModelProvider = NotifierProvider<AuthViewModel, AuthState>(() {

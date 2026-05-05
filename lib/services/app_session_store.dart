@@ -9,6 +9,27 @@ class AppSessionStore {
   static const sessionUuidKey = 'session_uuid';
   static const fcmTokenKey = 'fcm_token';
   static const pendingPushPayloadKey = 'pending_push_payload';
+  static const authStorageKeys = <String>[
+    tokenKey,
+    userIdKey,
+    'email',
+    'full_name',
+    'login_status',
+    'working_station_id',
+    'working_station_name',
+    'working_station_type',
+    'personal_information_id',
+    'employment_information_id',
+    'payroll',
+    'roles',
+    'role_ids',
+    'permissions',
+    'permission_ids',
+    'is_logged_in',
+    'active_portal_mode',
+    deviceUuidKey,
+    sessionUuidKey,
+  ];
 
   static Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -76,10 +97,7 @@ class AppSessionStore {
       }
     }
 
-    await saveRealtimeSession(
-      deviceUuid: deviceUuid,
-      sessionUuid: sessionUuid,
-    );
+    await saveRealtimeSession(deviceUuid: deviceUuid, sessionUuid: sessionUuid);
   }
 
   static Future<Map<String, String>> authorizedHeaders({
@@ -103,7 +121,9 @@ class AppSessionStore {
     return headers;
   }
 
-  static Future<void> savePendingPushPayload(Map<String, dynamic> payload) async {
+  static Future<void> savePendingPushPayload(
+    Map<String, dynamic> payload,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(pendingPushPayloadKey, jsonEncode(payload));
   }
@@ -121,12 +141,17 @@ class AppSessionStore {
         return decoded;
       }
       if (decoded is Map) {
-        return decoded.map(
-          (key, value) => MapEntry(key.toString(), value),
-        );
+        return decoded.map((key, value) => MapEntry(key.toString(), value));
       }
     } catch (_) {}
 
     return null;
+  }
+
+  static Future<void> clearAuthSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in authStorageKeys) {
+      await prefs.remove(key);
+    }
   }
 }

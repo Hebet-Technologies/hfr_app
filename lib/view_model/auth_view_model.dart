@@ -124,8 +124,14 @@ class AuthViewModel extends Notifier<AuthState> {
 
   Future<void> logout() async {
     await _authRepository.logout();
+    clearSession();
+  }
+
+  void clearSession() {
     state = state.copyWith(
       user: null,
+      errorMessage: null,
+      isLoading: false,
       activePortalMode: StaffPortalMode.employee,
     );
   }

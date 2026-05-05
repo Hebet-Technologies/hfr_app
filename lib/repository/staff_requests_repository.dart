@@ -5,13 +5,9 @@ import 'package:dio/dio.dart';
 import '../data/network/api_service.dart';
 import '../model/staff_request_models.dart';
 import '../model/user_model.dart';
-import '../services/app_session_store.dart';
-import 'auth_repository.dart';
 
 class StaffRequestsRepository {
-  StaffRequestsRepository(this._authRepository);
-
-  final AuthRepository _authRepository;
+  StaffRequestsRepository();
   final Dio _dio = createLoggedDio(
     BaseOptions(
       baseUrl: ApiService.baseUrl,
@@ -1347,13 +1343,19 @@ class StaffRequestsRepository {
     final endsAt = _dateValue(item['announce_end_date']);
     final createdAt = _dateValue(item['created_at']);
     final updatedAt = _dateValue(item['updated_at']);
-    final type = _stringValue(item['type'], fallback: 'training');
+    final type = _stringValue(item['type']);
     final primaryDate = endsAt ?? updatedAt ?? createdAt;
     final caption = endsAt == null
         ? primaryDate == null
               ? type
-              : '$type • ${_displayDate(primaryDate)}'
-        : '$type • Ends ${_displayDate(endsAt)}';
+              : [
+                  type,
+                  _displayDate(primaryDate),
+                ].where((value) => value.trim().isNotEmpty).join(' • ')
+        : [
+            type,
+            'Ends ${_displayDate(endsAt)}',
+          ].where((value) => value.trim().isNotEmpty).join(' • ');
     final sourceType = _stringValue(item['source_type']);
     final sourceId = _stringValue(item['source_id']);
     final sourceTypeKey = sourceType.toLowerCase();
@@ -1750,16 +1752,7 @@ class StaffRequestsRepository {
   Future<Options> _authorizedOptions({
     Map<String, String>? extraHeaders,
   }) async {
-    final token = await _authRepository.getToken();
-    if (token == null || token.trim().isEmpty) {
-      throw Exception('Authentication token not found. Please sign in again.');
-    }
-
-    return Options(
-      headers: await AppSessionStore.authorizedHeaders(
-        extraHeaders: extraHeaders,
-      ),
-    );
+    return requireAuth(headers: extraHeaders);
   }
 
   List<Map<String, dynamic>> _extractList(dynamic responseData) {

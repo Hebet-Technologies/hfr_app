@@ -3,7 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:staffportal/data/app_exception.dart';
 import 'package:staffportal/data/network/api_service.dart';
 import 'package:staffportal/data/network/base_api_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:staffportal/services/session_expiry_service.dart';
 
 class NetworkApiService extends BaseApiService {
   final Dio _dio = createLoggedDio(
@@ -17,7 +17,7 @@ class NetworkApiService extends BaseApiService {
   @override
   Future<dynamic> getGetApiResponse(String url) async {
     try {
-      final response = await _dio.getUri(Uri.parse(url));
+      final response = await _dio.getUri(Uri.parse(url), options: skipAuth());
       return returnResponse(response);
     } on DioException catch (error) {
       throw _handleDioException(error);
@@ -29,7 +29,11 @@ class NetworkApiService extends BaseApiService {
   @override
   Future<dynamic> getPostApiResponse(String url, data) async {
     try {
-      final response = await _dio.postUri(Uri.parse(url), data: data);
+      final response = await _dio.postUri(
+        Uri.parse(url),
+        data: data,
+        options: skipAuth(),
+      );
       return returnResponse(response);
     } on DioException catch (error) {
       throw _handleDioException(error);
@@ -40,13 +44,10 @@ class NetworkApiService extends BaseApiService {
 
   @override
   Future<dynamic> getGetApiResponseWithToken(String url) async {
-    final SharedPreferences sp = await SharedPreferences.getInstance();
-    final token = sp.getString('token')!;
-
     try {
       final response = await _dio.getUri(
         Uri.parse(url),
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+        options: requireAuth(),
       );
       return returnResponse(response);
     } on DioException catch (error) {
@@ -58,13 +59,10 @@ class NetworkApiService extends BaseApiService {
 
   @override
   Future<dynamic> getGetApiResponseWithTokenById(String url, id) async {
-    final SharedPreferences sp = await SharedPreferences.getInstance();
-    final token = sp.getString('token')!;
-
     try {
       final response = await _dio.getUri(
         Uri.parse('$url/$id'),
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+        options: requireAuth(),
       );
       return returnResponse(response);
     } on DioException catch (error) {
@@ -76,14 +74,11 @@ class NetworkApiService extends BaseApiService {
 
   @override
   Future<dynamic> getPostApiResponseWithToken(String url, data) async {
-    final SharedPreferences sp = await SharedPreferences.getInstance();
-    final token = sp.getString('token')!;
-
     try {
       final response = await _dio.postUri(
         Uri.parse(url),
         data: data,
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+        options: requireAuth(),
       );
       return returnResponse(response);
     } on DioException catch (error) {
@@ -95,13 +90,10 @@ class NetworkApiService extends BaseApiService {
 
   @override
   Future<dynamic> getLogoutApiResponseWithToken(String url) async {
-    final SharedPreferences sp = await SharedPreferences.getInstance();
-    final token = sp.getString('token')!;
-
     try {
       final response = await _dio.postUri(
         Uri.parse(url),
-        options: Options(headers: {'Authorization': 'Bearer $token'}),
+        options: requireAuth(),
       );
       return returnResponse(response);
     } on DioException catch (error) {
@@ -117,11 +109,13 @@ class NetworkApiService extends BaseApiService {
       case 201:
         return response.data;
       case 400:
-      case 401:
       case 403:
       case 404:
       case 422:
       case 500:
+        throw ExceptionHandling(_messageFromData(response.data));
+      case 401:
+        SessionExpiryService.handleUnauthorized();
         throw ExceptionHandling(_messageFromData(response.data));
       default:
         throw ExceptionHandling(
@@ -138,6 +132,9 @@ class NetworkApiService extends BaseApiService {
 
     final response = error.response;
     if (response != null) {
+      if (response.statusCode == 401) {
+        SessionExpiryService.handleUnauthorized();
+      }
       return ExceptionHandling(_messageFromData(response.data));
     }
 

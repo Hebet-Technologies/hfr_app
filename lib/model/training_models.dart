@@ -207,6 +207,25 @@ class TrainingProgram {
   }
 }
 
+class TrainingInstitute {
+  const TrainingInstitute({
+    required this.id,
+    required this.name,
+    this.countryName,
+  });
+
+  final String id;
+  final String name;
+  final String? countryName;
+}
+
+class TrainingCountry {
+  const TrainingCountry({required this.code, required this.name});
+
+  final String code;
+  final String name;
+}
+
 class TrainingApprovalRecord {
   const TrainingApprovalRecord({
     required this.id,

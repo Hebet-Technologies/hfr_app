@@ -1209,6 +1209,206 @@ class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen> {
     });
   }
 
+  Future<void> _submitApplication(TrainingProgram program) async {
+    final messenger = ScaffoldMessenger.of(context);
+    var application = program;
+
+    final needsInstitute =
+        (application.shortCourseDescriptionId ?? '').trim().isEmpty &&
+        (application.instituteId ?? '').trim().isEmpty;
+    if (needsInstitute) {
+      final institute = await _pickTrainingInstitute(application);
+      if (!mounted || institute == null) return;
+      application = application.copyWith(
+        instituteId: institute.id,
+        location: institute.name,
+      );
+    }
+
+    try {
+      await ref
+          .read(trainingViewModelProvider.notifier)
+          .applyForTraining(application);
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Training request submitted successfully.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            ref.read(trainingViewModelProvider).errorMessage ??
+                'Unable to submit the training request.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<TrainingCountry?> _pickTrainingCountry() async {
+    List<TrainingCountry> countries;
+    try {
+      countries = await ref
+          .read(trainingRepositoryProvider)
+          .fetchTrainingCountries();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load institute countries.')),
+        );
+      }
+      return null;
+    }
+
+    if (!mounted) return null;
+    if (countries.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No institute countries found.')),
+      );
+      return null;
+    }
+
+    return showModalBottomSheet<TrainingCountry>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final normalizedQuery = query.trim().toLowerCase();
+            final filtered = normalizedQuery.isEmpty
+                ? countries
+                : countries
+                      .where(
+                        (item) =>
+                            item.name.toLowerCase().contains(normalizedQuery) ||
+                            item.code.toLowerCase().contains(normalizedQuery),
+                      )
+                      .toList();
+
+            return _TrainingPickerSheet(
+              title: 'Select Institute Country',
+              subtitle: 'Choose the country where the institute is registered.',
+              searchHint: 'Search country',
+              onSearchChanged: (value) => setModalState(() => query = value),
+              emptyMessage: 'No country matches your search.',
+              itemCount: filtered.length,
+              itemBuilder: (context, index) {
+                final country = filtered[index];
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    country.name,
+                    style: _trainingTextStyle(fontSize: 14),
+                  ),
+                  subtitle: Text(country.code),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(sheetContext).pop(country),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<TrainingInstitute?> _pickTrainingInstitute(
+    TrainingProgram program,
+  ) async {
+    final country = await _pickTrainingCountry();
+    if (!mounted || country == null) return null;
+
+    final educationLevelId = (program.educationLevelId ?? '').trim();
+    if (educationLevelId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This training is missing an education level.'),
+        ),
+      );
+      return null;
+    }
+
+    List<TrainingInstitute> institutes;
+    try {
+      institutes = await ref
+          .read(trainingRepositoryProvider)
+          .fetchInstitutes(
+            countryCode: country.code,
+            educationLevelId: educationLevelId,
+          );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load training institutes.')),
+        );
+      }
+      return null;
+    }
+
+    if (!mounted) return null;
+    if (institutes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No training institutes found.')),
+      );
+      return null;
+    }
+
+    return showModalBottomSheet<TrainingInstitute>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final normalizedQuery = query.trim().toLowerCase();
+            final filtered = normalizedQuery.isEmpty
+                ? institutes
+                : institutes
+                      .where(
+                        (item) =>
+                            item.name.toLowerCase().contains(normalizedQuery) ||
+                            (item.countryName ?? '').toLowerCase().contains(
+                              normalizedQuery,
+                            ),
+                      )
+                      .toList();
+
+            return _TrainingPickerSheet(
+              title: 'Select Training Institute',
+              subtitle:
+                  'Showing institutes for ${country.name} and this education level.',
+              searchHint: 'Search institute',
+              onSearchChanged: (value) => setModalState(() => query = value),
+              emptyMessage: 'No institute matches your search.',
+              itemCount: filtered.length,
+              itemBuilder: (context, index) {
+                final institute = filtered[index];
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    institute.name,
+                    style: _trainingTextStyle(fontSize: 14),
+                  ),
+                  subtitle: (institute.countryName ?? '').trim().isEmpty
+                      ? null
+                      : Text(institute.countryName!),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => Navigator.of(sheetContext).pop(institute),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(trainingViewModelProvider);
@@ -1217,10 +1417,7 @@ class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen> {
         ? program.targetCadres
         : const ['Staff Members'];
     final actionLabel = switch (program.status) {
-      TrainingParticipationStatus.notApplied =>
-        program.canApplyLive
-            ? 'Apply for Training'
-            : 'Application Not Available',
+      TrainingParticipationStatus.notApplied => 'Apply for Training',
       TrainingParticipationStatus.pending => 'Application Submitted',
       TrainingParticipationStatus.approved => 'Training Approved',
       TrainingParticipationStatus.rejected => 'Application Rejected',
@@ -1423,34 +1620,7 @@ class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen> {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: canApply
-                ? () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    try {
-                      await ref
-                          .read(trainingViewModelProvider.notifier)
-                          .applyForTraining(program);
-                      if (!mounted) return;
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Training request submitted successfully.',
-                          ),
-                        ),
-                      );
-                    } catch (_) {
-                      if (!mounted) return;
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            ref.read(trainingViewModelProvider).errorMessage ??
-                                'Unable to submit the training request.',
-                          ),
-                        ),
-                      );
-                    }
-                  }
-                : null,
+            onPressed: canApply ? () => _submitApplication(program) : null,
             child: state.isSubmitting
                 ? const SizedBox(
                     width: 20,
@@ -1817,6 +1987,105 @@ class _SectionHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TrainingPickerSheet extends StatelessWidget {
+  const _TrainingPickerSheet({
+    required this.title,
+    required this.subtitle,
+    required this.searchHint,
+    required this.onSearchChanged,
+    required this.emptyMessage,
+    required this.itemCount,
+    required this.itemBuilder,
+  });
+
+  final String title;
+  final String subtitle;
+  final String searchHint;
+  final ValueChanged<String> onSearchChanged;
+  final String emptyMessage;
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.76,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _trainingBorder),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: _trainingTextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: _trainingTextStyle(fontSize: 12, color: _trainingMuted),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            autofocus: true,
+            onChanged: onSearchChanged,
+            decoration: InputDecoration(
+              hintText: searchHint,
+              prefixIcon: const Icon(Icons.search_rounded),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _trainingBorder),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _trainingBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: const BorderSide(color: _trainingBlue),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Flexible(
+            child: itemCount == 0
+                ? Center(
+                    child: Text(
+                      emptyMessage,
+                      style: _trainingTextStyle(
+                        fontSize: 13,
+                        color: _trainingMuted,
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: itemCount,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: itemBuilder,
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -3085,7 +3354,10 @@ Future<void> _openResource(
     return;
   }
 
-  final didLaunch = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  var didLaunch = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+  if (!didLaunch) {
+    didLaunch = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
   if (!didLaunch && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Could not open this resource.')),
@@ -3164,6 +3436,10 @@ List<TrainingProgram> _mergeTrainingPrograms(
   List<TrainingProgram> primary,
   List<TrainingProgram> secondary,
 ) {
+  if (primary.isNotEmpty) {
+    return [...primary]..sort(_sortTrainingProgramsByDate);
+  }
+
   final byKey = <String, TrainingProgram>{};
   for (final item in [...secondary, ...primary]) {
     byKey[_normalizedTrainingKey(item.title)] = item;

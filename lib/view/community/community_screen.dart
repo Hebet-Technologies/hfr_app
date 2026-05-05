@@ -38,6 +38,25 @@ enum _CommunitySection {
   final String label;
 }
 
+enum CommunityInitialSection { overview, inbox, groups, questions, topics }
+
+extension on CommunityInitialSection {
+  _CommunitySection get section {
+    switch (this) {
+      case CommunityInitialSection.overview:
+        return _CommunitySection.overview;
+      case CommunityInitialSection.inbox:
+        return _CommunitySection.inbox;
+      case CommunityInitialSection.groups:
+        return _CommunitySection.groups;
+      case CommunityInitialSection.questions:
+        return _CommunitySection.questions;
+      case CommunityInitialSection.topics:
+        return _CommunitySection.topics;
+    }
+  }
+}
+
 enum _ItemMenuAction { edit, delete }
 
 class _CommunityLoadingShimmer extends StatelessWidget {
@@ -155,7 +174,12 @@ class _CommunitySkeletonBox extends StatelessWidget {
 }
 
 class CommunityScreen extends ConsumerStatefulWidget {
-  const CommunityScreen({super.key});
+  const CommunityScreen({
+    super.key,
+    this.initialSection = CommunityInitialSection.overview,
+  });
+
+  final CommunityInitialSection initialSection;
 
   @override
   ConsumerState<CommunityScreen> createState() => _CommunityScreenState();
@@ -164,12 +188,13 @@ class CommunityScreen extends ConsumerStatefulWidget {
 class _CommunityScreenState extends ConsumerState<CommunityScreen> {
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
-  _CommunitySection _section = _CommunitySection.overview;
+  late _CommunitySection _section;
   DateTime? _selectedQuestionDay;
 
   @override
   void initState() {
     super.initState();
+    _section = widget.initialSection.section;
     _searchController.addListener(_handleSearchChange);
   }
 
@@ -389,7 +414,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     );
   }
 
-  Widget _buildSearchRow(PeerExchangeState state) {
+  Widget _buildSearchRow(PeerExchangeState _) {
     final isQuestionSection = _section == _CommunitySection.questions;
     final searchField = Expanded(
       child: Container(
@@ -449,59 +474,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
       ),
     );
 
-    if (isQuestionSection) {
-      final hasCategoryFilter = state.selectedCategoryUuid != null;
-      final hasDateFilter = _selectedQuestionDay != null;
-
-      return Row(
-        children: [
-          searchField,
-          const SizedBox(width: 8),
-          _SquareIconButton(
-            isActive: hasCategoryFilter,
-            icon: Icon(
-              Icons.tune_rounded,
-              color: hasCategoryFilter ? _peerPrimary : _peerText,
-              size: 18,
-            ),
-            onTap: () => _showQuestionFiltersSheet(state),
-            size: _qaToolbarHeight,
-          ),
-          const SizedBox(width: 8),
-          _SquareIconButton(
-            isActive: hasDateFilter,
-            icon: Icon(
-              Icons.calendar_today_outlined,
-              color: hasDateFilter ? _peerPrimary : _peerText,
-              size: 18,
-            ),
-            onTap: _pickQuestionDate,
-            size: _qaToolbarHeight,
-          ),
-        ],
-      );
-    }
-
-    return Row(
-      children: [
-        searchField,
-        const SizedBox(width: 12),
-        _SquareIconButton(
-          icon: const AppSvgIcon(
-            assetName: 'assets/icons/filter.svg',
-            color: _peerText,
-            size: 18,
-          ),
-          onTap: _showOverviewActionsSheet,
-        ),
-        const SizedBox(width: 8),
-        _SquareIconButton(
-          icon: const Icon(Icons.refresh_rounded, color: _peerText, size: 18),
-          onTap: () =>
-              ref.read(peerExchangeViewModelProvider.notifier).loadAll(),
-        ),
-      ],
-    );
+    return Row(children: [searchField]);
   }
 
   Widget _buildSectionBody(
@@ -1253,19 +1226,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                       ),
                     ),
                   ),
-                  if (_canEditTopic(access, topic))
-                    _buildEntityMenu(
-                      onSelected: (action) async {
-                        switch (action) {
-                          case _ItemMenuAction.edit:
-                            await _showEditTopicSheet(topic);
-                            return;
-                          case _ItemMenuAction.delete:
-                            await _deleteTopic(topic);
-                            return;
-                        }
-                      },
-                    ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -1434,10 +1394,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
 
   bool _canEditQuestion(PeerExchangeAccess access, PeerQuestion question) {
     return access.canEditQuestion(question.createdBy);
-  }
-
-  bool _canEditTopic(PeerExchangeAccess access, PeerTopic topic) {
-    return access.canEditTopic(topic.createdBy);
   }
 
   PeerQuestionCategory? _selectedQuestionCategory(PeerExchangeState state) {
@@ -1655,27 +1611,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     }
   }
 
-  Future<void> _pickQuestionDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedQuestionDay ?? now,
-      firstDate: DateTime(now.year - 3),
-      lastDate: DateTime(now.year + 1),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: _peerPrimary),
-          ),
-          child: child ?? const SizedBox.shrink(),
-        );
-      },
-    );
-
-    if (!mounted || picked == null) return;
-    setState(() => _selectedQuestionDay = picked);
-  }
-
   Future<void> _showOverviewActionsSheet() async {
     final access = _currentAccess();
     final requestAccess = ref.read(staffPortalAccessProvider);
@@ -1748,71 +1683,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     );
   }
 
-  Future<void> _showQuestionFiltersSheet(PeerExchangeState state) async {
-    final access = _currentAccess();
-
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return _BottomSheetCard(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _BottomSheetTitle(
-                title: 'Filter questions',
-                subtitle: 'Choose a category to narrow the Q&A list.',
-              ),
-              _ActionTile(
-                title: 'All categories',
-                subtitle: state.selectedCategoryUuid == null
-                    ? 'Currently showing every question.'
-                    : 'Clear the category filter.',
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  ref
-                      .read(peerExchangeViewModelProvider.notifier)
-                      .selectCategory(null);
-                },
-              ),
-              if (state.categories.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8, bottom: 16),
-                  child: Text('No categories available yet.'),
-                )
-              else
-                ...state.categories.map(
-                  (category) => _ActionTile(
-                    title: category.name,
-                    subtitle: state.selectedCategoryUuid == category.uuid
-                        ? 'Currently selected.'
-                        : 'Show questions in this category.',
-                    onTap: () {
-                      Navigator.pop(sheetContext);
-                      ref
-                          .read(peerExchangeViewModelProvider.notifier)
-                          .selectCategory(category.uuid);
-                    },
-                  ),
-                ),
-              if (access.canManageQuestionCategories) ...[
-                const SizedBox(height: 8),
-                _PrimaryButton(
-                  label: 'Manage categories',
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _showManageCategoriesSheet(state);
-                  },
-                ),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
+  // ignore: unused_element
   Future<void> _showManageCategoriesSheet(PeerExchangeState state) async {
     final access = _currentAccess();
     if (!access.canManageQuestionCategories) {
@@ -2388,7 +2259,9 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                         existing: selectedFiles,
                                       );
                                       if (!sheetContext.mounted) return;
-                                      setModalState(() => selectedFiles = picked);
+                                      setModalState(
+                                        () => selectedFiles = picked,
+                                      );
                                     },
                               icon: const Icon(Icons.attach_file_rounded),
                               label: Text(
@@ -3259,115 +3132,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     );
   }
 
-  Future<void> _showEditTopicSheet(PeerTopic topic) async {
-    final access = _currentAccess();
-    if (!_canEditTopic(access, topic)) {
-      _showMessage(
-        'You do not have permission to update this topic.',
-        error: true,
-      );
-      return;
-    }
-
-    final titleController = TextEditingController(text: topic.name);
-    final descriptionController = TextEditingController(
-      text: topic.description,
-    );
-    var isSaving = false;
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return _BottomSheetCard(
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const _BottomSheetTitle(
-                      title: 'Edit topic',
-                      subtitle:
-                          'Update this moderated discussion topic and its description.',
-                    ),
-                    _FormField(
-                      controller: titleController,
-                      label: 'Topic name',
-                      hintText: 'Topic name',
-                    ),
-                    const SizedBox(height: 14),
-                    _FormField(
-                      controller: descriptionController,
-                      label: 'Description',
-                      hintText: 'Topic description',
-                      maxLines: 4,
-                    ),
-                    const SizedBox(height: 18),
-                    _PrimaryButton(
-                      label: isSaving ? 'Saving...' : 'Save changes',
-                      isBusy: isSaving,
-                      onTap: isSaving
-                          ? null
-                          : () async {
-                              final name = titleController.text.trim();
-                              if (name.isEmpty) {
-                                _showMessage(
-                                  'Enter a topic name.',
-                                  error: true,
-                                );
-                                return;
-                              }
-
-                              setModalState(() => isSaving = true);
-                              try {
-                                await ref
-                                    .read(peerExchangeRepositoryProvider)
-                                    .updateTopic(
-                                      topicUuid: topic.uuid,
-                                      name: name,
-                                      description: descriptionController.text
-                                          .trim(),
-                                    );
-                                if (!mounted || !sheetContext.mounted) return;
-                                Navigator.pop(sheetContext);
-                                await ref
-                                    .read(
-                                      peerExchangeViewModelProvider.notifier,
-                                    )
-                                    .loadAll();
-                                _showMessage('Topic updated successfully.');
-                              } catch (error) {
-                                if (!mounted) return;
-                                _showMessage(
-                                  error.toString().replaceFirst(
-                                    'Exception: ',
-                                    '',
-                                  ),
-                                  error: true,
-                                );
-                              } finally {
-                                if (sheetContext.mounted) {
-                                  setModalState(() => isSaving = false);
-                                }
-                              }
-                            },
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   Future<void> _deleteGroup(PeerConversation group) async {
     final access = _currentAccess();
     if (!_canDeleteGroup(access, group)) {
@@ -3419,34 +3183,6 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
           .deleteQuestion(question.uuid);
       await ref.read(peerExchangeViewModelProvider.notifier).loadAll();
       _showMessage('Question deleted successfully.');
-    } catch (error) {
-      _showMessage(
-        error.toString().replaceFirst('Exception: ', ''),
-        error: true,
-      );
-    }
-  }
-
-  Future<void> _deleteTopic(PeerTopic topic) async {
-    final access = _currentAccess();
-    if (!_canEditTopic(access, topic)) {
-      _showMessage(
-        'You do not have permission to delete this topic.',
-        error: true,
-      );
-      return;
-    }
-
-    final shouldDelete = await _confirmDestructiveAction(
-      title: 'Delete topic?',
-      body: 'This will remove the moderated topic and its discussion thread.',
-    );
-    if (!shouldDelete) return;
-
-    try {
-      await ref.read(peerExchangeRepositoryProvider).deleteTopic(topic.uuid);
-      await ref.read(peerExchangeViewModelProvider.notifier).loadAll();
-      _showMessage('Topic deleted successfully.');
     } catch (error) {
       _showMessage(
         error.toString().replaceFirst('Exception: ', ''),
@@ -4324,7 +4060,8 @@ class _ConversationDetailScreenState
     final currentUserId = ref.read(authViewModelProvider).user?.userId ?? '';
     final hasIncomingUnread = _messages.any(
       (message) =>
-          message.senderId.toString() != currentUserId && message.readAt == null,
+          message.senderId.toString() != currentUserId &&
+          message.readAt == null,
     );
     if (!hasIncomingUnread) return;
 
@@ -4947,17 +4684,10 @@ class _ConversationDetailScreenState
 }
 
 class _SquareIconButton extends StatelessWidget {
-  const _SquareIconButton({
-    required this.icon,
-    required this.onTap,
-    this.isActive = false,
-    this.size = 46,
-  });
+  const _SquareIconButton({required this.icon, required this.onTap});
 
   final Widget icon;
   final VoidCallback onTap;
-  final bool isActive;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -4965,16 +4695,12 @@ class _SquareIconButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        height: size,
-        width: size,
+        height: 46,
+        width: 46,
         decoration: BoxDecoration(
-          color: isActive ? _peerPrimary.withValues(alpha: 0.08) : Colors.white,
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive
-                ? _peerPrimary.withValues(alpha: 0.24)
-                : _peerBorder,
-          ),
+          border: Border.all(color: _peerBorder),
         ),
         alignment: Alignment.center,
         child: icon,
@@ -6164,10 +5890,7 @@ class _AttachmentChip extends StatelessWidget {
                 if (sizeLabel.isNotEmpty)
                   Text(
                     sizeLabel,
-                    style: _textStyle(
-                      fontSize: 10,
-                      color: _peerMuted,
-                    ),
+                    style: _textStyle(fontSize: 10, color: _peerMuted),
                   ),
               ],
             ),

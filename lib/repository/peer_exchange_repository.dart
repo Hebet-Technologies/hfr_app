@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/network/api_service.dart';
 import '../model/peer_exchange_models.dart';
-import '../services/app_session_store.dart';
 
 class PeerExchangeRepository {
   PeerExchangeRepository()
@@ -581,17 +580,7 @@ class PeerExchangeRepository {
   Future<Options> _authorizedOptions({
     Map<String, String>? extraHeaders,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token');
-    if (token == null || token.trim().isEmpty) {
-      throw Exception('Authentication token not found. Please sign in again.');
-    }
-
-    return Options(
-      headers: await AppSessionStore.authorizedHeaders(
-        extraHeaders: extraHeaders,
-      ),
-    );
+    return requireAuth(headers: extraHeaders);
   }
 
   String _resolveMessage(DioException error) {
