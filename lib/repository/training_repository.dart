@@ -433,10 +433,7 @@ class TrainingRepository {
       data: {'training_application_id': trainingApplicationId},
     );
 
-    final details = _extractList(response.data);
-    final detail = details.isNotEmpty
-        ? details.first
-        : const <String, dynamic>{};
+    final detail = _extractDataMap(response.data);
     final attachments = _extractNamedList(response.data, 'attachment');
     final resources = attachments
         .map(
@@ -568,10 +565,7 @@ class TrainingRepository {
       data: {'training_application_id': record.trainingApplicationId},
     );
 
-    final details = _extractList(response.data);
-    final detail = details.isNotEmpty
-        ? details.first
-        : const <String, dynamic>{};
+    final detail = _extractDataMap(response.data);
     final attachments = _extractNamedList(response.data, 'attachment');
     final resources = attachments
         .map(
@@ -661,6 +655,7 @@ class TrainingRepository {
   Future<String> submitApprovalAction({
     required TrainingApprovalRecord record,
     required String comment,
+    required String action,
   }) async {
     final response = await _postJson(
       '/approveTrainingRequest',
@@ -668,6 +663,7 @@ class TrainingRepository {
         'training_application_id': record.trainingApplicationId,
         'training_app_status_id': record.trainingAppStatusId,
         'app_comment': comment,
+        'action': action,
       },
     );
 
@@ -726,6 +722,26 @@ class TrainingRepository {
     return buildOptimisticAppliedProgram(training).copyWith(isLive: true);
   }
 
+  Future<String> deleteTrainingRequest(TrainingProgram training) async {
+    final trainingApplicationId = training.trainingApplicationId?.trim() ?? '';
+    if (trainingApplicationId.isEmpty ||
+        trainingApplicationId.startsWith('local-training-')) {
+      throw Exception('Training application details are incomplete.');
+    }
+
+    final response = await _delete(
+      '/destroyStaffTrainingRequest/$trainingApplicationId',
+    );
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Training application could not be deleted.',
+    );
+    return _extractMessage(
+      response.data,
+      fallback: 'Training application deleted successfully.',
+    );
+  }
+
   TrainingProgram buildOptimisticAppliedProgram(TrainingProgram training) {
     final now = DateTime.now();
     return training.copyWith(
@@ -761,6 +777,10 @@ class TrainingRepository {
     );
   }
 
+  Future<Response<dynamic>> _delete(String path) async {
+    return _dio.delete(path, options: await _authorizedOptions());
+  }
+
   Future<Options> _authorizedOptions({
     Map<String, String>? extraHeaders,
   }) async {
@@ -781,6 +801,26 @@ class TrainingRepository {
           .toList();
     }
     return const [];
+  }
+
+  Map<String, dynamic> _extractDataMap(dynamic responseData) {
+    if (responseData is Map<String, dynamic>) {
+      final data = responseData['data'];
+      if (data is Map<String, dynamic>) {
+        return data;
+      }
+      if (data is Map) {
+        return data.map((key, value) => MapEntry(key.toString(), value));
+      }
+      final list = _extractList(data);
+      return list.isEmpty ? const <String, dynamic>{} : list.first;
+    }
+    if (responseData is Map) {
+      return _extractDataMap(
+        responseData.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }
+    return const <String, dynamic>{};
   }
 
   List<Map<String, dynamic>> _extractNamedList(
@@ -990,6 +1030,35 @@ class TrainingRepository {
       );
     }
     return fallback;
+  }
+
+  void _ensureSuccessfulResponse(
+    Response<dynamic> response, {
+    required String fallback,
+  }) {
+    final httpStatus = response.statusCode;
+    if (httpStatus != null && (httpStatus < 200 || httpStatus >= 300)) {
+      throw Exception(_extractMessage(response.data, fallback: fallback));
+    }
+
+    final statusCode = _extractStatusCode(response.data);
+    if (statusCode == null || statusCode == 200 || statusCode == 201) return;
+
+    throw Exception(_extractMessage(response.data, fallback: fallback));
+  }
+
+  int? _extractStatusCode(dynamic responseData) {
+    if (responseData is Map<String, dynamic>) {
+      final value = responseData['statusCode'];
+      if (value is int) return value;
+      return int.tryParse(value?.toString().trim() ?? '');
+    }
+    if (responseData is Map) {
+      return _extractStatusCode(
+        responseData.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }
+    return null;
   }
 
   String _toApiDate(DateTime value) {

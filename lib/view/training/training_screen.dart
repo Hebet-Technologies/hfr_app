@@ -368,8 +368,7 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
         .length;
     final resources = _filterResources(trainingResources, _query);
     final isLoading = state.isLoading || sharedState.isLoading;
-    final actionLabel = _trainingApprovalActionLabel(access);
-    final resolvedActionLabel = actionLabel ?? 'Approve';
+    final actionLabels = _trainingApprovalActions(access);
 
     return Scaffold(
       backgroundColor: _trainingSurface,
@@ -465,7 +464,7 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _TrainingApprovalCard(
                         record: record,
-                        actionLabel: actionLabel,
+                        actionLabels: actionLabels,
                         isSubmitting: state.isSubmittingApproval,
                         onOpen: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
@@ -473,12 +472,10 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
                                 _TrainingApprovalDetailsScreen(record: record),
                           ),
                         ),
-                        onPrimaryAction:
-                            actionLabel != null && actionableRecord != null
-                            ? () => _submitAction(
-                                actionableRecord,
-                                resolvedActionLabel,
-                              )
+                        onAction:
+                            actionLabels.isNotEmpty && actionableRecord != null
+                            ? (action) =>
+                                  _submitAction(actionableRecord, action)
                             : null,
                       ),
                     );
@@ -522,7 +519,11 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
     try {
       final message = await ref
           .read(trainingViewModelProvider.notifier)
-          .submitApprovalAction(record: record, comment: result.comment);
+          .submitApprovalAction(
+            record: record,
+            comment: result.comment,
+            action: actionLabel,
+          );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -597,9 +598,8 @@ class _TrainingApprovalDetailsScreenState
       state.approvalQueue,
       record,
     );
-    final actionLabel = _trainingApprovalActionLabel(access);
-    final resolvedActionLabel = actionLabel ?? 'Approve';
-    final canSubmitAction = actionLabel != null && actionableRecord != null;
+    final actionLabels = _trainingApprovalActions(access);
+    final canSubmitAction = actionLabels.isNotEmpty && actionableRecord != null;
     final TrainingApprovalRecord reviewRecord = canSubmitAction
         ? actionableRecord
         : record;
@@ -774,29 +774,10 @@ class _TrainingApprovalDetailsScreenState
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _trainingBlue,
-                    minimumSize: const Size.fromHeight(50),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: state.isSubmittingApproval
-                      ? null
-                      : () => _handleAction(reviewRecord, resolvedActionLabel),
-                  child: state.isSubmittingApproval
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        )
-                      : Text('$resolvedActionLabel Application'),
+                child: _TrainingApprovalActionButtons(
+                  actions: actionLabels,
+                  isSubmitting: state.isSubmittingApproval,
+                  onAction: (action) => _handleAction(reviewRecord, action),
                 ),
               ),
             )
@@ -820,7 +801,11 @@ class _TrainingApprovalDetailsScreenState
     try {
       final message = await ref
           .read(trainingViewModelProvider.notifier)
-          .submitApprovalAction(record: record, comment: result.comment);
+          .submitApprovalAction(
+            record: record,
+            comment: result.comment,
+            action: actionLabel,
+          );
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -991,6 +976,9 @@ class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
                 child: _TrainingStatusTile(
                   program: item,
                   onTap: () => _openTrainingDetails(context, item),
+                  onDelete: item.status == TrainingParticipationStatus.pending
+                      ? () => _deleteTrainingApplication(item)
+                      : null,
                 ),
               ),
             ),
@@ -1014,6 +1002,45 @@ class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
     final range = await _pickTrainingDateRange(context, _dateRange);
     if (!mounted || range == _dateRange) return;
     setState(() => _dateRange = range);
+  }
+
+  Future<void> _deleteTrainingApplication(TrainingProgram program) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete training application'),
+        content: const Text(
+          'This will delete the training application if it is still editable.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep Application'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _trainingBlue),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final message = await ref
+          .read(trainingViewModelProvider.notifier)
+          .deleteTrainingRequest(program);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+      );
+    }
   }
 }
 
@@ -2199,10 +2226,15 @@ class _LatestTrainingCard extends StatelessWidget {
 }
 
 class _TrainingStatusTile extends StatelessWidget {
-  const _TrainingStatusTile({required this.program, required this.onTap});
+  const _TrainingStatusTile({
+    required this.program,
+    required this.onTap,
+    this.onDelete,
+  });
 
   final TrainingProgram program;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -2259,7 +2291,17 @@ class _TrainingStatusTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            const Icon(Icons.chevron_right_rounded, color: Color(0xFFD0D5DD)),
+            if (onDelete != null) ...[
+              IconButton(
+                tooltip: 'Delete application',
+                onPressed: onDelete,
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Color(0xFFD14343),
+                ),
+              ),
+            ] else
+              const Icon(Icons.chevron_right_rounded, color: Color(0xFFD0D5DD)),
           ],
         ),
       ),
@@ -2952,15 +2994,15 @@ class _TrainingApprovalCard extends StatelessWidget {
     required this.record,
     required this.isSubmitting,
     required this.onOpen,
-    this.actionLabel,
-    this.onPrimaryAction,
+    this.actionLabels = const [],
+    this.onAction,
   });
 
   final TrainingApprovalRecord record;
-  final String? actionLabel;
+  final List<String> actionLabels;
   final bool isSubmitting;
   final VoidCallback onOpen;
-  final VoidCallback? onPrimaryAction;
+  final ValueChanged<String>? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -3010,42 +3052,107 @@ class _TrainingApprovalCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onOpen,
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: _trainingBorder),
-                    foregroundColor: _trainingText,
-                    minimumSize: const Size.fromHeight(42),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text('View Details'),
-                ),
+          OutlinedButton(
+            onPressed: onOpen,
+            style: OutlinedButton.styleFrom(
+              side: const BorderSide(color: _trainingBorder),
+              foregroundColor: _trainingText,
+              minimumSize: const Size.fromHeight(42),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
-              if (actionLabel != null && onPrimaryAction != null) ...[
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: isSubmitting ? null : onPrimaryAction,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _trainingBlue,
-                      minimumSize: const Size.fromHeight(42),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(isSubmitting ? 'Submitting...' : actionLabel!),
-                  ),
-                ),
-              ],
-            ],
+            ),
+            child: const Center(child: Text('View Details')),
           ),
+          if (actionLabels.isNotEmpty && onAction != null) ...[
+            const SizedBox(height: 10),
+            _TrainingApprovalActionButtons(
+              actions: actionLabels,
+              isSubmitting: isSubmitting,
+              onAction: onAction!,
+              compact: true,
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _TrainingApprovalActionButtons extends StatelessWidget {
+  const _TrainingApprovalActionButtons({
+    required this.actions,
+    required this.isSubmitting,
+    required this.onAction,
+    this.compact = false,
+  });
+
+  final List<String> actions;
+  final bool isSubmitting;
+  final ValueChanged<String> onAction;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (actions.isEmpty) return const SizedBox.shrink();
+
+    if (actions.length == 1) {
+      return FilledButton(
+        style: FilledButton.styleFrom(
+          backgroundColor: _trainingBlue,
+          minimumSize: Size.fromHeight(compact ? 42 : 50),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(compact ? 12 : 14),
+          ),
+        ),
+        onPressed: isSubmitting ? null : () => onAction(actions.first),
+        child: isSubmitting
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Text('${actions.first} Application'),
+      );
+    }
+
+    return Row(
+      children: actions.map((action) {
+        final isDeny = action.trim().toLowerCase() == 'deny';
+        final button = isDeny
+            ? OutlinedButton(
+                onPressed: isSubmitting ? null : () => onAction(action),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFFD92D20),
+                  side: const BorderSide(color: Color(0xFFFDA29B)),
+                  minimumSize: Size.fromHeight(compact ? 42 : 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(compact ? 12 : 14),
+                  ),
+                ),
+                child: Text(isSubmitting ? 'Submitting...' : action),
+              )
+            : FilledButton(
+                onPressed: isSubmitting ? null : () => onAction(action),
+                style: FilledButton.styleFrom(
+                  backgroundColor: _trainingBlue,
+                  minimumSize: Size.fromHeight(compact ? 42 : 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(compact ? 12 : 14),
+                  ),
+                ),
+                child: Text(isSubmitting ? 'Submitting...' : action),
+              );
+        return Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(right: action == actions.last ? 0 : 10),
+            child: button,
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -3584,10 +3691,12 @@ Future<DateTimeRange?> _pickTrainingDateRange(
   );
 }
 
-String? _trainingApprovalActionLabel(StaffPortalAccess access) {
-  if (access.canApproveTrainingRequests) return 'Approve';
-  if (access.canForwardTrainingRequests) return 'Forward';
-  return null;
+List<String> _trainingApprovalActions(StaffPortalAccess access) {
+  if (access.canApproveTrainingRequests) {
+    return ['Approve', if (access.canDenyTrainingRequests) 'Deny'];
+  }
+  if (access.canForwardTrainingRequests) return const ['Forward'];
+  return const [];
 }
 
 TrainingApprovalRecord? _findActionableApproval(

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../data/network/api_service.dart';
 import '../../model/staff_request_models.dart';
 import '../../model/training_models.dart';
 import '../../view_model/providers.dart';
@@ -2021,6 +2022,20 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
             style: _homeTextStyle(fontSize: 13),
             decoration: _homeInputDecoration('Search announcements'),
           ),
+          if (ref
+              .watch(staffPortalAccessProvider)
+              .canCreatePositionRequest) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const JobAdvertisementApplicationsScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.assignment_outlined),
+              label: const Text('My Applications'),
+            ),
+          ],
           const SizedBox(height: 16),
           if (state.isLoading && source.isEmpty)
             const _AnnouncementFeedShimmer()
@@ -2034,6 +2049,318 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class JobAdvertisementApplicationsScreen extends ConsumerStatefulWidget {
+  const JobAdvertisementApplicationsScreen({super.key});
+
+  @override
+  ConsumerState<JobAdvertisementApplicationsScreen> createState() =>
+      _JobAdvertisementApplicationsScreenState();
+}
+
+class _JobAdvertisementApplicationsScreenState
+    extends ConsumerState<JobAdvertisementApplicationsScreen> {
+  bool _isLoading = true;
+  String? _errorMessage;
+  List<JobAdvertisementApplication> _applications = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_loadApplications);
+  }
+
+  Future<void> _loadApplications() async {
+    final user = ref.read(authViewModelProvider).user;
+    if (user == null) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Please sign in again.';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final applications = await ref
+          .read(staffRequestsRepositoryProvider)
+          .fetchJobAdvertisementApplications(user);
+      if (!mounted) return;
+      setState(() {
+        _applications = applications;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  Future<void> _openApplicationLetter(
+    JobAdvertisementApplication application,
+  ) async {
+    final fileName = application.fileName.trim();
+    if (fileName.isEmpty) return;
+    final baseUrl = ApiService.baseUrl.replaceFirst(RegExp(r'/api$'), '');
+    final uri = Uri.tryParse(
+      '$baseUrl/uploads/Employee/PersonalFile/$fileName',
+    );
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Future<void> _editApplication(JobAdvertisementApplication application) async {
+    final message = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _JobAnnouncementApplicationSheet(
+        announcement: _announcementFromApplication(application),
+        application: application,
+      ),
+    );
+    if (!mounted || message == null) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+    await _loadApplications();
+  }
+
+  Future<void> _deleteApplication(
+    JobAdvertisementApplication application,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Application'),
+        content: Text('Delete application for ${application.title}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      final message = await ref
+          .read(staffRequestsRepositoryProvider)
+          .deleteStaffAdvertisementApplication(application);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+      await _loadApplications();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Exception: ', '')),
+        ),
+      );
+    }
+  }
+
+  HomeAnnouncement _announcementFromApplication(
+    JobAdvertisementApplication application,
+  ) {
+    return HomeAnnouncement(
+      id: application.staffAdvertisementId,
+      title: application.title,
+      subtitle: application.title,
+      caption: 'Job Advertisement',
+      type: 'Job',
+      sourceType: 'StaffAdvertisements',
+      sourceId: application.staffAdvertisementId,
+      endsAt: application.endDate,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final access = ref.watch(staffPortalAccessProvider);
+    return Scaffold(
+      backgroundColor: _homeSurface,
+      appBar: AppBar(
+        backgroundColor: _homeSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'My Applications',
+          style: _homeTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: RefreshIndicator(
+        color: _homeBlue,
+        onRefresh: _loadApplications,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+          children: [
+            if (!access.canCreatePositionRequest)
+              const _AnnouncementInfoCard(
+                message: 'You do not have permission to manage applications.',
+              )
+            else if (_errorMessage != null) ...[
+              _AnnouncementInfoCard(message: _errorMessage!),
+              const SizedBox(height: 12),
+            ],
+            if (access.canCreatePositionRequest) ...[
+              if (_isLoading)
+                const _AnnouncementFeedShimmer()
+              else if (_applications.isEmpty)
+                const _EmptyActivityCard(message: 'No applications found')
+              else
+                ..._applications.map(
+                  (application) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _JobApplicationCard(
+                      application: application,
+                      onOpenLetter: () => _openApplicationLetter(application),
+                      onEdit: application.canEdit
+                          ? () => _editApplication(application)
+                          : null,
+                      onDelete: application.canEdit
+                          ? () => _deleteApplication(application)
+                          : null,
+                    ),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _JobApplicationCard extends StatelessWidget {
+  const _JobApplicationCard({
+    required this.application,
+    required this.onOpenLetter,
+    this.onEdit,
+    this.onDelete,
+  });
+
+  final JobAdvertisementApplication application;
+  final VoidCallback onOpenLetter;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _homeCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _homeBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  application.title,
+                  style: _homeTextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              _AnnouncementPill(application.status),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            [
+              if (application.positionName.trim().isNotEmpty)
+                application.positionName,
+              if (application.programName.trim().isNotEmpty)
+                application.programName,
+            ].join(' • '),
+            style: _homeTextStyle(fontSize: 13, color: _homeMuted),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: onOpenLetter,
+                icon: const Icon(Icons.download_rounded, size: 18),
+                label: Text(
+                  application.uploadName.trim().isEmpty
+                      ? 'Letter'
+                      : application.uploadName,
+                ),
+              ),
+              if (onEdit != null)
+                OutlinedButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_rounded, size: 18),
+                  label: const Text('Edit'),
+                ),
+              if (onDelete != null)
+                OutlinedButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: const Text('Delete'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFD92D20),
+                    side: const BorderSide(color: Color(0xFFFDA29B)),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AnnouncementPill extends StatelessWidget {
+  const _AnnouncementPill(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = label.trim();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEAF2FF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        normalized.isEmpty ? 'Submitted' : normalized,
+        style: _homeTextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          color: _homeBlue,
+        ),
       ),
     );
   }
@@ -2202,8 +2529,23 @@ class _AnnouncementDetailsScreenState
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Future<void> _openJobApplicationForm() async {
+    final message = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          _JobAnnouncementApplicationSheet(announcement: announcement),
+    );
+    if (!mounted || message == null) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
+    final access = ref.watch(staffPortalAccessProvider);
     final trainingState = ref.watch(trainingViewModelProvider);
     final isTrainingAnnouncement =
         _normalizedAnnouncementKey(announcement.type) == 'training';
@@ -2384,9 +2726,8 @@ class _AnnouncementDetailsScreenState
           ],
         ],
       ),
-      bottomNavigationBar: !isTrainingAnnouncement
-          ? null
-          : SafeArea(
+      bottomNavigationBar: isTrainingAnnouncement
+          ? SafeArea(
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -2450,7 +2791,369 @@ class _AnnouncementDetailsScreenState
                         ),
                 ),
               ),
-            ),
+            )
+          : announcement.supportsJobApplication &&
+                access.canCreatePositionRequest
+          ? SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _homeBlue,
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  onPressed: _openJobApplicationForm,
+                  icon: const Icon(Icons.send_rounded),
+                  label: Text(
+                    'Apply',
+                    style: _homeTextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _JobAnnouncementApplicationSheet extends ConsumerStatefulWidget {
+  const _JobAnnouncementApplicationSheet({
+    required this.announcement,
+    this.application,
+  });
+
+  final HomeAnnouncement announcement;
+  final JobAdvertisementApplication? application;
+
+  @override
+  ConsumerState<_JobAnnouncementApplicationSheet> createState() =>
+      _JobAnnouncementApplicationSheetState();
+}
+
+class _JobAnnouncementApplicationSheetState
+    extends ConsumerState<_JobAnnouncementApplicationSheet> {
+  bool _isLoading = true;
+  bool _isSubmitting = false;
+  bool _isLeaveWithoutPay = false;
+  String? _errorMessage;
+  List<RequestLookupOption> _programs = const [];
+  List<RequestLookupOption> _positions = const [];
+  RequestLookupOption? _selectedProgram;
+  RequestLookupOption? _selectedPosition;
+  PlatformFile? _applicationLetter;
+
+  final _workingAreaController = TextEditingController();
+  final _workingPositionController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_loadLookups);
+  }
+
+  @override
+  void dispose() {
+    _workingAreaController.dispose();
+    _workingPositionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadLookups() async {
+    try {
+      final repository = ref.read(staffRequestsRepositoryProvider);
+      final programs = await repository.fetchStaffAdvertisementPrograms(
+        widget.announcement,
+      );
+      final positions = await repository.fetchStaffAdvertisementPositions(
+        widget.announcement,
+      );
+      if (!mounted) return;
+      final application = widget.application;
+      setState(() {
+        _programs = programs;
+        _positions = positions;
+        if (application != null) {
+          _selectedProgram = _matchLookup(
+            programs,
+            application.programId,
+            application.programName,
+          );
+          _selectedPosition = _matchLookup(
+            positions,
+            application.positionId,
+            application.positionName,
+          );
+          _workingAreaController.text = application.workingArea ?? '';
+          _workingPositionController.text = application.workingPosition ?? '';
+          _isLeaveWithoutPay =
+              _workingAreaController.text.trim().isNotEmpty ||
+              _workingPositionController.text.trim().isNotEmpty;
+        }
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  RequestLookupOption? _matchLookup(
+    List<RequestLookupOption> options,
+    String id,
+    String label,
+  ) {
+    for (final option in options) {
+      if (option.id == id) return option;
+    }
+    if (id.trim().isEmpty && label.trim().isEmpty) return null;
+    return RequestLookupOption(id: id, label: label);
+  }
+
+  Future<void> _pickApplicationLetter() async {
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: const ['pdf'],
+      withData: false,
+    );
+    if (!mounted || result == null || result.files.isEmpty) return;
+
+    final file = result.files.first;
+    if (file.size > 1024 * 1024) {
+      setState(() => _errorMessage = 'Application letter must be 1MB or less.');
+      return;
+    }
+
+    setState(() {
+      _applicationLetter = file;
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _submit() async {
+    final user = ref.read(authViewModelProvider).user;
+    if (user == null) {
+      setState(() => _errorMessage = 'Please sign in again.');
+      return;
+    }
+    if (_selectedProgram == null || _selectedPosition == null) {
+      setState(() => _errorMessage = 'Select position and program.');
+      return;
+    }
+    final letterPath = _applicationLetter?.path?.trim() ?? '';
+    final isEditing = widget.application != null;
+    if (!isEditing && letterPath.isEmpty) {
+      setState(() => _errorMessage = 'Attach your application letter.');
+      return;
+    }
+    if (_isLeaveWithoutPay &&
+        (_workingAreaController.text.trim().isEmpty ||
+            _workingPositionController.text.trim().isEmpty)) {
+      setState(
+        () => _errorMessage =
+            'Current working station and position are required.',
+      );
+      return;
+    }
+    if (_isSubmitting) return;
+
+    setState(() {
+      _isSubmitting = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final letter = letterPath.isEmpty
+          ? null
+          : await MultipartFile.fromFile(
+              letterPath,
+              filename: _applicationLetter!.name,
+            );
+      final repository = ref.read(staffRequestsRepositoryProvider);
+      final message = isEditing
+          ? await repository.updateStaffAdvertisementApplication(
+              application: widget.application!,
+              user: user,
+              program: _selectedProgram!,
+              position: _selectedPosition!,
+              applicationLetter: letter,
+              workingArea: _isLeaveWithoutPay
+                  ? _workingAreaController.text
+                  : null,
+              workingPosition: _isLeaveWithoutPay
+                  ? _workingPositionController.text
+                  : null,
+            )
+          : await repository.submitStaffAdvertisementApplication(
+              announcement: widget.announcement,
+              user: user,
+              program: _selectedProgram!,
+              position: _selectedPosition!,
+              applicationLetter: letter!,
+              workingArea: _isLeaveWithoutPay
+                  ? _workingAreaController.text
+                  : null,
+              workingPosition: _isLeaveWithoutPay
+                  ? _workingPositionController.text
+                  : null,
+            );
+      if (!mounted) return;
+      Navigator.of(context).pop(message);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _errorMessage = error.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          MediaQuery.of(context).viewInsets.bottom + 20,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: _isLoading
+            ? const Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.application == null
+                          ? 'Apply'
+                          : 'Update Application',
+                      style: _homeTextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      widget.announcement.title,
+                      style: _homeTextStyle(fontSize: 13, color: _homeMuted),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_errorMessage != null) ...[
+                      _AnnouncementInfoCard(message: _errorMessage!),
+                      const SizedBox(height: 12),
+                    ],
+                    DropdownButtonFormField<RequestLookupOption>(
+                      initialValue: _selectedPosition,
+                      items: _positions
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setState(() => _selectedPosition = value),
+                      decoration: _homeInputDecoration('Position'),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<RequestLookupOption>(
+                      initialValue: _selectedProgram,
+                      items: _programs
+                          .map(
+                            (item) => DropdownMenuItem(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) =>
+                          setState(() => _selectedProgram = value),
+                      decoration: _homeInputDecoration('Program'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _pickApplicationLetter,
+                      icon: const Icon(Icons.attach_file_rounded),
+                      label: Text(
+                        _applicationLetter == null
+                            ? widget.application == null
+                                  ? 'Attach application letter PDF'
+                                  : 'Replace application letter PDF'
+                            : _applicationLetter!.name,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        'Leave without pay',
+                        style: _homeTextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      value: _isLeaveWithoutPay,
+                      onChanged: (value) =>
+                          setState(() => _isLeaveWithoutPay = value),
+                    ),
+                    if (_isLeaveWithoutPay) ...[
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: _workingAreaController,
+                        decoration: _homeInputDecoration(
+                          'Current working station',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _workingPositionController,
+                        decoration: _homeInputDecoration('Current position'),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    FilledButton(
+                      onPressed: _isSubmitting ? null : _submit,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _homeBlue,
+                        minimumSize: const Size.fromHeight(50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: Text(
+                        _isSubmitting
+                            ? 'Submitting...'
+                            : widget.application == null
+                            ? 'Submit'
+                            : 'Update',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+      ),
     );
   }
 }

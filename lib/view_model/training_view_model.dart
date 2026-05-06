@@ -358,6 +358,41 @@ class TrainingViewModel extends Notifier<TrainingState> {
     }
   }
 
+  Future<String> deleteTrainingRequest(TrainingProgram training) async {
+    final current = state.resolveProgram(training);
+
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+    try {
+      final message = await _repository.deleteTrainingRequest(current);
+      final nextApplications = state.myTrainingApplications
+          .where((item) => !_programsMatch(item, current))
+          .toList();
+      final nextDetails = Map<String, TrainingProgram>.from(state.detailsById)
+        ..removeWhere((_, value) => _programsMatch(value, current));
+      final nextLatest = state.latestTrainings.map((item) {
+        if (_programsMatch(item, current)) {
+          return item.copyWith(
+            status: TrainingParticipationStatus.notApplied,
+            trainingApplicationId: '',
+            canApplyLive: true,
+          );
+        }
+        return item;
+      }).toList();
+      state = state.copyWith(
+        isSubmitting: false,
+        latestTrainings: nextLatest,
+        myTrainingApplications: nextApplications,
+        detailsById: nextDetails,
+      );
+      return message;
+    } catch (error) {
+      final message = _cleanMessage(error);
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
   Future<TrainingApprovalRecord> loadApprovalDetail(
     TrainingApprovalRecord record,
   ) async {
@@ -384,6 +419,7 @@ class TrainingViewModel extends Notifier<TrainingState> {
   Future<String> submitApprovalAction({
     required TrainingApprovalRecord record,
     required String comment,
+    required String action,
   }) async {
     final current = state.resolveApproval(record);
 
@@ -392,6 +428,7 @@ class TrainingViewModel extends Notifier<TrainingState> {
       final message = await _repository.submitApprovalAction(
         record: current,
         comment: comment,
+        action: action,
       );
       final nextQueue = state.approvalQueue
           .where((item) => !_approvalsMatch(item, current))

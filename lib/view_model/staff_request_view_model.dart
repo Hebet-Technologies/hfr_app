@@ -419,6 +419,32 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
 
     state = state.copyWith(isSubmitting: true, errorMessage: null);
 
+    if (request.type == StaffRequestType.transfer) {
+      try {
+        await _repository.deleteTransferRequest(request);
+        final updatedRecords = state.records
+            .where((item) => item.id != request.id)
+            .toList();
+        state = state.copyWith(
+          isSubmitting: false,
+          records: updatedRecords,
+          errorMessage: null,
+        );
+        return request.copyWith(
+          status: StaffRequestStatus.withdrawn,
+          stageLabel: 'Deleted',
+          detailFields: _replaceStatusField(
+            request.detailFields,
+            StaffRequestStatus.withdrawn,
+          ),
+        );
+      } catch (error) {
+        final message = error.toString().replaceAll('Exception: ', '');
+        state = state.copyWith(isSubmitting: false, errorMessage: message);
+        rethrow;
+      }
+    }
+
     final updated = request.copyWith(
       status: StaffRequestStatus.withdrawn,
       stageLabel: 'Withdrawn',

@@ -1906,7 +1906,11 @@ class RequestDetailScreen extends ConsumerWidget {
                         final confirmed = await showDialog<bool>(
                           context: context,
                           builder: (_) => AlertDialog(
-                            title: const Text('Withdraw request'),
+                            title: Text(
+                              currentRequest.type == StaffRequestType.transfer
+                                  ? 'Delete transfer request'
+                                  : 'Withdraw request',
+                            ),
                             content: Text(
                               _withdrawPromptFor(currentRequest.type),
                             ),
@@ -1920,7 +1924,12 @@ class RequestDetailScreen extends ConsumerWidget {
                                 style: _filledStyle(),
                                 onPressed: () =>
                                     Navigator.of(context).pop(true),
-                                child: const Text('Withdraw'),
+                                child: Text(
+                                  currentRequest.type ==
+                                          StaffRequestType.transfer
+                                      ? 'Delete'
+                                      : 'Withdraw',
+                                ),
                               ),
                             ],
                           ),
@@ -1928,22 +1937,43 @@ class RequestDetailScreen extends ConsumerWidget {
 
                         if (confirmed != true || !context.mounted) return;
 
-                        final updated = await ref
-                            .read(staffRequestsViewModelProvider.notifier)
-                            .withdrawRequest(currentRequest);
+                        StaffRequestRecord updated;
+                        try {
+                          updated = await ref
+                              .read(staffRequestsViewModelProvider.notifier)
+                              .withdrawRequest(currentRequest);
+                        } catch (error) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                error.toString().replaceAll('Exception: ', ''),
+                              ),
+                            ),
+                          );
+                          return;
+                        }
                         if (!context.mounted) return;
 
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              '${updated.type.label} request marked as withdrawn.',
+                              currentRequest.type == StaffRequestType.transfer
+                                  ? 'Transfer request deleted successfully.'
+                                  : '${updated.type.label} request marked as withdrawn.',
                             ),
                           ),
                         );
+                        if (currentRequest.type == StaffRequestType.transfer &&
+                            context.mounted) {
+                          Navigator.of(context).pop();
+                        }
                       },
                 child: Text(
                   requestState.isSubmitting
-                      ? 'Withdrawing...'
+                      ? currentRequest.type == StaffRequestType.transfer
+                            ? 'Deleting...'
+                            : 'Withdrawing...'
                       : _detailActionLabel(currentRequest.type),
                 ),
               ),
@@ -3210,7 +3240,7 @@ String _detailActionLabel(StaffRequestType type) {
     case StaffRequestType.leave:
       return 'Withdraw Request and Re-submit Leave Request';
     case StaffRequestType.transfer:
-      return 'Withdraw Request and Re-submit Transfer Request';
+      return 'Delete Transfer Request';
     case StaffRequestType.loan:
       return 'Withdraw Loan Application';
     case StaffRequestType.activity:
@@ -3225,7 +3255,7 @@ String _withdrawPromptFor(StaffRequestType type) {
     case StaffRequestType.leave:
       return 'This will mark the leave request as withdrawn so you can submit a new leave request later.';
     case StaffRequestType.transfer:
-      return 'This will mark the transfer request as withdrawn so you can submit a new transfer request later.';
+      return 'This will delete the transfer request if it has not progressed past the first workflow step.';
     case StaffRequestType.loan:
       return 'This will mark the loan application as withdrawn.';
     case StaffRequestType.activity:

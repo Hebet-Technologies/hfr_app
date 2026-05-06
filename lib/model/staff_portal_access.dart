@@ -29,6 +29,7 @@ class StaffPortalAccess {
     required this.hasApproverMode,
     required this.roles,
     required this.permissions,
+    required this.isAdmin,
     required this.canForwardLeave,
     required this.canApproveLeave,
     required this.canDenyLeave,
@@ -38,7 +39,9 @@ class StaffPortalAccess {
     required this.canViewTrainingRequests,
     required this.canForwardTrainingRequests,
     required this.canApproveTrainingRequests,
+    required this.canDenyTrainingRequests,
     required this.canCreateTrainingResult,
+    required this.canCreatePositionRequest,
   });
 
   factory StaffPortalAccess.fromUser(UserModel? user) {
@@ -91,9 +94,17 @@ class StaffPortalAccess {
     final canForwardTrainingRequests =
         isAdmin || _containsAny(values, const ['forward training request']);
     final canApproveTrainingRequests =
-        isAdmin || _containsAny(values, const ['approve training']);
+        isAdmin || _containsAny(values, const ['approve training request']);
+    final canDenyTrainingRequests =
+        isAdmin ||
+        _containsAny(values, const [
+          'deny training request',
+          'denied training request',
+        ]);
     final canCreateTrainingResult =
         isAdmin || _containsAny(values, const ['create training result']);
+    final canCreatePositionRequest =
+        isAdmin || _containsAny(values, const ['create position request']);
 
     final hasApproverMode =
         canForwardLeave ||
@@ -105,6 +116,7 @@ class StaffPortalAccess {
         canViewTrainingRequests ||
         canForwardTrainingRequests ||
         canApproveTrainingRequests ||
+        canDenyTrainingRequests ||
         canCreateTrainingResult;
 
     return StaffPortalAccess._(
@@ -115,6 +127,7 @@ class StaffPortalAccess {
       hasApproverMode: hasApproverMode,
       roles: roles,
       permissions: permissions,
+      isAdmin: isAdmin,
       canForwardLeave: canForwardLeave,
       canApproveLeave: canApproveLeave,
       canDenyLeave: canDenyLeave,
@@ -124,7 +137,9 @@ class StaffPortalAccess {
       canViewTrainingRequests: canViewTrainingRequests,
       canForwardTrainingRequests: canForwardTrainingRequests,
       canApproveTrainingRequests: canApproveTrainingRequests,
+      canDenyTrainingRequests: canDenyTrainingRequests,
       canCreateTrainingResult: canCreateTrainingResult,
+      canCreatePositionRequest: canCreatePositionRequest,
     );
   }
 
@@ -133,6 +148,7 @@ class StaffPortalAccess {
   final bool hasApproverMode;
   final List<String> roles;
   final List<String> permissions;
+  final bool isAdmin;
   final bool canForwardLeave;
   final bool canApproveLeave;
   final bool canDenyLeave;
@@ -142,7 +158,9 @@ class StaffPortalAccess {
   final bool canViewTrainingRequests;
   final bool canForwardTrainingRequests;
   final bool canApproveTrainingRequests;
+  final bool canDenyTrainingRequests;
   final bool canCreateTrainingResult;
+  final bool canCreatePositionRequest;
 
   bool get isEmployeeMode => activeMode == StaffPortalMode.employee;
 
@@ -174,6 +192,12 @@ class StaffPortalAccess {
       case StaffPortalMode.approver:
         return 'Review, forward, approve, or deny other staff requests.';
     }
+  }
+
+  bool allows(String permission) {
+    if (isAdmin) return true;
+    final values = [...roles, ...permissions].map(_normalize).toList();
+    return _containsAny(values, [permission]);
   }
 
   static bool _containsAny(List<String> haystack, List<String> needles) {

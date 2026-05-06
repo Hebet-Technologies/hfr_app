@@ -131,6 +131,7 @@ class StaffRequestsRepository {
         attachmentName: _stringValue(item['upload_file_name']),
         stageLabel: _stringValue(item['transfer_path_name']),
         isLive: true,
+        sourceId: _stringValue(item['transfer_request_id']),
         detailFields: [
           RequestDetailField(
             label: 'Reason',
@@ -719,6 +720,168 @@ class StaffRequestsRepository {
     throw Exception('Unable to read the posted comment.');
   }
 
+  Future<List<RequestLookupOption>> fetchStaffAdvertisementPrograms(
+    HomeAnnouncement announcement,
+  ) async {
+    final advertId = announcement.sourceId?.trim() ?? '';
+    if (advertId.isEmpty) return const [];
+
+    final response = await _get('/getStaffAdverProgram/$advertId');
+    return _extractListByKey(response.data, 'data')
+        .map(
+          (item) => RequestLookupOption(
+            id: _stringValue(item['program_id']),
+            label: _stringValue(item['program_name']),
+          ),
+        )
+        .where((item) => item.id.isNotEmpty && item.label.isNotEmpty)
+        .toList();
+  }
+
+  Future<List<RequestLookupOption>> fetchStaffAdvertisementPositions(
+    HomeAnnouncement announcement,
+  ) async {
+    final advertId = announcement.sourceId?.trim() ?? '';
+    if (advertId.isEmpty) return const [];
+
+    final response = await _get('/getStaffAdverPosition/$advertId');
+    return _extractListByKey(response.data, 'data')
+        .map(
+          (item) => RequestLookupOption(
+            id: _stringValue(item['staff_adver_position_id']),
+            label: _stringValue(item['position_name']),
+          ),
+        )
+        .where((item) => item.id.isNotEmpty && item.label.isNotEmpty)
+        .toList();
+  }
+
+  Future<String> submitStaffAdvertisementApplication({
+    required HomeAnnouncement announcement,
+    required UserModel user,
+    required RequestLookupOption program,
+    required RequestLookupOption position,
+    required MultipartFile applicationLetter,
+    String? workingArea,
+    String? workingPosition,
+  }) async {
+    final advertId = announcement.sourceId?.trim() ?? '';
+    if (advertId.isEmpty) {
+      throw Exception('This announcement is missing the advertisement ID.');
+    }
+    if (user.personalInformationId.trim().isEmpty) {
+      throw Exception('Your employee profile is not linked to this session.');
+    }
+
+    final response = await _postForm(
+      '/storeAdverRequest',
+      data: {
+        'staff_advertisement_id': advertId,
+        'personal_information_id': user.personalInformationId,
+        'program_id': program.id,
+        'staff_adver_position_id': position.id,
+        'upload_file_name': applicationLetter,
+        if ((workingArea ?? '').trim().isNotEmpty)
+          'working_area': workingArea!.trim(),
+        if ((workingPosition ?? '').trim().isNotEmpty)
+          'working_position': workingPosition!.trim(),
+      },
+    );
+
+    return _extractMessage(
+      response.data,
+      fallback: 'Application submitted successfully.',
+    );
+  }
+
+  Future<List<JobAdvertisementApplication>> fetchJobAdvertisementApplications(
+    UserModel user,
+  ) async {
+    if (user.personalInformationId.trim().isEmpty) return const [];
+
+    final response = await _postJson(
+      '/getStaffAdvertisementApp',
+      data: {'personal_information_id': user.personalInformationId},
+    );
+
+    return _extractListByKey(
+      response.data,
+      'data',
+    ).map(_jobAdvertisementApplicationFromApi).toList()..sort((first, second) {
+      final firstDate = first.createdAt ?? DateTime(1970);
+      final secondDate = second.createdAt ?? DateTime(1970);
+      return secondDate.compareTo(firstDate);
+    });
+  }
+
+  Future<String> updateStaffAdvertisementApplication({
+    required JobAdvertisementApplication application,
+    required UserModel user,
+    required RequestLookupOption program,
+    required RequestLookupOption position,
+    MultipartFile? applicationLetter,
+    String? workingArea,
+    String? workingPosition,
+  }) async {
+    if (user.personalInformationId.trim().isEmpty) {
+      throw Exception('Your employee profile is not linked to this session.');
+    }
+
+    final payload = <String, dynamic>{
+      'staff_advertisement_id': application.staffAdvertisementId,
+      'staff_adver_application_id': application.id,
+      'personal_information_id': user.personalInformationId,
+      'program_id': program.id,
+      'staff_adver_position_id': position.id,
+      if ((workingArea ?? '').trim().isNotEmpty)
+        'working_area': workingArea!.trim(),
+      if ((workingPosition ?? '').trim().isNotEmpty)
+        'working_position': workingPosition!.trim(),
+    };
+    if (applicationLetter != null) {
+      payload['upload_file_name'] = applicationLetter;
+    }
+
+    final response = await _postForm('/storeAdverRequestUpdate', data: payload);
+
+    return _extractMessage(
+      response.data,
+      fallback: 'Application updated successfully.',
+    );
+  }
+
+  Future<String> deleteStaffAdvertisementApplication(
+    JobAdvertisementApplication application,
+  ) async {
+    final response = await _delete(
+      '/deleteStaffAdverApplication/${application.id}',
+    );
+    return _extractMessage(
+      response.data,
+      fallback: 'Application deleted successfully.',
+    );
+  }
+
+  Future<String> deleteTransferRequest(StaffRequestRecord request) async {
+    final sourceId = request.sourceId?.trim() ?? '';
+    final requestId = sourceId.isNotEmpty
+        ? sourceId
+        : request.id.replaceFirst('transfer-', '').trim();
+    if (requestId.isEmpty) {
+      throw Exception('Transfer request details are incomplete.');
+    }
+
+    final response = await _delete('/deleteStaffTransfer/$requestId');
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Transfer request could not be deleted.',
+    );
+    return _extractMessage(
+      response.data,
+      fallback: 'Transfer request deleted successfully.',
+    );
+  }
+
   Future<List<RequestLookupOption>> fetchLeaveTypes(UserModel user) async {
     if (user.personalInformationId.trim().isEmpty) {
       return const [];
@@ -995,6 +1158,10 @@ class StaffRequestsRepository {
     );
 
     final reference = _reference(prefix: 'TR');
+    final responseData = response.data;
+    final responseMap = responseData is Map
+        ? responseData.map((key, value) => MapEntry(key.toString(), value))
+        : const <String, dynamic>{};
     return StaffRequestRecord(
       id: reference,
       type: StaffRequestType.transfer,
@@ -1007,6 +1174,7 @@ class StaffRequestsRepository {
       attachmentName: draft.fileName,
       stageLabel: 'Submitted',
       isLive: true,
+      sourceId: _stringValue(responseMap['transfer_request_id']),
       detailFields: [
         RequestDetailField(
           label: 'Preferred Facility',
@@ -1392,6 +1560,30 @@ class StaffRequestsRepository {
     );
   }
 
+  JobAdvertisementApplication _jobAdvertisementApplicationFromApi(
+    Map<String, dynamic> item,
+  ) {
+    return JobAdvertisementApplication(
+      id: _stringValue(item['staff_adver_application_id']),
+      staffAdvertisementId: _stringValue(item['staff_advertisement_id']),
+      title: _stringValue(item['title_name'], fallback: 'Job Advertisement'),
+      positionId: _stringValue(item['staff_adver_position_id']),
+      positionName: _stringValue(item['position_name']),
+      programId: _stringValue(item['program_id']),
+      programName: _stringValue(item['program_name']),
+      fileName: _stringValue(item['file_name']),
+      uploadName: _stringValue(
+        item['upload_name'],
+        fallback: 'Application Letter',
+      ),
+      status: _stringValue(item['status'], fallback: 'Submitted'),
+      endDate: _dateValue(item['end_date']),
+      createdAt: _dateValue(item['created_at']),
+      workingArea: _nullableString(item['working_area']),
+      workingPosition: _nullableString(item['working_position']),
+    );
+  }
+
   HomeResource _resourceFromApi(Map<String, dynamic> item) {
     final attachments = _extractListByKey(item, 'attachments')
         .map(
@@ -1735,6 +1927,19 @@ class StaffRequestsRepository {
     }
   }
 
+  Future<Response<dynamic>> _delete(String path) async {
+    try {
+      return await _dio.delete(path, options: await _authorizedOptions());
+    } on DioException catch (error) {
+      throw Exception(
+        _resolveRequestError(
+          error,
+          fallback: 'The request could not be deleted.',
+        ),
+      );
+    }
+  }
+
   String? _announcementCommentsPath(HomeAnnouncement announcement) {
     final trainingAnnouncementId = announcement.trainingAnnouncementId?.trim();
     if (trainingAnnouncementId != null && trainingAnnouncementId.isNotEmpty) {
@@ -1862,6 +2067,11 @@ class StaffRequestsRepository {
   String _stringValue(dynamic value, {String fallback = ''}) {
     final normalized = value?.toString().trim() ?? '';
     return normalized.isEmpty ? fallback : normalized;
+  }
+
+  String? _nullableString(dynamic value) {
+    final normalized = value?.toString().trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 
   int? _intValue(dynamic value) {

@@ -115,6 +115,7 @@ class StaffRequestRecord {
     this.attachmentName,
     this.stageLabel,
     this.isLive = false,
+    this.sourceId,
   });
 
   final String id;
@@ -131,6 +132,7 @@ class StaffRequestRecord {
   final String? attachmentName;
   final String? stageLabel;
   final bool isLive;
+  final String? sourceId;
 
   StaffRequestRecord copyWith({
     String? id,
@@ -147,6 +149,7 @@ class StaffRequestRecord {
     String? attachmentName,
     String? stageLabel,
     bool? isLive,
+    String? sourceId,
   }) {
     return StaffRequestRecord(
       id: id ?? this.id,
@@ -163,6 +166,7 @@ class StaffRequestRecord {
       attachmentName: attachmentName ?? this.attachmentName,
       stageLabel: stageLabel ?? this.stageLabel,
       isLive: isLive ?? this.isLive,
+      sourceId: sourceId ?? this.sourceId,
     );
   }
 }
@@ -355,8 +359,19 @@ class HomeAnnouncement {
   final int? commentsCount;
 
   bool get supportsComments {
-    return (trainingAnnouncementId != null && trainingAnnouncementId!.isNotEmpty) ||
+    return (trainingAnnouncementId != null &&
+            trainingAnnouncementId!.isNotEmpty) ||
         (announcementUuid != null && announcementUuid!.isNotEmpty);
+  }
+
+  bool get supportsJobApplication {
+    final normalizedType = type.trim().toLowerCase();
+    final normalizedSource = (sourceType ?? '').trim().toLowerCase();
+    return sourceId != null &&
+        sourceId!.trim().isNotEmpty &&
+        (normalizedType == 'job' ||
+            normalizedSource.contains('staffadvertisements') ||
+            normalizedSource.contains('staff_advertisement'));
   }
 }
 
@@ -398,6 +413,53 @@ class HomeResourceAttachment {
   final String attachmentUrl;
   final String mimeType;
   final int? fileSize;
+}
+
+class JobAdvertisementApplication {
+  const JobAdvertisementApplication({
+    required this.id,
+    required this.staffAdvertisementId,
+    required this.title,
+    required this.positionId,
+    required this.positionName,
+    required this.programId,
+    required this.programName,
+    required this.fileName,
+    required this.uploadName,
+    required this.status,
+    this.endDate,
+    this.createdAt,
+    this.workingArea,
+    this.workingPosition,
+  });
+
+  final String id;
+  final String staffAdvertisementId;
+  final String title;
+  final String positionId;
+  final String positionName;
+  final String programId;
+  final String programName;
+  final String fileName;
+  final String uploadName;
+  final String status;
+  final DateTime? endDate;
+  final DateTime? createdAt;
+  final String? workingArea;
+  final String? workingPosition;
+
+  bool get canEdit {
+    final closeDate = endDate;
+    if (closeDate == null) return true;
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final closeDateOnly = DateTime(
+      closeDate.year,
+      closeDate.month,
+      closeDate.day,
+    );
+    return !todayDate.isAfter(closeDateOnly);
+  }
 }
 
 class HomeAnnouncementComment {
