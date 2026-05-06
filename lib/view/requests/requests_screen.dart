@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../model/staff_portal_access.dart';
 import '../../model/staff_request_models.dart';
@@ -1733,6 +1734,18 @@ class _RequestCategoryListScreenState
           widget.type.pluralLabel,
           style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
+        actions: [
+          if (widget.type == StaffRequestType.leave)
+            IconButton(
+              tooltip: 'Leave history',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const LeaveHistoryScreen(),
+                ),
+              ),
+              icon: const Icon(Icons.history_rounded),
+            ),
+        ],
       ),
       floatingActionButton: widget.type == StaffRequestType.sickLeave
           ? null
@@ -1772,6 +1785,103 @@ class _RequestCategoryListScreenState
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class LeaveHistoryScreen extends ConsumerStatefulWidget {
+  const LeaveHistoryScreen({super.key});
+
+  @override
+  ConsumerState<LeaveHistoryScreen> createState() => _LeaveHistoryScreenState();
+}
+
+class _LeaveHistoryScreenState extends ConsumerState<LeaveHistoryScreen> {
+  List<StaffRequestRecord> _items = const [];
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    Future<void>.microtask(_load);
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final items = await ref
+          .read(staffRequestsViewModelProvider.notifier)
+          .fetchLeaveHistory();
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _isLoading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = error.toString().replaceAll('Exception: ', '');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _requestSurface,
+      appBar: AppBar(
+        backgroundColor: _requestSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'Leave History',
+          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+      ),
+      body: RefreshIndicator(
+        color: _requestBlue,
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            if (_error != null) ...[
+              _InlineBanner(
+                message: _error!,
+                onClose: () => setState(() => _error = null),
+              ),
+              const SizedBox(height: 14),
+            ],
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.only(top: 72),
+                child: Center(
+                  child: CircularProgressIndicator(color: _requestBlue),
+                ),
+              )
+            else if (_items.isEmpty)
+              const _ApprovalEmptyState(message: 'No leave history found.')
+            else
+              ..._items.map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _RequestListCard(
+                    request: item,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => RequestDetailScreen(request: item),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1876,6 +1986,10 @@ class RequestDetailScreen extends ConsumerWidget {
                   .toList(),
             ),
           ),
+          if (currentRequest.type == StaffRequestType.leave) ...[
+            const SizedBox(height: 18),
+            _LeaveDetailActions(request: currentRequest),
+          ],
           if (currentRequest.type == StaffRequestType.activity) ...[
             const SizedBox(height: 18),
             SizedBox(
@@ -2073,6 +2187,245 @@ class RequestSubmissionSuccessScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _LeaveDetailActions extends ConsumerWidget {
+  const _LeaveDetailActions({required this.request});
+
+  final StaffRequestRecord request;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(staffRequestsViewModelProvider);
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              final detail = await ref
+                  .read(staffRequestsViewModelProvider.notifier)
+                  .fetchLeaveDetail(request);
+              if (!context.mounted) return;
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute<void>(
+                  builder: (_) => RequestDetailScreen(request: detail),
+                ),
+              );
+            },
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('Refresh Detail From Backend'),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _openLeaveDocument(
+                  context,
+                  ref
+                      .read(staffRequestsRepositoryProvider)
+                      .leaveLetterUrl(request),
+                ),
+                icon: const Icon(Icons.description_outlined, size: 18),
+                label: const Text('Leave Letter'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _openLeaveDocument(
+                  context,
+                  ref
+                      .read(staffRequestsRepositoryProvider)
+                      .returnToWorkLetterUrl(request),
+                ),
+                icon: const Icon(Icons.assignment_return_outlined, size: 18),
+                label: const Text('Return Letter'),
+              ),
+            ),
+          ],
+        ),
+        if (request.status == StaffRequestStatus.approved) ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: _filledStyle(),
+              onPressed: state.isSubmitting
+                  ? null
+                  : () => _openReturnToWorkSheet(context, ref, request),
+              icon: const Icon(Icons.keyboard_return_rounded, size: 18),
+              label: Text(
+                state.isSubmitting ? 'Submitting...' : 'Submit Return To Work',
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+Future<void> _openReturnToWorkSheet(
+  BuildContext context,
+  WidgetRef ref,
+  StaffRequestRecord request,
+) async {
+  final result = await showModalBottomSheet<_ReturnToWorkResult>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _ReturnToWorkSheet(),
+  );
+  if (result == null || !context.mounted) return;
+
+  try {
+    final message = await ref
+        .read(staffRequestsViewModelProvider.notifier)
+        .submitReturnToWork(
+          request: request,
+          returnedDate: result.returnedDate,
+          description: result.description,
+        );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  } catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+    );
+  }
+}
+
+class _ReturnToWorkSheet extends StatefulWidget {
+  const _ReturnToWorkSheet();
+
+  @override
+  State<_ReturnToWorkSheet> createState() => _ReturnToWorkSheetState();
+}
+
+class _ReturnToWorkSheetState extends State<_ReturnToWorkSheet> {
+  final _descriptionController = TextEditingController();
+  DateTime _returnedDate = DateTime.now();
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          18,
+          18,
+          18 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Return To Work',
+              style: _requestTextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _returnedDate,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (picked != null) setState(() => _returnedDate = picked);
+              },
+              icon: const Icon(Icons.calendar_today_rounded, size: 18),
+              label: Text('Returned ${_formatShortDate(_returnedDate)}'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descriptionController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Description',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: _filledStyle(),
+                onPressed: () {
+                  final description = _descriptionController.text.trim();
+                  if (description.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Description is required.')),
+                    );
+                    return;
+                  }
+                  Navigator.of(context).pop(
+                    _ReturnToWorkResult(
+                      returnedDate: _returnedDate,
+                      description: description,
+                    ),
+                  );
+                },
+                child: const Text('Submit'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReturnToWorkResult {
+  const _ReturnToWorkResult({
+    required this.returnedDate,
+    required this.description,
+  });
+
+  final DateTime returnedDate;
+  final String description;
+}
+
+Future<void> _openLeaveDocument(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.path.endsWith('/')) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Document is not available yet.')),
+    );
+    return;
+  }
+  var opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+  if (!opened) {
+    opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Could not open document.')));
   }
 }
 

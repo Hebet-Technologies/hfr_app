@@ -470,6 +470,46 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     return task;
   }
 
+  Future<List<StaffRequestRecord>> fetchLeaveHistory() async {
+    final user = await _resolveCurrentUser();
+    if (user == null || user.personalInformationId.trim().isEmpty) {
+      throw Exception(_missingEmployeeInformationMessage());
+    }
+    return _repository.fetchLeaveHistory(user);
+  }
+
+  Future<StaffRequestRecord> fetchLeaveDetail(
+    StaffRequestRecord request,
+  ) async {
+    final user = await _resolveCurrentUser();
+    if (user == null || user.personalInformationId.trim().isEmpty) {
+      throw Exception(_missingEmployeeInformationMessage());
+    }
+    return _repository.fetchLeaveDetail(request: request, user: user);
+  }
+
+  Future<String> submitReturnToWork({
+    required StaffRequestRecord request,
+    required DateTime returnedDate,
+    required String description,
+  }) async {
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+    try {
+      final message = await _repository.submitReturnToWork(
+        request: request,
+        returnedDate: returnedDate,
+        description: description,
+      );
+      await load();
+      state = state.copyWith(isSubmitting: false);
+      return message;
+    } catch (error) {
+      final message = error.toString().replaceAll('Exception: ', '');
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
   Future<String> performApprovalAction({
     required ApprovalTask task,
     required ApproverAction action,

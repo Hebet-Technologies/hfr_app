@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../model/staff_portal_access.dart';
+import '../model/staff_request_models.dart';
 import '../model/training_models.dart';
 import '../model/user_model.dart';
 import '../repository/auth_repository.dart';
@@ -391,6 +392,127 @@ class TrainingViewModel extends Notifier<TrainingState> {
       state = state.copyWith(isSubmitting: false, errorMessage: message);
       rethrow;
     }
+  }
+
+  Future<String> updateTrainingRequest({
+    required TrainingProgram training,
+    required DateTime startDate,
+    required DateTime endDate,
+    String? admissionLetterPath,
+    String? admissionLetterName,
+  }) async {
+    final user = _currentUser ?? await _authRepository.getSavedUser();
+    if (user == null) {
+      throw Exception('Your employee profile is not linked to this session.');
+    }
+    final current = state.resolveProgram(training);
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+    try {
+      final message = await _repository.updateTrainingRequest(
+        user: user,
+        training: current,
+        startDate: startDate,
+        endDate: endDate,
+        admissionLetterPath: admissionLetterPath,
+        admissionLetterName: admissionLetterName,
+      );
+      await load();
+      state = state.copyWith(isSubmitting: false);
+      return message;
+    } catch (error) {
+      final message = _cleanMessage(error);
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
+  Future<String> uploadTrainingContract({
+    required TrainingProgram training,
+    required String filePath,
+    required String fileName,
+  }) async {
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+    try {
+      final message = await _repository.uploadTrainingContract(
+        training: state.resolveProgram(training),
+        filePath: filePath,
+        fileName: fileName,
+      );
+      state = state.copyWith(isSubmitting: false);
+      return message;
+    } catch (error) {
+      final message = _cleanMessage(error);
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
+  Future<String> uploadTrainingResult({
+    required String trainingStudentResultId,
+    required String filePath,
+    required String fileName,
+  }) async {
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+    try {
+      final message = await _repository.uploadTrainingResult(
+        trainingStudentResultId: trainingStudentResultId,
+        filePath: filePath,
+        fileName: fileName,
+      );
+      state = state.copyWith(isSubmitting: false);
+      return message;
+    } catch (error) {
+      final message = _cleanMessage(error);
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
+  Future<String> generateTrainingContract({
+    required TrainingProgram training,
+    required String refereeId,
+    required String directorId,
+    required String costTypeId,
+    required String costAmount,
+    required String unit,
+  }) async {
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+    try {
+      final message = await _repository.generateTrainingContract(
+        training: state.resolveProgram(training),
+        refereeId: refereeId,
+        directorId: directorId,
+        costTypeId: costTypeId,
+        costAmount: costAmount,
+        unit: unit,
+      );
+      state = state.copyWith(isSubmitting: false);
+      return message;
+    } catch (error) {
+      final message = _cleanMessage(error);
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
+  Future<List<RequestLookupOption>> fetchTrainingReferees() async {
+    final user = _currentUser ?? await _authRepository.getSavedUser();
+    if (user == null) return const [];
+    return _repository.fetchTrainingReferees(user);
+  }
+
+  Future<List<RequestLookupOption>> fetchTrainingDirectors() {
+    return _repository.fetchTrainingDirectors();
+  }
+
+  Future<List<RequestLookupOption>> fetchTrainingCostTypes() {
+    return _repository.fetchTrainingCostTypes();
+  }
+
+  Future<List<RequestLookupOption>> fetchTrainingResultOptions() async {
+    final user = _currentUser ?? await _authRepository.getSavedUser();
+    if (user == null) return const [];
+    return _repository.fetchTrainingResultOptions(user);
   }
 
   Future<TrainingApprovalRecord> loadApprovalDetail(

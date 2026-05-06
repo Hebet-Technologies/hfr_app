@@ -5,6 +5,7 @@ import '../data/network/api_service.dart';
 import '../repository/auth_repository.dart';
 import '../model/staff_portal_access.dart';
 import '../repository/peer_exchange_repository.dart';
+import '../repository/profile_records_repository.dart';
 import '../repository/staff_requests_repository.dart';
 import '../repository/training_repository.dart';
 import 'auth_view_model.dart';
@@ -30,6 +31,10 @@ final staffRequestsRepositoryProvider = Provider<StaffRequestsRepository>(
 
 final trainingRepositoryProvider = Provider<TrainingRepository>(
   (_) => TrainingRepository(),
+);
+
+final profileRecordsRepositoryProvider = Provider<ProfileRecordsRepository>(
+  (_) => ProfileRecordsRepository(),
 );
 
 final authViewModelProvider = NotifierProvider<AuthViewModel, AuthState>(() {

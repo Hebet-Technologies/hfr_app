@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../data/network/api_service.dart';
+import '../model/staff_request_models.dart';
 import '../model/training_models.dart';
 import '../model/user_model.dart';
 
@@ -742,6 +743,230 @@ class TrainingRepository {
     );
   }
 
+  Future<String> updateTrainingRequest({
+    required UserModel user,
+    required TrainingProgram training,
+    required DateTime startDate,
+    required DateTime endDate,
+    String? admissionLetterPath,
+    String? admissionLetterName,
+  }) async {
+    final trainingApplicationId = training.trainingApplicationId?.trim() ?? '';
+    if (trainingApplicationId.isEmpty) {
+      throw Exception('Training application details are incomplete.');
+    }
+    if (user.personalInformationId.trim().isEmpty) {
+      throw Exception('Your employee profile is not linked to this session.');
+    }
+
+    final payload = <String, dynamic>{
+      'training_application_id': trainingApplicationId,
+      'personal_information_id': user.personalInformationId,
+      'development_plan_vendor_id': training.developmentPlanVendorId,
+      'institute_id': training.instituteId,
+      'start_date': _toApiDate(startDate),
+      'end_date': _toApiDate(endDate),
+    };
+    if ((admissionLetterPath ?? '').trim().isNotEmpty) {
+      payload['admission_letter'] = await MultipartFile.fromFile(
+        admissionLetterPath!,
+        filename: admissionLetterName,
+      );
+    }
+
+    final response = await _postForm('/updateTrainingRequest', data: payload);
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Training application could not be updated.',
+    );
+    return _extractMessage(
+      response.data,
+      fallback: 'Training application updated successfully.',
+    );
+  }
+
+  Future<String> uploadTrainingContract({
+    required TrainingProgram training,
+    required String filePath,
+    required String fileName,
+  }) async {
+    final trainingApplicationId = training.trainingApplicationId?.trim() ?? '';
+    if (trainingApplicationId.isEmpty) {
+      throw Exception('Training application details are incomplete.');
+    }
+    final response = await _postForm(
+      '/storeTrainingContract',
+      data: {
+        'training_application_id': trainingApplicationId,
+        'trining_contract': await MultipartFile.fromFile(
+          filePath,
+          filename: fileName,
+        ),
+      },
+    );
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Training contract could not be uploaded.',
+    );
+    return _extractMessage(
+      response.data,
+      fallback: 'Training contract uploaded successfully.',
+    );
+  }
+
+  Future<String> uploadTrainingResult({
+    required String trainingStudentResultId,
+    required String filePath,
+    required String fileName,
+  }) async {
+    if (trainingStudentResultId.trim().isEmpty) {
+      throw Exception('Training result ID is required.');
+    }
+    final response = await _postForm(
+      '/updateTrainingResult',
+      data: {
+        'training_student_result_id': trainingStudentResultId.trim(),
+        'training_result': await MultipartFile.fromFile(
+          filePath,
+          filename: fileName,
+        ),
+      },
+    );
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Training result could not be uploaded.',
+    );
+    return _extractMessage(
+      response.data,
+      fallback: 'Training result uploaded successfully.',
+    );
+  }
+
+  Future<String> generateTrainingContract({
+    required TrainingProgram training,
+    required String refereeId,
+    required String directorId,
+    required String costTypeId,
+    required String costAmount,
+    required String unit,
+  }) async {
+    final trainingApplicationId = training.trainingApplicationId?.trim() ?? '';
+    if (trainingApplicationId.isEmpty) {
+      throw Exception('Training application details are incomplete.');
+    }
+    final response = await _postJson(
+      '/downloadTrainingContract',
+      data: {
+        'training_application_id': trainingApplicationId,
+        'refferee_id': refereeId,
+        'director_id': directorId,
+        'study_cost': [
+          {'cost_type_id': costTypeId, 'cost_amount': costAmount, 'unit': unit},
+        ],
+      },
+    );
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Training contract could not be generated.',
+    );
+    return _extractMessage(
+      response.data,
+      fallback: 'Training contract generated successfully.',
+    );
+  }
+
+  Future<List<RequestLookupOption>> fetchTrainingReferees(
+    UserModel user,
+  ) async {
+    if (user.personalInformationId.trim().isEmpty) return const [];
+    final response = await _get(
+      '/personalRefferees/${user.personalInformationId}',
+    );
+    return _extractList(response.data)
+        .map((item) {
+          final name = _compact([
+            _stringValue(item['first_name']),
+            _stringValue(item['middle_name']),
+            _stringValue(item['last_name']),
+          ]).join(' ');
+          return RequestLookupOption(
+            id: _stringValue(item['refferee_id']),
+            label: name.isEmpty ? 'Referee' : name,
+            subtitle: _stringValue(item['refferee_position']),
+          );
+        })
+        .where((item) => item.id.isNotEmpty)
+        .toList();
+  }
+
+  Future<List<RequestLookupOption>> fetchTrainingDirectors() async {
+    final response = await _get('/getHeadOfDepartment');
+    return _extractList(response.data)
+        .map((item) {
+          final name = _compact([
+            _stringValue(item['first_name']),
+            _stringValue(item['middle_name']),
+            _stringValue(item['last_name']),
+          ]).join(' ');
+          return RequestLookupOption(
+            id: _stringValue(item['personal_information_id']),
+            label: name.isEmpty ? 'Director' : name,
+            subtitle: _stringValue(item['working_station_name']),
+          );
+        })
+        .where((item) => item.id.isNotEmpty)
+        .toList();
+  }
+
+  Future<List<RequestLookupOption>> fetchTrainingCostTypes() async {
+    final response = await _get('/costTypes');
+    return _extractList(response.data)
+        .map((item) {
+          return RequestLookupOption(
+            id: _stringValue(item['cost_type_id']),
+            label: _stringValue(
+              item['cost_name'],
+              fallback: _stringValue(item['cost_type_name'], fallback: 'Cost'),
+            ),
+            subtitle: _stringValue(item['unit']),
+          );
+        })
+        .where((item) => item.id.isNotEmpty)
+        .toList();
+  }
+
+  Future<List<RequestLookupOption>> fetchTrainingResultOptions(
+    UserModel user,
+  ) async {
+    if (user.personalInformationId.trim().isEmpty) return const [];
+    final response = await _postJson(
+      '/getStudentTrainingResult',
+      data: {'personal_information_id': user.personalInformationId},
+    );
+    return _extractList(response.data)
+        .map((item) {
+          final id = _stringValue(item['training_student_result_id']);
+          return RequestLookupOption(
+            id: id,
+            label: _stringValue(
+              item['training_name'],
+              fallback: _stringValue(
+                item['upload_name'],
+                fallback: 'Training Result $id',
+              ),
+            ),
+            subtitle: _stringValue(item['result_year']),
+          );
+        })
+        .where((item) => item.id.isNotEmpty)
+        .toList();
+  }
+
+  String trainingLetterUrl(TrainingProgram training) {
+    final trainingApplicationId = training.trainingApplicationId?.trim() ?? '';
+    return '${ApiService.baseUrl}/getTrainingLetter/$trainingApplicationId';
+  }
+
   TrainingProgram buildOptimisticAppliedProgram(TrainingProgram training) {
     final now = DateTime.now();
     return training.copyWith(
@@ -900,16 +1125,14 @@ class TrainingRepository {
       return normalizedPath;
     }
 
-    final apiUri = Uri.parse(ApiService.baseUrl);
-    final publicBaseUrl = '${apiUri.scheme}://${apiUri.host}';
     if (normalizedPath.isNotEmpty) {
       final relativePath = normalizedPath.replaceFirst(RegExp(r'^/+'), '');
-      return '$publicBaseUrl/$relativePath';
+      return '${ApiService.baseUrl}/$relativePath';
     }
 
     final normalizedFileName = fileName.trim();
     if (normalizedFileName.isEmpty) return '';
-    return '$publicBaseUrl/uploads/Employee/TrainingFile/$normalizedFileName';
+    return '${ApiService.baseUrl}/uploads/Employee/TrainingFile/$normalizedFileName';
   }
 
   TrainingResource? _approvalResourceFromItem(

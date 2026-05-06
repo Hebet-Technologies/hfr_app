@@ -1,3 +1,4 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -973,12 +974,28 @@ class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
             ...items.map(
               (item) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _TrainingStatusTile(
-                  program: item,
-                  onTap: () => _openTrainingDetails(context, item),
-                  onDelete: item.status == TrainingParticipationStatus.pending
-                      ? () => _deleteTrainingApplication(item)
-                      : null,
+                child: Column(
+                  children: [
+                    _TrainingStatusTile(
+                      program: item,
+                      onTap: () => _openTrainingDetails(context, item),
+                      onDelete:
+                          item.status == TrainingParticipationStatus.pending
+                          ? () => _deleteTrainingApplication(item)
+                          : null,
+                    ),
+                    const SizedBox(height: 8),
+                    _TrainingEmployeeActions(
+                      program: item,
+                      onEdit: item.status == TrainingParticipationStatus.pending
+                          ? () => _editTrainingApplication(item)
+                          : null,
+                      onUploadContract: () => _uploadContract(item),
+                      onGenerateContract: () => _generateContract(item),
+                      onUploadResult: () => _uploadResult(),
+                      onLetter: () => _openTrainingLetter(item),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1040,6 +1057,143 @@ class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
       );
+    }
+  }
+
+  Future<void> _editTrainingApplication(TrainingProgram program) async {
+    final result = await showModalBottomSheet<_TrainingEditResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TrainingEditSheet(program: program),
+    );
+    if (result == null || !mounted) return;
+    try {
+      final message = await ref
+          .read(trainingViewModelProvider.notifier)
+          .updateTrainingRequest(
+            training: program,
+            startDate: result.startDate,
+            endDate: result.endDate,
+            admissionLetterPath: result.filePath,
+            admissionLetterName: result.fileName,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+      );
+    }
+  }
+
+  Future<void> _uploadContract(TrainingProgram program) async {
+    final file = await _pickTrainingPdf();
+    if (file == null || !mounted) return;
+    try {
+      final message = await ref
+          .read(trainingViewModelProvider.notifier)
+          .uploadTrainingContract(
+            training: program,
+            filePath: file.$1,
+            fileName: file.$2,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+      );
+    }
+  }
+
+  Future<void> _uploadResult() async {
+    final options = await ref
+        .read(trainingViewModelProvider.notifier)
+        .fetchTrainingResultOptions();
+    if (!mounted) return;
+    final result = await showModalBottomSheet<_TrainingResultUploadResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TrainingResultUploadSheet(options: options),
+    );
+    if (result == null || !mounted) return;
+    try {
+      final message = await ref
+          .read(trainingViewModelProvider.notifier)
+          .uploadTrainingResult(
+            trainingStudentResultId: result.trainingStudentResultId,
+            filePath: result.filePath,
+            fileName: result.fileName,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+      );
+    }
+  }
+
+  Future<void> _generateContract(TrainingProgram program) async {
+    final viewModel = ref.read(trainingViewModelProvider.notifier);
+    final results = await Future.wait<List<RequestLookupOption>>([
+      viewModel.fetchTrainingReferees(),
+      viewModel.fetchTrainingDirectors(),
+      viewModel.fetchTrainingCostTypes(),
+    ]);
+    if (!mounted) return;
+    final result = await showModalBottomSheet<_TrainingContractResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TrainingContractSheet(
+        referees: results[0],
+        directors: results[1],
+        costTypes: results[2],
+      ),
+    );
+    if (result == null || !mounted) return;
+    try {
+      final message = await ref
+          .read(trainingViewModelProvider.notifier)
+          .generateTrainingContract(
+            training: program,
+            refereeId: result.refereeId,
+            directorId: result.directorId,
+            costTypeId: result.costTypeId,
+            costAmount: result.costAmount,
+            unit: result.unit,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceAll('Exception: ', ''))),
+      );
+    }
+  }
+
+  Future<void> _openTrainingLetter(TrainingProgram program) async {
+    final url = ref.read(trainingRepositoryProvider).trainingLetterUrl(program);
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.path.endsWith('/')) return;
+    var opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!opened) {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 }
@@ -2309,6 +2463,543 @@ class _TrainingStatusTile extends StatelessWidget {
   }
 }
 
+class _TrainingEmployeeActions extends StatelessWidget {
+  const _TrainingEmployeeActions({
+    required this.program,
+    required this.onUploadContract,
+    required this.onGenerateContract,
+    required this.onUploadResult,
+    required this.onLetter,
+    this.onEdit,
+  });
+
+  final TrainingProgram program;
+  final VoidCallback? onEdit;
+  final VoidCallback onUploadContract;
+  final VoidCallback onGenerateContract;
+  final VoidCallback onUploadResult;
+  final VoidCallback onLetter;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (onEdit != null)
+          _TrainingActionChip(
+            icon: Icons.edit_outlined,
+            label: 'Edit',
+            onTap: onEdit!,
+          ),
+        _TrainingActionChip(
+          icon: Icons.upload_file_outlined,
+          label: 'Contract',
+          onTap: onUploadContract,
+        ),
+        _TrainingActionChip(
+          icon: Icons.receipt_long_outlined,
+          label: 'Generate',
+          onTap: onGenerateContract,
+        ),
+        _TrainingActionChip(
+          icon: Icons.school_outlined,
+          label: 'Result',
+          onTap: onUploadResult,
+        ),
+        _TrainingActionChip(
+          icon: Icons.description_outlined,
+          label: 'Letter',
+          onTap: onLetter,
+        ),
+      ],
+    );
+  }
+}
+
+class _TrainingActionChip extends StatelessWidget {
+  const _TrainingActionChip({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ActionChip(
+      avatar: Icon(icon, size: 16, color: _trainingBlue),
+      label: Text(
+        label,
+        style: _trainingTextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: _trainingBlue,
+        ),
+      ),
+      onPressed: onTap,
+      backgroundColor: _trainingSoftBlue,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFD8E6FF)),
+      ),
+    );
+  }
+}
+
+class _TrainingEditSheet extends StatefulWidget {
+  const _TrainingEditSheet({required this.program});
+
+  final TrainingProgram program;
+
+  @override
+  State<_TrainingEditSheet> createState() => _TrainingEditSheetState();
+}
+
+class _TrainingEditSheetState extends State<_TrainingEditSheet> {
+  late DateTime _startDate = widget.program.startDate ?? DateTime.now();
+  late DateTime _endDate =
+      widget.program.endDate ?? DateTime.now().add(const Duration(days: 1));
+  String? _filePath;
+  String? _fileName;
+
+  Future<void> _pickDate(bool start) async {
+    final current = start ? _startDate : _endDate;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    setState(() {
+      if (start) {
+        _startDate = picked;
+        if (_endDate.isBefore(_startDate)) _endDate = _startDate;
+      } else {
+        _endDate = picked;
+      }
+    });
+  }
+
+  Future<void> _pickFile() async {
+    final file = await _pickTrainingPdf();
+    if (file == null) return;
+    setState(() {
+      _filePath = file.$1;
+      _fileName = file.$2;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          18,
+          18,
+          18 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Edit Training Request',
+              style: _trainingTextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickDate(true),
+                    icon: const Icon(Icons.event_rounded, size: 18),
+                    label: Text(_formatShortDate(_startDate)),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickDate(false),
+                    icon: const Icon(Icons.event_available_rounded, size: 18),
+                    label: Text(_formatShortDate(_endDate)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _pickFile,
+              icon: const Icon(Icons.attach_file_rounded, size: 18),
+              label: Text(_fileName ?? 'Admission Letter'),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: _trainingBlue),
+                onPressed: () => Navigator.of(context).pop(
+                  _TrainingEditResult(
+                    startDate: _startDate,
+                    endDate: _endDate,
+                    filePath: _filePath,
+                    fileName: _fileName,
+                  ),
+                ),
+                child: const Text('Save'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingEditResult {
+  const _TrainingEditResult({
+    required this.startDate,
+    required this.endDate,
+    this.filePath,
+    this.fileName,
+  });
+
+  final DateTime startDate;
+  final DateTime endDate;
+  final String? filePath;
+  final String? fileName;
+}
+
+class _TrainingResultUploadSheet extends StatefulWidget {
+  const _TrainingResultUploadSheet({required this.options});
+
+  final List<RequestLookupOption> options;
+
+  @override
+  State<_TrainingResultUploadSheet> createState() =>
+      _TrainingResultUploadSheetState();
+}
+
+class _TrainingResultUploadSheetState
+    extends State<_TrainingResultUploadSheet> {
+  final _idController = TextEditingController();
+  String? _filePath;
+  String? _fileName;
+
+  @override
+  void dispose() {
+    _idController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickFile() async {
+    final file = await _pickTrainingPdf();
+    if (file == null) return;
+    setState(() {
+      _filePath = file.$1;
+      _fileName = file.$2;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _TrainingSimpleSheet(
+      title: 'Upload Training Result',
+      children: [
+        if (widget.options.isNotEmpty)
+          DropdownButtonFormField<String>(
+            initialValue: _idController.text.trim().isEmpty
+                ? null
+                : _idController.text.trim(),
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Training Result'),
+            items: widget.options
+                .map(
+                  (option) => DropdownMenuItem<String>(
+                    value: option.id,
+                    child: Text(
+                      option.subtitle?.trim().isNotEmpty == true
+                          ? '${option.label} • ${option.subtitle}'
+                          : option.label,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) _idController.text = value;
+            },
+          )
+        else
+          TextField(
+            controller: _idController,
+            decoration: const InputDecoration(
+              labelText: 'Training Student Result ID',
+            ),
+          ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _pickFile,
+          icon: const Icon(Icons.attach_file_rounded, size: 18),
+          label: Text(_fileName ?? 'Training Result File'),
+        ),
+      ],
+      onSubmit: () {
+        final id = _idController.text.trim();
+        if (id.isEmpty || _filePath == null) return;
+        Navigator.of(context).pop(
+          _TrainingResultUploadResult(
+            trainingStudentResultId: id,
+            filePath: _filePath!,
+            fileName: _fileName ?? 'training-result.pdf',
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TrainingResultUploadResult {
+  const _TrainingResultUploadResult({
+    required this.trainingStudentResultId,
+    required this.filePath,
+    required this.fileName,
+  });
+
+  final String trainingStudentResultId;
+  final String filePath;
+  final String fileName;
+}
+
+class _TrainingContractSheet extends StatefulWidget {
+  const _TrainingContractSheet({
+    required this.referees,
+    required this.directors,
+    required this.costTypes,
+  });
+
+  final List<RequestLookupOption> referees;
+  final List<RequestLookupOption> directors;
+  final List<RequestLookupOption> costTypes;
+
+  @override
+  State<_TrainingContractSheet> createState() => _TrainingContractSheetState();
+}
+
+class _TrainingContractSheetState extends State<_TrainingContractSheet> {
+  final _refereeController = TextEditingController();
+  final _directorController = TextEditingController();
+  final _costTypeController = TextEditingController();
+  final _amountController = TextEditingController();
+  final _unitController = TextEditingController(text: 'TZS');
+
+  @override
+  void dispose() {
+    _refereeController.dispose();
+    _directorController.dispose();
+    _costTypeController.dispose();
+    _amountController.dispose();
+    _unitController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _TrainingSimpleSheet(
+      title: 'Generate Training Contract',
+      children: [
+        _LookupOrTextField(
+          controller: _refereeController,
+          label: 'Referee',
+          fallbackLabel: 'Referee ID',
+          options: widget.referees,
+        ),
+        const SizedBox(height: 10),
+        _LookupOrTextField(
+          controller: _directorController,
+          label: 'Director',
+          fallbackLabel: 'Director ID',
+          options: widget.directors,
+        ),
+        const SizedBox(height: 10),
+        _LookupOrTextField(
+          controller: _costTypeController,
+          label: 'Cost Type',
+          fallbackLabel: 'Cost Type ID',
+          options: widget.costTypes,
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _amountController,
+          decoration: const InputDecoration(labelText: 'Cost Amount'),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _unitController,
+          decoration: const InputDecoration(labelText: 'Unit'),
+        ),
+      ],
+      onSubmit: () {
+        if (_refereeController.text.trim().isEmpty ||
+            _directorController.text.trim().isEmpty ||
+            _costTypeController.text.trim().isEmpty ||
+            _amountController.text.trim().isEmpty) {
+          return;
+        }
+        Navigator.of(context).pop(
+          _TrainingContractResult(
+            refereeId: _refereeController.text.trim(),
+            directorId: _directorController.text.trim(),
+            costTypeId: _costTypeController.text.trim(),
+            costAmount: _amountController.text.trim(),
+            unit: _unitController.text.trim().isEmpty
+                ? 'TZS'
+                : _unitController.text.trim(),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TrainingContractResult {
+  const _TrainingContractResult({
+    required this.refereeId,
+    required this.directorId,
+    required this.costTypeId,
+    required this.costAmount,
+    required this.unit,
+  });
+
+  final String refereeId;
+  final String directorId;
+  final String costTypeId;
+  final String costAmount;
+  final String unit;
+}
+
+class _LookupOrTextField extends StatelessWidget {
+  const _LookupOrTextField({
+    required this.controller,
+    required this.label,
+    required this.fallbackLabel,
+    required this.options,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String fallbackLabel;
+  final List<RequestLookupOption> options;
+
+  @override
+  Widget build(BuildContext context) {
+    if (options.isEmpty) {
+      return TextField(
+        controller: controller,
+        decoration: InputDecoration(labelText: fallbackLabel),
+      );
+    }
+
+    final value = controller.text.trim();
+    return DropdownButtonFormField<String>(
+      initialValue: options.any((option) => option.id == value) ? value : null,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label),
+      items: options
+          .map(
+            (option) => DropdownMenuItem<String>(
+              value: option.id,
+              child: Text(
+                option.subtitle?.trim().isNotEmpty == true
+                    ? '${option.label} • ${option.subtitle}'
+                    : option.label,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        if (value != null) controller.text = value;
+      },
+    );
+  }
+}
+
+class _TrainingSimpleSheet extends StatelessWidget {
+  const _TrainingSimpleSheet({
+    required this.title,
+    required this.children,
+    required this.onSubmit,
+  });
+
+  final String title;
+  final List<Widget> children;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          18,
+          18,
+          18 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Text(
+              title,
+              style: _trainingTextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 14),
+            ...children,
+            const SizedBox(height: 14),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: _trainingBlue),
+              onPressed: onSubmit,
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+Future<(String, String)?> _pickTrainingPdf() async {
+  final result = await FilePicker.platform.pickFiles(
+    type: FileType.custom,
+    allowedExtensions: const ['pdf'],
+  );
+  if (result == null || result.files.isEmpty) return null;
+  final file = result.files.single;
+  if (file.path == null) return null;
+  return (file.path!, file.name);
+}
+
 class _ResourceTile extends StatelessWidget {
   const _ResourceTile({required this.resource, required this.onTap});
 
@@ -3461,9 +4152,9 @@ Future<void> _openResource(
     return;
   }
 
-  var didLaunch = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+  var didLaunch = await launchUrl(uri, mode: LaunchMode.externalApplication);
   if (!didLaunch) {
-    didLaunch = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    didLaunch = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
   }
   if (!didLaunch && context.mounted) {
     ScaffoldMessenger.of(context).showSnackBar(

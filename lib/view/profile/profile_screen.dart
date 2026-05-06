@@ -5,6 +5,7 @@ import '../../model/profile_details.dart';
 import '../../utils/routes/routes_name.dart';
 import '../../view_model/providers.dart';
 import 'edit_profile_screen.dart';
+import 'profile_records_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -99,6 +100,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         : user != null && user.roles.isNotEmpty
         ? _formatRole(user.roles.first)
         : 'Staff member';
+    final access = ref.watch(staffPortalAccessProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
@@ -169,6 +171,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 )
               else if (profile != null) ...[
                 _ProfileHeroCard(profile: profile, roleLabel: roleLabel),
+                if (access.hasEmployeeProfile) ...[
+                  const SizedBox(height: 14),
+                  _ProfileRecordsEntryCard(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ProfileRecordsScreen(),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 _SectionLabel(title: 'PERSONAL DETAILS'),
                 const SizedBox(height: 8),
@@ -546,6 +558,45 @@ class _ProfileItem {
 
   final String label;
   final String value;
+}
+
+class _ProfileRecordsEntryCard extends StatelessWidget {
+  const _ProfileRecordsEntryCard({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFEAECEF)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.folder_shared_outlined, color: Color(0xFF1F6BFF)),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Education, work, family, skills and attachments',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF101828),
+                ),
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: Color(0xFF98A2B3)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _initials(String value) {

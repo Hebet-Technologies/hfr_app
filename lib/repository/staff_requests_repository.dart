@@ -46,6 +46,7 @@ class StaffRequestsRepository {
             attachmentName: _stringValue(item['upload_file_name']),
             stageLabel: _stringValue(item['leave_path_name']),
             isLive: true,
+            sourceId: _stringValue(item['leave_request_id']),
             detailFields: [
               RequestDetailField(
                 label: 'Leave Type',
@@ -82,6 +83,79 @@ class StaffRequestsRepository {
           ),
         )
         .toList();
+  }
+
+  Future<List<StaffRequestRecord>> fetchLeaveHistory(UserModel user) async {
+    if (user.personalInformationId.trim().isEmpty) return const [];
+
+    final response = await _get(
+      '/viewStaffLeaveHistory/${user.personalInformationId}',
+    );
+    return _extractList(
+        response.data,
+      ).map((item) => _leaveRecordFromApi(item, user, history: true)).toList()
+      ..sort(
+        (first, second) => second.submittedAt.compareTo(first.submittedAt),
+      );
+  }
+
+  Future<StaffRequestRecord> fetchLeaveDetail({
+    required StaffRequestRecord request,
+    required UserModel user,
+  }) async {
+    final leaveRequestId = _requestSourceId(request, 'leave-');
+    if (leaveRequestId.isEmpty) {
+      throw Exception('Leave request details are incomplete.');
+    }
+
+    final response = await _get('/getLeaveLetter/$leaveRequestId');
+    final items = _extractList(response.data);
+    if (items.isEmpty) {
+      final data = _extractMap(response.data, 'data');
+      if (data.isNotEmpty) {
+        return _leaveRecordFromApi(data, user, history: true);
+      }
+      return request;
+    }
+    return _leaveRecordFromApi(items.first, user, history: true);
+  }
+
+  Future<String> submitReturnToWork({
+    required StaffRequestRecord request,
+    required DateTime returnedDate,
+    required String description,
+  }) async {
+    final leaveRequestId = _requestSourceId(request, 'leave-');
+    if (leaveRequestId.isEmpty) {
+      throw Exception('Leave request details are incomplete.');
+    }
+
+    final response = await _postJson(
+      '/returnToWork',
+      data: {
+        'leave_request_id': leaveRequestId,
+        'returned_date': _toApiDate(returnedDate),
+        'description': description,
+      },
+    );
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Return to work request could not be submitted.',
+    );
+    return _extractMessage(
+      response.data,
+      fallback: 'Return to work request submitted successfully.',
+    );
+  }
+
+  String leaveLetterUrl(StaffRequestRecord request) {
+    final leaveRequestId = _requestSourceId(request, 'leave-');
+    return '${ApiService.baseUrl}/getLeaveLetter/$leaveRequestId';
+  }
+
+  String returnToWorkLetterUrl(StaffRequestRecord request) {
+    final leaveRequestId = _requestSourceId(request, 'leave-');
+    return '${ApiService.baseUrl}/viewReturnedToWorkLetter/$leaveRequestId';
   }
 
   Future<List<StaffRequestRecord>> fetchTransferRequests(UserModel user) async {
@@ -1410,6 +1484,88 @@ class StaffRequestsRepository {
     );
   }
 
+  StaffRequestRecord _leaveRecordFromApi(
+    Map<String, dynamic> item,
+    UserModel user, {
+    bool history = false,
+  }) {
+    final leaveRequestId = _stringValue(item['leave_request_id']);
+    final status = _statusFromApi(item['status'] ?? item['leave_period']);
+    return StaffRequestRecord(
+      id: 'leave-$leaveRequestId',
+      type: StaffRequestType.leave,
+      title: '${_stringValue(item['leave_type'], fallback: 'Leave')} Request',
+      summary: [
+        _stringValue(item['working_station_name']),
+        _stringValue(item['department_name']),
+      ].where((value) => value.isNotEmpty).join(' • '),
+      status: status,
+      submittedAt:
+          _dateValue(
+            item['request_date'],
+            fallback: _dateValue(
+              item['created_at'],
+              fallback: _dateValue(item['proposed_start_date']),
+            ),
+          ) ??
+          DateTime.now(),
+      referenceNumber: 'LV-${leaveRequestId.padLeft(5, '0')}',
+      startDate: _dateValue(
+        item['start_date'],
+        fallback: _dateValue(item['proposed_start_date']),
+      ),
+      endDate: _dateValue(
+        item['end_date'],
+        fallback: _dateValue(item['proposed_end_date']),
+      ),
+      attachmentName: _stringValue(item['upload_file_name']),
+      stageLabel: _stringValue(
+        item['leave_path_name'],
+        fallback: history ? 'History' : 'Open',
+      ),
+      isLive: true,
+      sourceId: leaveRequestId,
+      detailFields: [
+        RequestDetailField(
+          label: 'Leave Type',
+          value: _stringValue(item['leave_type'], fallback: 'Leave'),
+        ),
+        RequestDetailField(
+          label: 'Facility',
+          value: _stringValue(
+            item['working_station_name'],
+            fallback: user.workingStationName,
+          ),
+        ),
+        RequestDetailField(
+          label: 'Department',
+          value: _stringValue(item['department_name'], fallback: 'N/A'),
+        ),
+        RequestDetailField(
+          label: 'Post Category',
+          value: _stringValue(item['post_category_name'], fallback: 'General'),
+        ),
+        RequestDetailField(
+          label: 'Number of Days',
+          value: _stringValue(item['number_of_days'], fallback: 'N/A'),
+        ),
+        RequestDetailField(
+          label: 'Return Date',
+          value: _displayOptionalDate(_dateValue(item['return_date'])),
+        ),
+        RequestDetailField(
+          label: 'Comment',
+          value: _stringValue(item['comment'], fallback: 'No comment'),
+        ),
+        RequestDetailField(
+          label: 'Status',
+          value: status.label,
+          status: status,
+        ),
+      ],
+    );
+  }
+
   StaffRequestRecord _loanRecordFromApi(Map<String, dynamic> item) {
     final amount = _stringValue(item['amount'], fallback: '0');
     final bank = _extractNestedMap(item['approved_bank']);
@@ -2072,6 +2228,12 @@ class StaffRequestsRepository {
   String? _nullableString(dynamic value) {
     final normalized = value?.toString().trim() ?? '';
     return normalized.isEmpty ? null : normalized;
+  }
+
+  String _requestSourceId(StaffRequestRecord request, String prefix) {
+    final sourceId = request.sourceId?.trim() ?? '';
+    if (sourceId.isNotEmpty) return sourceId;
+    return request.id.replaceFirst(prefix, '').trim();
   }
 
   int? _intValue(dynamic value) {
