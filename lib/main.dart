@@ -2,20 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:staffportal/utils/routes/routes.dart';
-import 'package:staffportal/utils/routes/routes_name.dart';
+import 'package:staffportal/core/routing/routes.dart';
+import 'package:staffportal/core/routing/routes_name.dart';
 
-import 'services/app_navigation_service.dart';
-import 'services/push_notification_service.dart';
-import 'services/realtime_service.dart';
-import 'services/session_expiry_service.dart';
-import 'view_model/auth_view_model.dart';
-import 'view_model/providers.dart';
+import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/services/app_navigation_service.dart';
+import 'package:staffportal/core/services/push_notification_service.dart';
+import 'package:staffportal/core/services/realtime_service.dart';
+import 'package:staffportal/core/services/session_expiry_service.dart';
+import 'package:staffportal/features/auth/providers/auth_view_model.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await PushNotificationService.instance.initialize();
   runApp(const ProviderScope(child: MyApp()));
+  unawaited(PushNotificationService.instance.initialize());
 }
 
 class MyApp extends ConsumerStatefulWidget {
@@ -73,6 +73,16 @@ class _MyAppState extends ConsumerState<MyApp> {
     return MaterialApp(
       navigatorKey: AppNavigationService.navigatorKey,
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: Color(0xFF101828),
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          iconTheme: IconThemeData(color: Color(0xFF101828)),
+          actionsIconTheme: IconThemeData(color: Color(0xFF101828)),
+        ),
+      ),
       initialRoute: RoutesName.splash,
       onGenerateRoute: Routes.generateRoute,
     );

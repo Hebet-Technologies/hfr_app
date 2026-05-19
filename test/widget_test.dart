@@ -3,12 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:staffportal/model/staff_portal_access.dart';
-import 'package:staffportal/model/user_model.dart';
-import 'package:staffportal/view/requests/loan_request_form.dart';
-import 'package:staffportal/view/requests/requests_screen.dart';
-import 'package:staffportal/view/training/training_screen.dart';
-import 'package:staffportal/view_model/providers.dart';
+import 'package:staffportal/features/auth/models/staff_portal_access.dart';
+import 'package:staffportal/features/auth/models/user_model.dart';
+import 'package:staffportal/features/requests/views/loan_request_form.dart';
+import 'package:staffportal/features/requests/views/requests_screen.dart';
+import 'package:staffportal/features/training/views/training_screen.dart';
+import 'package:staffportal/core/providers/app_providers.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

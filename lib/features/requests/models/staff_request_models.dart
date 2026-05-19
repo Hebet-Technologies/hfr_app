@@ -1,0 +1,643 @@
+enum StaffRequestType { activity, leave, transfer, loan, sickLeave }
+
+extension StaffRequestTypeX on StaffRequestType {
+  String get label {
+    switch (this) {
+      case StaffRequestType.activity:
+        return 'Activity';
+      case StaffRequestType.leave:
+        return 'Leave';
+      case StaffRequestType.transfer:
+        return 'Transfer';
+      case StaffRequestType.loan:
+        return 'Loan';
+      case StaffRequestType.sickLeave:
+        return 'Sick Leave';
+    }
+  }
+
+  String get pluralLabel {
+    switch (this) {
+      case StaffRequestType.activity:
+        return 'Activity Requests';
+      case StaffRequestType.leave:
+        return 'Leave Requests';
+      case StaffRequestType.transfer:
+        return 'Transfer Requests';
+      case StaffRequestType.loan:
+        return 'Loan Applications';
+      case StaffRequestType.sickLeave:
+        return 'Sick Leave Submissions';
+    }
+  }
+
+  String get actionLabel {
+    switch (this) {
+      case StaffRequestType.activity:
+        return 'Register Activity';
+      case StaffRequestType.leave:
+        return 'Apply Leave';
+      case StaffRequestType.transfer:
+        return 'Request Transfer';
+      case StaffRequestType.loan:
+        return 'Apply for Loan';
+      case StaffRequestType.sickLeave:
+        return 'Submit Sick Leave';
+    }
+  }
+}
+
+enum StaffRequestStatus { pending, approved, rejected, withdrawn, submitted }
+
+extension StaffRequestStatusX on StaffRequestStatus {
+  String get label {
+    switch (this) {
+      case StaffRequestStatus.pending:
+        return 'Pending';
+      case StaffRequestStatus.approved:
+        return 'Approved';
+      case StaffRequestStatus.rejected:
+        return 'Rejected';
+      case StaffRequestStatus.withdrawn:
+        return 'Withdrawn';
+      case StaffRequestStatus.submitted:
+        return 'Submitted';
+    }
+  }
+
+  bool get isOpen {
+    return this == StaffRequestStatus.pending ||
+        this == StaffRequestStatus.submitted;
+  }
+}
+
+class RequestLookupOption {
+  const RequestLookupOption({
+    required this.id,
+    required this.label,
+    this.subtitle,
+    this.requiresAttachment = false,
+    this.requiresDayCount = false,
+  });
+
+  final String id;
+  final String label;
+  final String? subtitle;
+  final bool requiresAttachment;
+  final bool requiresDayCount;
+}
+
+class RequestDetailField {
+  const RequestDetailField({
+    required this.label,
+    required this.value,
+    this.status,
+  });
+
+  final String label;
+  final String value;
+  final StaffRequestStatus? status;
+}
+
+class StaffRequestRecord {
+  const StaffRequestRecord({
+    required this.id,
+    required this.type,
+    required this.title,
+    required this.summary,
+    required this.status,
+    required this.submittedAt,
+    required this.detailFields,
+    this.referenceNumber,
+    this.startDate,
+    this.endDate,
+    this.location,
+    this.attachmentName,
+    this.stageLabel,
+    this.isLive = false,
+    this.sourceId,
+  });
+
+  final String id;
+  final StaffRequestType type;
+  final String title;
+  final String summary;
+  final StaffRequestStatus status;
+  final DateTime submittedAt;
+  final List<RequestDetailField> detailFields;
+  final String? referenceNumber;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final String? location;
+  final String? attachmentName;
+  final String? stageLabel;
+  final bool isLive;
+  final String? sourceId;
+
+  StaffRequestRecord copyWith({
+    String? id,
+    StaffRequestType? type,
+    String? title,
+    String? summary,
+    StaffRequestStatus? status,
+    DateTime? submittedAt,
+    List<RequestDetailField>? detailFields,
+    String? referenceNumber,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? location,
+    String? attachmentName,
+    String? stageLabel,
+    bool? isLive,
+    String? sourceId,
+  }) {
+    return StaffRequestRecord(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      summary: summary ?? this.summary,
+      status: status ?? this.status,
+      submittedAt: submittedAt ?? this.submittedAt,
+      detailFields: detailFields ?? this.detailFields,
+      referenceNumber: referenceNumber ?? this.referenceNumber,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      location: location ?? this.location,
+      attachmentName: attachmentName ?? this.attachmentName,
+      stageLabel: stageLabel ?? this.stageLabel,
+      isLive: isLive ?? this.isLive,
+      sourceId: sourceId ?? this.sourceId,
+    );
+  }
+}
+
+enum ApproverRequestType { leave, transfer }
+
+extension ApproverRequestTypeX on ApproverRequestType {
+  String get label {
+    switch (this) {
+      case ApproverRequestType.leave:
+        return 'Leave Approval';
+      case ApproverRequestType.transfer:
+        return 'Transfer Approval';
+    }
+  }
+
+  String get pluralLabel {
+    switch (this) {
+      case ApproverRequestType.leave:
+        return 'Leave Approvals';
+      case ApproverRequestType.transfer:
+        return 'Transfer Approvals';
+    }
+  }
+}
+
+enum ApproverAction { forward, approve, deny }
+
+extension ApproverActionX on ApproverAction {
+  String get label {
+    switch (this) {
+      case ApproverAction.forward:
+        return 'Forward';
+      case ApproverAction.approve:
+        return 'Approve';
+      case ApproverAction.deny:
+        return 'Deny';
+    }
+  }
+}
+
+class ApprovalCommentRecord {
+  const ApprovalCommentRecord({
+    required this.stage,
+    required this.comment,
+    this.reason,
+    this.additionalComment,
+  });
+
+  final String stage;
+  final String comment;
+  final String? reason;
+  final String? additionalComment;
+}
+
+class ApprovalTask {
+  const ApprovalTask({
+    required this.id,
+    required this.requestId,
+    required this.type,
+    required this.title,
+    required this.subjectName,
+    required this.summary,
+    required this.status,
+    required this.submittedAt,
+    this.referenceNumber,
+    this.attachmentName,
+    this.personalInformationId,
+    this.employmentStatusId,
+    this.numberOfDays,
+    this.parentStageId,
+    this.rawStatus,
+    this.proposedStartDate,
+    this.proposedEndDate,
+    this.startDate,
+    this.endDate,
+    this.detailFields = const [],
+    this.commentHistory = const [],
+  });
+
+  final String id;
+  final String requestId;
+  final ApproverRequestType type;
+  final String title;
+  final String subjectName;
+  final String summary;
+  final StaffRequestStatus status;
+  final DateTime submittedAt;
+  final String? referenceNumber;
+  final String? attachmentName;
+  final String? personalInformationId;
+  final String? employmentStatusId;
+  final int? numberOfDays;
+  final String? parentStageId;
+  final String? rawStatus;
+  final DateTime? proposedStartDate;
+  final DateTime? proposedEndDate;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final List<RequestDetailField> detailFields;
+  final List<ApprovalCommentRecord> commentHistory;
+
+  bool get isFinalStage => (parentStageId ?? '').trim().isEmpty;
+
+  bool get isForwarded => (rawStatus ?? '').toUpperCase() == 'FORWARDED';
+
+  ApprovalTask copyWith({
+    String? id,
+    String? requestId,
+    ApproverRequestType? type,
+    String? title,
+    String? subjectName,
+    String? summary,
+    StaffRequestStatus? status,
+    DateTime? submittedAt,
+    String? referenceNumber,
+    String? attachmentName,
+    String? personalInformationId,
+    String? employmentStatusId,
+    int? numberOfDays,
+    String? parentStageId,
+    String? rawStatus,
+    DateTime? proposedStartDate,
+    DateTime? proposedEndDate,
+    DateTime? startDate,
+    DateTime? endDate,
+    List<RequestDetailField>? detailFields,
+    List<ApprovalCommentRecord>? commentHistory,
+  }) {
+    return ApprovalTask(
+      id: id ?? this.id,
+      requestId: requestId ?? this.requestId,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      subjectName: subjectName ?? this.subjectName,
+      summary: summary ?? this.summary,
+      status: status ?? this.status,
+      submittedAt: submittedAt ?? this.submittedAt,
+      referenceNumber: referenceNumber ?? this.referenceNumber,
+      attachmentName: attachmentName ?? this.attachmentName,
+      personalInformationId:
+          personalInformationId ?? this.personalInformationId,
+      employmentStatusId: employmentStatusId ?? this.employmentStatusId,
+      numberOfDays: numberOfDays ?? this.numberOfDays,
+      parentStageId: parentStageId ?? this.parentStageId,
+      rawStatus: rawStatus ?? this.rawStatus,
+      proposedStartDate: proposedStartDate ?? this.proposedStartDate,
+      proposedEndDate: proposedEndDate ?? this.proposedEndDate,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      detailFields: detailFields ?? this.detailFields,
+      commentHistory: commentHistory ?? this.commentHistory,
+    );
+  }
+}
+
+class HomeAnnouncement {
+  const HomeAnnouncement({
+    this.id,
+    this.trainingAnnouncementId,
+    this.announcementUuid,
+    required this.title,
+    required this.subtitle,
+    required this.caption,
+    this.type = 'General',
+    this.externalLink,
+    this.linkLabel,
+    this.sourceType,
+    this.sourceId,
+    this.startsAt,
+    this.endsAt,
+    this.isLive = false,
+    this.commentsCount,
+  });
+
+  final String? id;
+  final String? trainingAnnouncementId;
+  final String? announcementUuid;
+  final String title;
+  final String subtitle;
+  final String caption;
+  final String type;
+  final String? externalLink;
+  final String? linkLabel;
+  final String? sourceType;
+  final String? sourceId;
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  final bool isLive;
+  final int? commentsCount;
+
+  bool get supportsComments {
+    return (trainingAnnouncementId != null &&
+            trainingAnnouncementId!.isNotEmpty) ||
+        (announcementUuid != null && announcementUuid!.isNotEmpty);
+  }
+
+  bool get supportsJobApplication {
+    final normalizedType = type.trim().toLowerCase();
+    final normalizedSource = (sourceType ?? '').trim().toLowerCase();
+    return sourceId != null &&
+        sourceId!.trim().isNotEmpty &&
+        (normalizedType == 'job' ||
+            normalizedSource.contains('staffadvertisements') ||
+            normalizedSource.contains('staff_advertisement'));
+  }
+}
+
+class HomeResource {
+  const HomeResource({
+    required this.uuid,
+    required this.title,
+    required this.subtitle,
+    required this.status,
+    required this.attachments,
+    this.createdAt,
+    this.updatedAt,
+    this.isLive = false,
+  });
+
+  final String uuid;
+  final String title;
+  final String subtitle;
+  final String status;
+  final List<HomeResourceAttachment> attachments;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final bool isLive;
+}
+
+class HomeResourceAttachment {
+  const HomeResourceAttachment({
+    required this.uuid,
+    required this.label,
+    required this.originalFileName,
+    required this.attachmentUrl,
+    required this.mimeType,
+    required this.fileSize,
+  });
+
+  final String uuid;
+  final String label;
+  final String originalFileName;
+  final String attachmentUrl;
+  final String mimeType;
+  final int? fileSize;
+}
+
+class JobAdvertisementApplication {
+  const JobAdvertisementApplication({
+    required this.id,
+    required this.staffAdvertisementId,
+    required this.title,
+    required this.positionId,
+    required this.positionName,
+    required this.programId,
+    required this.programName,
+    required this.fileName,
+    required this.uploadName,
+    required this.status,
+    this.endDate,
+    this.createdAt,
+    this.workingArea,
+    this.workingPosition,
+  });
+
+  final String id;
+  final String staffAdvertisementId;
+  final String title;
+  final String positionId;
+  final String positionName;
+  final String programId;
+  final String programName;
+  final String fileName;
+  final String uploadName;
+  final String status;
+  final DateTime? endDate;
+  final DateTime? createdAt;
+  final String? workingArea;
+  final String? workingPosition;
+
+  bool get canEdit {
+    final closeDate = endDate;
+    if (closeDate == null) return true;
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    final closeDateOnly = DateTime(
+      closeDate.year,
+      closeDate.month,
+      closeDate.day,
+    );
+    return !todayDate.isAfter(closeDateOnly);
+  }
+}
+
+class HomeAnnouncementComment {
+  const HomeAnnouncementComment({
+    required this.uuid,
+    required this.comment,
+    required this.authorName,
+    required this.createdAt,
+    this.attachments = const [],
+  });
+
+  final String uuid;
+  final String comment;
+  final String authorName;
+  final DateTime? createdAt;
+  final List<HomeAnnouncementCommentAttachment> attachments;
+}
+
+class HomeAnnouncementCommentAttachment {
+  const HomeAnnouncementCommentAttachment({
+    required this.uuid,
+    required this.originalFileName,
+    required this.attachmentUrl,
+    required this.mimeType,
+    required this.fileSize,
+  });
+
+  final String uuid;
+  final String originalFileName;
+  final String attachmentUrl;
+  final String mimeType;
+  final int? fileSize;
+}
+
+class HomeTrainingItem {
+  const HomeTrainingItem({
+    required this.title,
+    required this.location,
+    required this.dateLabel,
+    required this.tag,
+  });
+
+  final String title;
+  final String location;
+  final String dateLabel;
+  final String tag;
+}
+
+class FacilityDirectory {
+  const FacilityDirectory({
+    required this.facilities,
+    required this.departmentsByFacilityId,
+  });
+
+  final List<RequestLookupOption> facilities;
+  final Map<String, List<RequestLookupOption>> departmentsByFacilityId;
+}
+
+class LeaveRequestDraft {
+  const LeaveRequestDraft({
+    required this.leaveTypeId,
+    required this.leaveTypeLabel,
+    required this.startDate,
+    required this.contactOnLeave,
+    required this.reason,
+    this.endDate,
+    this.numberOfDays,
+    this.representativeId,
+    this.representativeLabel,
+    this.placeToTravel,
+    this.filePath,
+    this.fileName,
+  });
+
+  final String leaveTypeId;
+  final String leaveTypeLabel;
+  final DateTime startDate;
+  final DateTime? endDate;
+  final String contactOnLeave;
+  final String reason;
+  final int? numberOfDays;
+  final String? representativeId;
+  final String? representativeLabel;
+  final String? placeToTravel;
+  final String? filePath;
+  final String? fileName;
+}
+
+class TransferRequestDraft {
+  const TransferRequestDraft({
+    required this.facilityId,
+    required this.facilityLabel,
+    required this.reasonId,
+    required this.reasonLabel,
+    required this.reasonText,
+    required this.preferredTransferDate,
+    this.departmentId,
+    this.departmentLabel,
+    this.filePath,
+    this.fileName,
+  });
+
+  final String facilityId;
+  final String facilityLabel;
+  final String reasonId;
+  final String reasonLabel;
+  final String reasonText;
+  final DateTime preferredTransferDate;
+  final String? departmentId;
+  final String? departmentLabel;
+  final String? filePath;
+  final String? fileName;
+}
+
+class SickSheetDraft {
+  const SickSheetDraft({
+    required this.leaveTypeId,
+    required this.leaveTypeLabel,
+    required this.startDate,
+    required this.contactOnLeave,
+    required this.filePath,
+    required this.fileName,
+    this.numberOfDays,
+    this.note,
+  });
+
+  final String leaveTypeId;
+  final String leaveTypeLabel;
+  final DateTime startDate;
+  final String contactOnLeave;
+  final String filePath;
+  final String fileName;
+  final int? numberOfDays;
+  final String? note;
+}
+
+class ActivityRequestDraft {
+  const ActivityRequestDraft({
+    required this.name,
+    required this.activityDate,
+    required this.activityAreaType,
+    this.destinationName,
+    this.description,
+    this.filePath,
+    this.fileName,
+  });
+
+  final String name;
+  final DateTime activityDate;
+  final String activityAreaType;
+  final String? destinationName;
+  final String? description;
+  final String? filePath;
+  final String? fileName;
+}
+
+class LoanRequestDraft {
+  const LoanRequestDraft({
+    required this.bankId,
+    required this.bankLabel,
+    required this.loanType,
+    required this.requestedAmount,
+    required this.employerStatus,
+    required this.monthlySalary,
+    required this.repaymentMonths,
+    required this.termDuration,
+    required this.termPeriod,
+    required this.purpose,
+  });
+
+  final String bankId;
+  final String bankLabel;
+  final String loanType;
+  final String requestedAmount;
+  final String employerStatus;
+  final String monthlySalary;
+  final String repaymentMonths;
+  final int termDuration;
+  final String termPeriod;
+  final String purpose;
+}
