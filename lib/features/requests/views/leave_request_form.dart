@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:staffportal/features/requests/models/staff_request_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'request_form_widgets.dart';
 import 'request_submission_success.dart';
 
@@ -60,128 +61,131 @@ class _LeaveRequestFormScreenState
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                AppDropdownField(
-                  label: 'Leave Type',
-                  value: _leaveTypeId,
-                  hintText: 'Select',
-                  items: state.leaveTypes,
-                  onChanged: (value) {
-                    setState(() {
-                      _leaveTypeId = value;
-                      final nextType = state.leaveTypes.firstWhereOrNull(
-                        (item) => item.id == value,
+          padding: AppBreakpoints.pagePadding(context, bottom: 32),
+          child: ResponsiveWidth(
+            maxWidth: AppBreakpoints.maxFormWidth,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  AppDropdownField(
+                    label: 'Leave Type',
+                    value: _leaveTypeId,
+                    hintText: 'Select',
+                    items: state.leaveTypes,
+                    onChanged: (value) {
+                      setState(() {
+                        _leaveTypeId = value;
+                        final nextType = state.leaveTypes.firstWhereOrNull(
+                          (item) => item.id == value,
+                        );
+                        if (nextType?.requiresDayCount != true) {
+                          _numberOfDaysController.clear();
+                        }
+                        if (nextType?.requiresAttachment != true) {
+                          _selectedFile = null;
+                        }
+                        if (!_canBackdateLeave(nextType) &&
+                            _startDate != null &&
+                            isPastDate(_startDate!)) {
+                          _startDate = null;
+                        }
+                      });
+                    },
+                    validator: (value) =>
+                        value == null ? 'Select a leave type' : null,
+                  ),
+                  DateInputField(
+                    label: 'Start Date',
+                    value: _startDate,
+                    onTap: () async {
+                      final picked = await pickDate(
+                        context,
+                        initial: _startDate,
+                        allowPast: canBackdateLeave,
                       );
-                      if (nextType?.requiresDayCount != true) {
-                        _numberOfDaysController.clear();
+                      if (picked != null) {
+                        setState(() => _startDate = picked);
                       }
-                      if (nextType?.requiresAttachment != true) {
-                        _selectedFile = null;
-                      }
-                      if (!_canBackdateLeave(nextType) &&
-                          _startDate != null &&
-                          isPastDate(_startDate!)) {
-                        _startDate = null;
-                      }
-                    });
-                  },
-                  validator: (value) =>
-                      value == null ? 'Select a leave type' : null,
-                ),
-                DateInputField(
-                  label: 'Start Date',
-                  value: _startDate,
-                  onTap: () async {
-                    final picked = await pickDate(
-                      context,
-                      initial: _startDate,
-                      allowPast: canBackdateLeave,
-                    );
-                    if (picked != null) {
-                      setState(() => _startDate = picked);
-                    }
-                  },
-                ),
-                if (selectedLeaveType?.requiresDayCount == true)
-                  AppTextField(
-                    label: 'Number of Days',
-                    controller: _numberOfDaysController,
-                    hintText: 'Input Number of Days',
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      final normalized = (value ?? '').trim();
-                      if (normalized.isEmpty) {
-                        return 'This field is required';
-                      }
-                      final days = int.tryParse(normalized);
-                      if (days == null || days <= 0) {
-                        return 'Enter a valid number of days';
-                      }
-                      return null;
                     },
                   ),
-                AppTextField(
-                  label: 'Contact on Leave',
-                  controller: _contactController,
-                  hintText: 'Input Number',
-                  keyboardType: TextInputType.phone,
-                ),
-                if (selectedLeaveType?.requiresAttachment == true)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: FileUploadField(
-                      title: 'Upload Leave Attachment',
-                      description: 'PDF format, max 1MB.',
-                      fileName: _selectedFile?.name,
-                      onBrowse: _pickFile,
+                  if (selectedLeaveType?.requiresDayCount == true)
+                    AppTextField(
+                      label: 'Number of Days',
+                      controller: _numberOfDaysController,
+                      hintText: 'Input Number of Days',
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        final normalized = (value ?? '').trim();
+                        if (normalized.isEmpty) {
+                          return 'This field is required';
+                        }
+                        final days = int.tryParse(normalized);
+                        if (days == null || days <= 0) {
+                          return 'Enter a valid number of days';
+                        }
+                        return null;
+                      },
                     ),
+                  AppTextField(
+                    label: 'Contact on Leave',
+                    controller: _contactController,
+                    hintText: 'Input Number',
+                    keyboardType: TextInputType.phone,
                   ),
-                if (requiresRepresentative)
-                  AppDropdownField(
-                    label: 'Representative',
-                    value: _representativeId,
-                    hintText: 'Input Name',
-                    items: state.representatives,
-                    onChanged: (value) =>
-                        setState(() => _representativeId = value),
-                    validator: (value) =>
-                        value == null ? 'Select a representative' : null,
-                  ),
-                // AppTextField(
-                //   label: 'Place To Travel',
-                //   controller: _placeToTravelController,
-                //   hintText: 'Optional',
-                //   validator: (_) => null,
-                // ),
-                /* AppTextField(
+                  if (selectedLeaveType?.requiresAttachment == true)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: FileUploadField(
+                        title: 'Upload Leave Attachment',
+                        description: 'PDF format, max 1MB.',
+                        fileName: _selectedFile?.name,
+                        onBrowse: _pickFile,
+                      ),
+                    ),
+                  if (requiresRepresentative)
+                    AppDropdownField(
+                      label: 'Representative',
+                      value: _representativeId,
+                      hintText: 'Input Name',
+                      items: state.representatives,
+                      onChanged: (value) =>
+                          setState(() => _representativeId = value),
+                      validator: (value) =>
+                          value == null ? 'Select a representative' : null,
+                    ),
+                  // AppTextField(
+                  //   label: 'Place To Travel',
+                  //   controller: _placeToTravelController,
+                  //   hintText: 'Optional',
+                  //   validator: (_) => null,
+                  // ),
+                  /* AppTextField(
                   label: 'Reason for Leave',
                   controller: _reasonController,
                   hintText: 'Optional',
                   maxLines: 5,
                   validator: (_) => null,
                 ), */
-                if (state.errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  InlineErrorText(message: state.errorMessage!),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: filledButtonStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting
-                          ? 'Submitting...'
-                          : 'Submit Leave Request',
+                  if (state.errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    InlineErrorText(message: state.errorMessage!),
+                  ],
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: filledButtonStyle(),
+                      onPressed: state.isSubmitting ? null : _submit,
+                      child: Text(
+                        state.isSubmitting
+                            ? 'Submitting...'
+                            : 'Submit Leave Request',
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

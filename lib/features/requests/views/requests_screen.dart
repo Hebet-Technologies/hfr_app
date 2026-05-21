@@ -8,6 +8,7 @@ import 'package:staffportal/features/auth/models/staff_portal_access.dart';
 import 'package:staffportal/features/requests/models/staff_request_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import '../providers/staff_request_view_model.dart';
 import 'activity_request_form.dart';
 import 'leave_request_form.dart';
@@ -194,9 +195,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
           color: _requestBlue,
           onRefresh: () =>
               ref.read(staffRequestsViewModelProvider.notifier).refresh(),
-          child: ListView(
+          child: ResponsiveListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+            padding: AppBreakpoints.pagePadding(context, bottom: 96),
             children: [
               Row(
                 children: [

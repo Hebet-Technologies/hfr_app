@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:staffportal/features/requests/models/staff_request_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'request_form_widgets.dart';
 import 'request_submission_success.dart';
 
@@ -53,98 +54,100 @@ class _TransferRequestFormScreenState
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                AppDropdownField(
-                  label: 'Preferred Facility',
-                  value: _facilityId,
-                  hintText: 'Select',
-                  items: state.facilities,
-                  onChanged: (value) {
-                    setState(() {
-                      _facilityId = value;
-                      _departmentId = null;
-                    });
-                  },
-                  validator: (value) =>
-                      value == null ? 'Select a facility' : null,
-                ),
-                AppDropdownField(
-                  label: 'Preferred Department',
-                  value: _departmentId,
-                  hintText: 'Select',
-                  items: departments,
-                  onChanged: (value) => setState(() => _departmentId = value),
-                ),
-                AppDropdownField(
-                  label: 'Reason for Transfer',
-                  value: _reasonId,
-                  hintText: 'Select',
-                  items: state.transferReasons,
-                  onChanged: (value) {
-                    setState(() {
-                      _reasonId = value;
-                      final nextReason = state.transferReasons.firstWhereOrNull(
-                        (item) => item.id == value,
-                      );
-                      if (nextReason?.requiresAttachment != true) {
-                        _selectedFile = null;
-                      }
-                    });
-                  },
-                  validator: (value) =>
-                      value == null ? 'Select a transfer reason' : null,
-                ),
-                AppTextField(
-                  label: 'Transfer Notes',
-                  controller: _reasonTextController,
-                  hintText: 'Optional',
-                  maxLines: 5,
-                  validator: (_) => null,
-                ),
-                DateInputField(
-                  label: 'Preferred Transfer Date',
-                  value: _preferredDate,
-                  onTap: () async {
-                    final picked = await pickDate(
-                      context,
-                      initial: _preferredDate,
-                    );
-                    if (picked != null) {
-                      setState(() => _preferredDate = picked);
-                    }
-                  },
-                ),
-                if (selectedReason?.requiresAttachment == true) ...[
-                  const SizedBox(height: 10),
-                  FileUploadField(
-                    title: 'Upload Transfer Attachment',
-                    description: 'PDF format, max 1MB.',
-                    fileName: _selectedFile?.name,
-                    onBrowse: _pickFile,
+          padding: AppBreakpoints.pagePadding(context, bottom: 32),
+          child: ResponsiveWidth(
+            maxWidth: AppBreakpoints.maxFormWidth,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  AppDropdownField(
+                    label: 'Preferred Facility',
+                    value: _facilityId,
+                    hintText: 'Select',
+                    items: state.facilities,
+                    onChanged: (value) {
+                      setState(() {
+                        _facilityId = value;
+                        _departmentId = null;
+                      });
+                    },
+                    validator: (value) =>
+                        value == null ? 'Select a facility' : null,
                   ),
-                ],
-                if (state.errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  InlineErrorText(message: state.errorMessage!),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: filledButtonStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting
-                          ? 'Submitting...'
-                          : 'Submit Transfer Request',
+                  AppDropdownField(
+                    label: 'Preferred Department',
+                    value: _departmentId,
+                    hintText: 'Select',
+                    items: departments,
+                    onChanged: (value) => setState(() => _departmentId = value),
+                  ),
+                  AppDropdownField(
+                    label: 'Reason for Transfer',
+                    value: _reasonId,
+                    hintText: 'Select',
+                    items: state.transferReasons,
+                    onChanged: (value) {
+                      setState(() {
+                        _reasonId = value;
+                        final nextReason = state.transferReasons
+                            .firstWhereOrNull((item) => item.id == value);
+                        if (nextReason?.requiresAttachment != true) {
+                          _selectedFile = null;
+                        }
+                      });
+                    },
+                    validator: (value) =>
+                        value == null ? 'Select a transfer reason' : null,
+                  ),
+                  AppTextField(
+                    label: 'Transfer Notes',
+                    controller: _reasonTextController,
+                    hintText: 'Optional',
+                    maxLines: 5,
+                    validator: (_) => null,
+                  ),
+                  DateInputField(
+                    label: 'Preferred Transfer Date',
+                    value: _preferredDate,
+                    onTap: () async {
+                      final picked = await pickDate(
+                        context,
+                        initial: _preferredDate,
+                      );
+                      if (picked != null) {
+                        setState(() => _preferredDate = picked);
+                      }
+                    },
+                  ),
+                  if (selectedReason?.requiresAttachment == true) ...[
+                    const SizedBox(height: 10),
+                    FileUploadField(
+                      title: 'Upload Transfer Attachment',
+                      description: 'PDF format, max 1MB.',
+                      fileName: _selectedFile?.name,
+                      onBrowse: _pickFile,
+                    ),
+                  ],
+                  if (state.errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    InlineErrorText(message: state.errorMessage!),
+                  ],
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: filledButtonStyle(),
+                      onPressed: state.isSubmitting ? null : _submit,
+                      child: Text(
+                        state.isSubmitting
+                            ? 'Submitting...'
+                            : 'Submit Transfer Request',
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

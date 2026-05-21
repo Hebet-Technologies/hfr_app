@@ -5,6 +5,7 @@ import 'package:staffportal/features/profile/models/profile_details.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/routing/routes_name.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import '../providers/profile_view_model.dart';
 import 'edit_profile_screen.dart';
 import 'profile_records_screen.dart';
@@ -73,8 +74,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         child: RefreshIndicator(
           onRefresh: _refreshProfile,
           color: const Color(0xFF1F6BFF),
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+          child: ResponsiveListView(
+            padding: AppBreakpoints.pagePadding(context),
             children: [
               Row(
                 children: [

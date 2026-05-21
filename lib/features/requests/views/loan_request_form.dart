@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:staffportal/features/requests/models/staff_request_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'request_form_widgets.dart';
 import 'request_submission_success.dart';
 
@@ -50,53 +51,56 @@ class _LoanRequestFormScreenState extends ConsumerState<LoanRequestFormScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                AppDropdownField(
-                  label: 'Preferred Bank',
-                  value: _bankId,
-                  hintText: 'Select',
-                  items: state.loanBanks,
-                  onChanged: (value) => setState(() => _bankId = value),
-                  validator: (value) => value == null ? 'Select bank' : null,
-                ),
-                AppTextField(
-                  label: 'Requested Amount',
-                  controller: _amountController,
-                  hintText: 'Input Number',
-                  keyboardType: TextInputType.number,
-                ),
-                SimpleDropdownField(
-                  label: 'Repayment Period',
-                  value: _repaymentPeriod,
-                  hintText: 'Select',
-                  items: _repaymentOptions,
-                  onChanged: (value) =>
-                      setState(() => _repaymentPeriod = value),
-                ),
-                if (state.errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  InlineErrorText(message: state.errorMessage!),
-                ],
-                /* const SizedBox(height: 10),
+          padding: AppBreakpoints.pagePadding(context, bottom: 32),
+          child: ResponsiveWidth(
+            maxWidth: AppBreakpoints.maxFormWidth,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  AppDropdownField(
+                    label: 'Preferred Bank',
+                    value: _bankId,
+                    hintText: 'Select',
+                    items: state.loanBanks,
+                    onChanged: (value) => setState(() => _bankId = value),
+                    validator: (value) => value == null ? 'Select bank' : null,
+                  ),
+                  AppTextField(
+                    label: 'Requested Amount',
+                    controller: _amountController,
+                    hintText: 'Input Number',
+                    keyboardType: TextInputType.number,
+                  ),
+                  SimpleDropdownField(
+                    label: 'Repayment Period',
+                    value: _repaymentPeriod,
+                    hintText: 'Select',
+                    items: _repaymentOptions,
+                    onChanged: (value) =>
+                        setState(() => _repaymentPeriod = value),
+                  ),
+                  if (state.errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    InlineErrorText(message: state.errorMessage!),
+                  ],
+                  /* const SizedBox(height: 10),
                 const UploadPlaceholder(), */
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: filledButtonStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting
-                          ? 'Submitting...'
-                          : 'Submit Loan Application',
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: filledButtonStyle(),
+                      onPressed: state.isSubmitting ? null : _submit,
+                      child: Text(
+                        state.isSubmitting
+                            ? 'Submitting...'
+                            : 'Submit Loan Application',
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

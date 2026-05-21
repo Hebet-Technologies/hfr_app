@@ -11,6 +11,7 @@ import 'package:staffportal/features/training/models/training_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/utils/url_resolver.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'package:staffportal/features/community/views/community_screen.dart';
 import 'package:staffportal/features/requests/views/requests_screen.dart';
 import 'package:staffportal/features/training/views/training_screen.dart';
@@ -115,9 +116,9 @@ class HomeTab extends ConsumerWidget {
               await ref.read(staffRequestsViewModelProvider.notifier).refresh();
               await ref.read(peerExchangeViewModelProvider.notifier).loadAll();
             },
-            child: ListView(
+            child: ResponsiveListView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              padding: AppBreakpoints.pagePadding(context),
               children: [
                 _ApproverHeader(
                   name: displayName,
@@ -226,9 +227,9 @@ class HomeTab extends ConsumerWidget {
             await ref.read(staffRequestsViewModelProvider.notifier).refresh();
             await ref.read(peerExchangeViewModelProvider.notifier).loadAll();
           },
-          child: ListView(
+          child: ResponsiveListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            padding: AppBreakpoints.pagePadding(context),
             children: [
               _ProfileHero(
                 name: displayName,

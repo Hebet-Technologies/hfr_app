@@ -13,6 +13,7 @@ import 'package:staffportal/features/community/models/peer_exchange_models.dart'
 import 'package:staffportal/core/services/realtime_service.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/utils/url_resolver.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import '../providers/peer_exchange_view_model.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
 import 'package:staffportal/core/widgets/app_svg_icon.dart';
@@ -259,8 +260,8 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
         backgroundColor: _peerBackground,
         body: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            child: const _CommunityLoadingShimmer(),
+            padding: AppBreakpoints.pagePadding(context),
+            child: const ResponsiveWidth(child: _CommunityLoadingShimmer()),
           ),
         ),
       );
@@ -311,37 +312,39 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    isQuestionSection ? 12 : 16,
-                    8,
-                    isQuestionSection ? 12 : 16,
-                    110,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHeader(state, access),
-                      SizedBox(height: isQuestionSection ? 12 : 14),
-                      _buildSearchRow(state),
-                      if (isQuestionSection &&
-                          (state.selectedCategoryUuid != null ||
-                              _selectedQuestionDay != null)) ...[
-                        const SizedBox(height: 12),
-                        _buildQuestionFilterSummary(state),
+                child: ResponsiveWidth(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      isQuestionSection ? 12 : 16,
+                      8,
+                      isQuestionSection ? 12 : 16,
+                      110,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(state, access),
+                        SizedBox(height: isQuestionSection ? 12 : 14),
+                        _buildSearchRow(state),
+                        if (isQuestionSection &&
+                            (state.selectedCategoryUuid != null ||
+                                _selectedQuestionDay != null)) ...[
+                          const SizedBox(height: 12),
+                          _buildQuestionFilterSummary(state),
+                        ],
+                        const SizedBox(height: 14),
+                        if (state.errorMessage != null) ...[
+                          _buildErrorBanner(state.errorMessage!),
+                          const SizedBox(height: 16),
+                        ],
+                        _buildSectionBody(
+                          state,
+                          directConversations,
+                          access,
+                          currentUserName,
+                        ),
                       ],
-                      const SizedBox(height: 14),
-                      if (state.errorMessage != null) ...[
-                        _buildErrorBanner(state.errorMessage!),
-                        const SizedBox(height: 16),
-                      ],
-                      _buildSectionBody(
-                        state,
-                        directConversations,
-                        access,
-                        currentUserName,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),

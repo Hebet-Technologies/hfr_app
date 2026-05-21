@@ -10,6 +10,7 @@ import 'package:staffportal/features/training/models/training_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/utils/url_resolver.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 
 part '../widgets/training_widgets.dart';
 
@@ -122,9 +123,9 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           color: _trainingBlue,
           onRefresh: () =>
               ref.read(trainingViewModelProvider.notifier).refresh(),
-          child: ListView(
+          child: ResponsiveListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+            padding: AppBreakpoints.pagePadding(context),
             children: [
               Text(
                 'Trainings',

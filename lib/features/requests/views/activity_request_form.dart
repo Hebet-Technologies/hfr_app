@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:staffportal/features/requests/models/staff_request_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'request_form_widgets.dart';
 import 'request_submission_success.dart';
 
@@ -76,139 +77,147 @@ class _ActivityRequestFormScreenState
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                SimpleDropdownField(
-                  label: 'Activity Category',
-                  value: _category,
-                  hintText: 'Select',
-                  items: _categories,
-                  onChanged: (value) => setState(() => _category = value),
-                ),
-                SimpleDropdownField(
-                  label: 'Activity Scope',
-                  value: _scope,
-                  hintText: 'Select',
-                  items: rules.scopeLabels,
-                  onChanged: (value) {
-                    setState(() {
-                      _scope = value;
-                      if (!rules.requiresAttachment(value)) {
-                        _selectedFile = null;
-                      }
-                    });
-                  },
-                ),
-                AppTextField(
-                  label: 'Destination Name (Optional)',
-                  controller: _locationController,
-                  hintText: 'Input',
-                ),
-                DateInputField(
-                  label: 'Start Date',
-                  value: _startDate,
-                  onTap: () async {
-                    final picked = await pickDate(context, initial: _startDate);
-                    if (picked != null) {
+          padding: AppBreakpoints.pagePadding(context, bottom: 32),
+          child: ResponsiveWidth(
+            maxWidth: AppBreakpoints.maxFormWidth,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  SimpleDropdownField(
+                    label: 'Activity Category',
+                    value: _category,
+                    hintText: 'Select',
+                    items: _categories,
+                    onChanged: (value) => setState(() => _category = value),
+                  ),
+                  SimpleDropdownField(
+                    label: 'Activity Scope',
+                    value: _scope,
+                    hintText: 'Select',
+                    items: rules.scopeLabels,
+                    onChanged: (value) {
                       setState(() {
-                        _startDate = picked;
-                        if (_endDate != null && _endDate!.isBefore(picked)) {
-                          _endDate = picked;
+                        _scope = value;
+                        if (!rules.requiresAttachment(value)) {
+                          _selectedFile = null;
                         }
                       });
-                    }
-                  },
-                ),
-                DateInputField(
-                  label: 'End Date',
-                  value: _endDate,
-                  onTap: () async {
-                    final picked = await pickDate(
-                      context,
-                      initial: _endDate ?? _startDate,
-                    );
-                    if (picked != null) {
-                      setState(() => _endDate = picked);
-                    }
-                  },
-                ),
-                AppTextField(
-                  label: 'Description',
-                  controller: _descriptionController,
-                  hintText: 'Describe the activity',
-                  maxLines: 5,
-                ),
-                AppTextField(
-                  label: 'Contact Person Name (Optional)',
-                  controller: _contactNameController,
-                  hintText: 'Input',
-                  validator: (_) => null,
-                ),
-                AppTextField(
-                  label: 'Contact Person Email (Optional)',
-                  controller: _contactEmailController,
-                  hintText: 'Input',
-                  keyboardType: TextInputType.emailAddress,
-                  validator: _optionalEmailValidator,
-                ),
-                AppTextField(
-                  label: 'Contact Person Phone (Optional)',
-                  controller: _contactPhoneController,
-                  hintText: 'Input',
-                  keyboardType: TextInputType.phone,
-                  validator: (_) => null,
-                ),
-                AppTextField(
-                  label: 'Organizer Name (Optional)',
-                  controller: _organizerNameController,
-                  hintText: 'Input',
-                  validator: (_) => null,
-                ),
-                AppTextField(
-                  label: 'Organizer Email (Optional)',
-                  controller: _organizerEmailController,
-                  hintText: 'Input',
-                  keyboardType: TextInputType.emailAddress,
-                  validator: _optionalEmailValidator,
-                ),
-                AppTextField(
-                  label: 'Organizer Phone (Optional)',
-                  controller: _organizerPhoneController,
-                  hintText: 'Input',
-                  keyboardType: TextInputType.phone,
-                  validator: (_) => null,
-                ),
-                FileUploadField(
-                  title: requiresAttachment
-                      ? 'Upload Letter or Supporting Documents'
-                      : 'Upload Supporting Documents (Optional)',
-                  description: requiresAttachment
-                      ? 'PDF format, max 1MB. Required for mainland or international activities.'
-                      : 'PDF format, max 1MB.',
-                  fileName: _selectedFile?.name,
-                  onBrowse: _pickFile,
-                ),
-                if (state.errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  InlineErrorText(message: state.errorMessage!),
-                ],
-                /* const SizedBox(height: 10),
+                    },
+                  ),
+                  AppTextField(
+                    label: 'Destination Name (Optional)',
+                    controller: _locationController,
+                    hintText: 'Input',
+                  ),
+                  DateInputField(
+                    label: 'Start Date',
+                    value: _startDate,
+                    onTap: () async {
+                      final picked = await pickDate(
+                        context,
+                        initial: _startDate,
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _startDate = picked;
+                          if (_endDate != null && _endDate!.isBefore(picked)) {
+                            _endDate = picked;
+                          }
+                        });
+                      }
+                    },
+                  ),
+                  DateInputField(
+                    label: 'End Date',
+                    value: _endDate,
+                    onTap: () async {
+                      final picked = await pickDate(
+                        context,
+                        initial: _endDate ?? _startDate,
+                      );
+                      if (picked != null) {
+                        setState(() => _endDate = picked);
+                      }
+                    },
+                  ),
+                  AppTextField(
+                    label: 'Description',
+                    controller: _descriptionController,
+                    hintText: 'Describe the activity',
+                    maxLines: 5,
+                  ),
+                  AppTextField(
+                    label: 'Contact Person Name (Optional)',
+                    controller: _contactNameController,
+                    hintText: 'Input',
+                    validator: (_) => null,
+                  ),
+                  AppTextField(
+                    label: 'Contact Person Email (Optional)',
+                    controller: _contactEmailController,
+                    hintText: 'Input',
+                    keyboardType: TextInputType.emailAddress,
+                    validator: _optionalEmailValidator,
+                  ),
+                  AppTextField(
+                    label: 'Contact Person Phone (Optional)',
+                    controller: _contactPhoneController,
+                    hintText: 'Input',
+                    keyboardType: TextInputType.phone,
+                    validator: (_) => null,
+                  ),
+                  AppTextField(
+                    label: 'Organizer Name (Optional)',
+                    controller: _organizerNameController,
+                    hintText: 'Input',
+                    validator: (_) => null,
+                  ),
+                  AppTextField(
+                    label: 'Organizer Email (Optional)',
+                    controller: _organizerEmailController,
+                    hintText: 'Input',
+                    keyboardType: TextInputType.emailAddress,
+                    validator: _optionalEmailValidator,
+                  ),
+                  AppTextField(
+                    label: 'Organizer Phone (Optional)',
+                    controller: _organizerPhoneController,
+                    hintText: 'Input',
+                    keyboardType: TextInputType.phone,
+                    validator: (_) => null,
+                  ),
+                  FileUploadField(
+                    title: requiresAttachment
+                        ? 'Upload Letter or Supporting Documents'
+                        : 'Upload Supporting Documents (Optional)',
+                    description: requiresAttachment
+                        ? 'PDF format, max 1MB. Required for mainland or international activities.'
+                        : 'PDF format, max 1MB.',
+                    fileName: _selectedFile?.name,
+                    onBrowse: _pickFile,
+                  ),
+                  if (state.errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    InlineErrorText(message: state.errorMessage!),
+                  ],
+                  /* const SizedBox(height: 10),
                 const UploadPlaceholder(), */
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: filledButtonStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting ? 'Submitting...' : 'Submit Activity',
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: filledButtonStyle(),
+                      onPressed: state.isSubmitting ? null : _submit,
+                      child: Text(
+                        state.isSubmitting
+                            ? 'Submitting...'
+                            : 'Submit Activity',
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:staffportal/features/requests/models/staff_request_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'request_form_widgets.dart';
 import 'request_submission_success.dart';
 
@@ -46,12 +47,14 @@ class _SickSheetFormScreenState extends ConsumerState<SickSheetFormScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                /* AppDropdownField(
+          padding: AppBreakpoints.pagePadding(context, bottom: 32),
+          child: ResponsiveWidth(
+            maxWidth: AppBreakpoints.maxFormWidth,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  /* AppDropdownField(
                   label: 'Sick Leave Type',
                   value: _leaveTypeId,
                   hintText: 'Select',
@@ -86,30 +89,31 @@ class _SickSheetFormScreenState extends ConsumerState<SickSheetFormScreen> {
                   maxLines: 4,
                   validator: (_) => null,
                 ), */
-                FileUploadField(
-                  title: 'Upload Sick Sheet',
-                  description: 'PDF format, max 1MB.',
-                  fileName: _selectedFile?.name,
-                  onBrowse: _pickFile,
-                ),
-                if (state.errorMessage != null) ...[
-                  const SizedBox(height: 12),
-                  InlineErrorText(message: state.errorMessage!),
-                ],
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    style: filledButtonStyle(),
-                    onPressed: state.isSubmitting ? null : _submit,
-                    child: Text(
-                      state.isSubmitting
-                          ? 'Submitting...'
-                          : 'Submit Sick Sheet',
+                  FileUploadField(
+                    title: 'Upload Sick Sheet',
+                    description: 'PDF format, max 1MB.',
+                    fileName: _selectedFile?.name,
+                    onBrowse: _pickFile,
+                  ),
+                  if (state.errorMessage != null) ...[
+                    const SizedBox(height: 12),
+                    InlineErrorText(message: state.errorMessage!),
+                  ],
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: filledButtonStyle(),
+                      onPressed: state.isSubmitting ? null : _submit,
+                      child: Text(
+                        state.isSubmitting
+                            ? 'Submitting...'
+                            : 'Submit Sick Sheet',
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
