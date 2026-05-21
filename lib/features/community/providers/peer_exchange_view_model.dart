@@ -187,14 +187,20 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
     required String name,
     String? description,
     List<int> memberIds = const [],
+    bool stationGroup = false,
   }) async {
     state = state.copyWith(isSubmitting: true, errorMessage: null);
     try {
-      final group = await _repository.createGroup(
-        name: name,
-        description: description,
-        memberIds: memberIds,
-      );
+      final group = stationGroup
+          ? await _repository.createStationGroup(
+              name: name.trim().isEmpty ? null : name,
+              description: description,
+            )
+          : await _repository.createGroup(
+              name: name,
+              description: description,
+              memberIds: memberIds,
+            );
       await loadAll();
       state = state.copyWith(isSubmitting: false);
       return group;

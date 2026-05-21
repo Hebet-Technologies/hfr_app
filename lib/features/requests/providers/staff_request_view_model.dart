@@ -463,6 +463,30 @@ class StaffRequestsViewModel extends Notifier<StaffRequestsState> {
     return updated;
   }
 
+  Future<StaffRequestRecord> uploadTransferCorrectionAttachments({
+    required StaffRequestRecord request,
+    required List<String> filePaths,
+    required List<String> fileNames,
+    List<String> labels = const [],
+  }) async {
+    state = state.copyWith(isSubmitting: true, errorMessage: null);
+    try {
+      final updated = await _repository.uploadTransferCorrectionAttachments(
+        request: request,
+        filePaths: filePaths,
+        fileNames: fileNames,
+        labels: labels,
+      );
+      _replaceRecord(updated);
+      state = state.copyWith(isSubmitting: false);
+      return updated;
+    } catch (error) {
+      final message = friendlyErrorMessage(error);
+      state = state.copyWith(isSubmitting: false, errorMessage: message);
+      rethrow;
+    }
+  }
+
   Future<ApprovalTask> loadApprovalTaskDetail(ApprovalTask task) async {
     if (task.type == ApproverRequestType.leave) {
       final personalInformationId = task.personalInformationId?.trim() ?? '';

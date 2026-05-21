@@ -74,6 +74,8 @@ class _MyAppState extends ConsumerState<MyApp> {
       navigatorKey: AppNavigationService.navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        platform: TargetPlatform.iOS,
+        fontFamily: 'SF Pro Display',
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           foregroundColor: Color(0xFF101828),

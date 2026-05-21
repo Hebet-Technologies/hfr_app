@@ -8,11 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:staffportal/core/network/api_service.dart';
 import 'package:staffportal/features/community/models/peer_exchange_access.dart';
 import 'package:staffportal/features/community/models/peer_exchange_models.dart';
 import 'package:staffportal/core/services/realtime_service.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
+import 'package:staffportal/core/utils/url_resolver.dart';
 import '../providers/peer_exchange_view_model.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
 import 'package:staffportal/core/widgets/app_svg_icon.dart';
@@ -1645,6 +1645,30 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
             _showCreateGroupSheet();
           },
         ),
+      _ActionTile(
+        title: 'Community reports',
+        subtitle: 'View question category demand and participation.',
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const CommunityReportsScreen(),
+            ),
+          );
+        },
+      ),
+      _ActionTile(
+        title: 'Attachment library',
+        subtitle: 'Browse files attached to Q&A, topics, or conversations.',
+        onTap: () {
+          Navigator.pop(context);
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const CommunityAttachmentLibraryScreen(),
+            ),
+          );
+        },
+      ),
       if (access.canStartDirectChats)
         _ActionTile(
           title: 'Start a chat',
@@ -1774,6 +1798,16 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                       },
                                       icon: const Icon(
                                         Icons.edit_outlined,
+                                        color: _peerPrimary,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.pop(sheetContext);
+                                        _showCategoryRespondersSheet(category);
+                                      },
+                                      icon: const Icon(
+                                        Icons.support_agent_rounded,
                                         color: _peerPrimary,
                                       ),
                                     ),
@@ -2163,6 +2197,148 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                     ],
                   ],
                 ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _showCategoryRespondersSheet(
+    PeerQuestionCategory category,
+  ) async {
+    final access = _currentAccess();
+    if (!access.canManageQuestionCategories) {
+      _showMessage('Your role cannot manage responders.', error: true);
+      return;
+    }
+
+    final repository = ref.read(peerExchangeRepositoryProvider);
+    var isSaving = false;
+    var responders = <PeerDirectoryPerson>[];
+    Object? loadError;
+    var didLoad = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> loadResponders() async {
+              try {
+                final loaded = await repository.fetchCategoryResponders(
+                  category.uuid,
+                );
+                if (!sheetContext.mounted) return;
+                setModalState(() {
+                  responders = loaded;
+                  loadError = null;
+                  didLoad = true;
+                });
+              } catch (error) {
+                if (!sheetContext.mounted) return;
+                setModalState(() {
+                  loadError = error;
+                  didLoad = true;
+                });
+              }
+            }
+
+            if (!didLoad && loadError == null && !isSaving) {
+              didLoad = true;
+              Future.microtask(loadResponders);
+            }
+
+            return _BottomSheetCard(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _BottomSheetTitle(
+                    title: 'Category responders',
+                    subtitle: category.name,
+                  ),
+                  if (loadError != null)
+                    Text(
+                      friendlyErrorMessage(loadError!),
+                      style: _textStyle(fontSize: 12, color: Colors.red),
+                    )
+                  else if (responders.isEmpty)
+                    Text(
+                      'No responders assigned yet.',
+                      style: _textStyle(fontSize: 13, color: _peerMuted),
+                    )
+                  else
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: responders
+                          .map(
+                            (person) => _SelectionChip(
+                              label: person.fullName,
+                              onRemove: () async {
+                                setModalState(() => isSaving = true);
+                                try {
+                                  await repository.deleteCategoryResponder(
+                                    categoryUuid: category.uuid,
+                                    userId: person.id,
+                                  );
+                                  await loadResponders();
+                                } catch (error) {
+                                  if (mounted) {
+                                    _showMessage(
+                                      friendlyErrorMessage(error),
+                                      error: true,
+                                    );
+                                  }
+                                } finally {
+                                  if (sheetContext.mounted) {
+                                    setModalState(() => isSaving = false);
+                                  }
+                                }
+                              },
+                            ),
+                          )
+                          .toList(),
+                    ),
+                  const SizedBox(height: 18),
+                  _PrimaryButton(
+                    label: isSaving ? 'Saving...' : 'Assign responders',
+                    isBusy: isSaving,
+                    onTap: isSaving
+                        ? null
+                        : () async {
+                            final picked = await _showMultiStaffPicker(
+                              title: 'Select responders',
+                              initialSelection: responders,
+                            );
+                            if (picked == null || picked.isEmpty) return;
+                            setModalState(() => isSaving = true);
+                            try {
+                              await repository.saveCategoryResponders(
+                                categoryUuid: category.uuid,
+                                userIds: picked.map((item) => item.id).toList(),
+                              );
+                              await loadResponders();
+                              if (mounted) _showMessage('Responders updated.');
+                            } catch (error) {
+                              if (mounted) {
+                                _showMessage(
+                                  friendlyErrorMessage(error),
+                                  error: true,
+                                );
+                              }
+                            } finally {
+                              if (sheetContext.mounted) {
+                                setModalState(() => isSaving = false);
+                              }
+                            }
+                          },
+                  ),
+                ],
               ),
             );
           },
@@ -2699,6 +2875,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
     final titleController = TextEditingController();
     final descriptionController = TextEditingController();
     final selectedMembers = <PeerDirectoryPerson>[];
+    var stationGroup = false;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -2731,8 +2908,12 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                         ),
                         _FormField(
                           controller: titleController,
-                          label: 'Group name',
-                          hintText: 'Example: Infection prevention team',
+                          label: stationGroup
+                              ? 'Group name (Optional)'
+                              : 'Group name',
+                          hintText: stationGroup
+                              ? 'Leave blank to use your station name'
+                              : 'Example: Infection prevention team',
                         ),
                         const SizedBox(height: 14),
                         _FormField(
@@ -2742,46 +2923,72 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                           maxLines: 3,
                         ),
                         const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                selectedMembers.isEmpty
-                                    ? 'No members yet'
-                                    : '${selectedMembers.length} people selected',
-                                style: _textStyle(
-                                  fontSize: 13,
-                                  color: _peerMuted,
-                                ),
-                              ),
+                        CheckboxListTile(
+                          value: stationGroup,
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          title: Text(
+                            'Use all active staff in my station',
+                            style: _textStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: _peerText,
                             ),
-                            TextButton(
-                              onPressed: () async {
-                                final picked = await _showMultiStaffPicker(
-                                  title: 'Add members',
-                                  initialSelection: selectedMembers,
-                                );
-                                if (picked == null || !sheetContext.mounted) {
-                                  return;
-                                }
-                                setModalState(() {
-                                  selectedMembers
-                                    ..clear()
-                                    ..addAll(picked);
-                                });
-                              },
-                              child: Text(
-                                selectedMembers.isEmpty ? 'Choose' : 'Edit',
-                                style: _textStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                  color: _peerPrimary,
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
+                          subtitle: Text(
+                            'Creates or opens the station group from the server.',
+                            style: _textStyle(fontSize: 12, color: _peerMuted),
+                          ),
+                          onChanged: (value) {
+                            setModalState(() {
+                              stationGroup = value ?? false;
+                              if (stationGroup) selectedMembers.clear();
+                            });
+                          },
                         ),
-                        if (selectedMembers.isNotEmpty) ...[
+                        if (!stationGroup) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  selectedMembers.isEmpty
+                                      ? 'No members yet'
+                                      : '${selectedMembers.length} people selected',
+                                  style: _textStyle(
+                                    fontSize: 13,
+                                    color: _peerMuted,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () async {
+                                  final picked = await _showMultiStaffPicker(
+                                    title: 'Add members',
+                                    initialSelection: selectedMembers,
+                                  );
+                                  if (picked == null || !sheetContext.mounted) {
+                                    return;
+                                  }
+                                  setModalState(() {
+                                    selectedMembers
+                                      ..clear()
+                                      ..addAll(picked);
+                                  });
+                                },
+                                child: Text(
+                                  selectedMembers.isEmpty ? 'Choose' : 'Edit',
+                                  style: _textStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: _peerPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (!stationGroup && selectedMembers.isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Wrap(
                             spacing: 8,
@@ -2810,7 +3017,7 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                               ? null
                               : () async {
                                   final name = titleController.text.trim();
-                                  if (name.isEmpty) {
+                                  if (!stationGroup && name.isEmpty) {
                                     _showMessage(
                                       'Enter a group name.',
                                       error: true,
@@ -2829,12 +3036,17 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                         memberIds: selectedMembers
                                             .map((person) => person.id)
                                             .toList(),
+                                        stationGroup: stationGroup,
                                       );
 
                                   if (created == null || !mounted) return;
                                   if (!sheetContext.mounted) return;
                                   Navigator.pop(sheetContext);
-                                  _showMessage('Group created.');
+                                  _showMessage(
+                                    stationGroup
+                                        ? 'Station group is ready.'
+                                        : 'Group created.',
+                                  );
                                 },
                         ),
                       ],
@@ -4078,7 +4290,7 @@ class _ConversationDetailScreenState
     } catch (_) {}
   }
 
-  void _handleRealtimeEvent(RealtimeEnvelope event) {
+  Future<void> _handleRealtimeEvent(RealtimeEnvelope event) async {
     switch (event.eventName) {
       case 'conversation.message.sent':
         final conversation = event.payload['conversation'];
@@ -4092,7 +4304,14 @@ class _ConversationDetailScreenState
           final normalized = message.map(
             (key, value) => MapEntry(key.toString(), value),
           );
-          final peerMessage = PeerMessage.fromJson(normalized);
+          var peerMessage = PeerMessage.fromJson(normalized);
+          peerMessage = await ref
+              .read(peerExchangeRepositoryProvider)
+              .decryptConversationMessage(
+                conversationUuid: widget.conversationUuid,
+                message: peerMessage,
+              );
+          if (!mounted) return;
           _upsertMessage(peerMessage);
           final currentUserId =
               ref.read(authViewModelProvider).user?.userId ?? '';
@@ -4672,4 +4891,351 @@ class _ConversationDetailScreenState
       ),
     );
   }
+}
+
+class CommunityReportsScreen extends ConsumerWidget {
+  const CommunityReportsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repository = ref.watch(peerExchangeRepositoryProvider);
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: _peerBackground,
+        appBar: AppBar(
+          backgroundColor: _peerBackground,
+          elevation: 0,
+          centerTitle: true,
+          title: Text(
+            'Community Reports',
+            style: _textStyle(fontSize: 17, fontWeight: FontWeight.w800),
+          ),
+          bottom: const TabBar(
+            labelColor: _peerPrimary,
+            unselectedLabelColor: _peerMuted,
+            indicatorColor: _peerPrimary,
+            tabs: [
+              Tab(text: 'Categories'),
+              Tab(text: 'Leaderboard'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _ReportList(
+              future: repository.fetchQuestionCategoryReport(),
+              titleKey: const ['category_name', 'name', 'category'],
+              metrics: const ['questions_count', 'answers_count'],
+            ),
+            _ReportList(
+              future: repository.fetchCommunityLeaderboard(),
+              titleKey: const ['full_name', 'name', 'user_name'],
+              metrics: const [
+                'questions_count',
+                'answers_count',
+                'topic_comments_count',
+                'total_activity_count',
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReportList extends StatelessWidget {
+  const _ReportList({
+    required this.future,
+    required this.titleKey,
+    required this.metrics,
+  });
+
+  final Future<List<Map<String, dynamic>>> future;
+  final List<String> titleKey;
+  final List<String> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(
+            child: CircularProgressIndicator(color: _peerPrimary),
+          );
+        }
+        if (snapshot.hasError) {
+          return _ReportMessage(message: friendlyErrorMessage(snapshot.error!));
+        }
+        final items = snapshot.data ?? const [];
+        if (items.isEmpty) {
+          return const _ReportMessage(message: 'No report data available.');
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final title = _firstValue(item, titleKey, fallback: 'Record');
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _peerBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: _textStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: metrics
+                        .map(
+                          (metric) => _MetricPill(
+                            label: metric.replaceAll('_', ' '),
+                            value: _firstValue(item, [metric], fallback: '0'),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ),
+            );
+          },
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
+          itemCount: items.length,
+        );
+      },
+    );
+  }
+}
+
+class CommunityAttachmentLibraryScreen extends ConsumerStatefulWidget {
+  const CommunityAttachmentLibraryScreen({super.key});
+
+  @override
+  ConsumerState<CommunityAttachmentLibraryScreen> createState() =>
+      _CommunityAttachmentLibraryScreenState();
+}
+
+class _CommunityAttachmentLibraryScreenState
+    extends ConsumerState<CommunityAttachmentLibraryScreen> {
+  final _uuidController = TextEditingController();
+  final _searchController = TextEditingController();
+  String _scope = 'questions';
+  Future<List<Map<String, dynamic>>>? _future;
+
+  @override
+  void dispose() {
+    _uuidController.dispose();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _load() {
+    final uuid = _uuidController.text.trim();
+    if (uuid.isEmpty) return;
+    setState(() {
+      _future = ref
+          .read(peerExchangeRepositoryProvider)
+          .fetchAttachmentLibrary(
+            scope: _scope,
+            uuid: uuid,
+            search: _searchController.text.trim(),
+          );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: _peerBackground,
+      appBar: AppBar(
+        backgroundColor: _peerBackground,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'Attachment Library',
+          style: _textStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'questions', label: Text('Q&A')),
+              ButtonSegment(value: 'topics', label: Text('Topics')),
+              ButtonSegment(value: 'conversations', label: Text('Chats')),
+            ],
+            selected: {_scope},
+            onSelectionChanged: (value) => setState(() => _scope = value.first),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _uuidController,
+            decoration: const InputDecoration(
+              labelText: 'Question, topic, or conversation UUID',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              labelText: 'Search files',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (_) => _load(),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(onPressed: _load, child: const Text('Load Files')),
+          const SizedBox(height: 16),
+          if (_future == null)
+            const _ReportMessage(message: 'Enter a UUID to view attachments.')
+          else
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _future,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: _peerPrimary),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return _ReportMessage(
+                    message: friendlyErrorMessage(snapshot.error!),
+                  );
+                }
+                final files = snapshot.data ?? const [];
+                if (files.isEmpty) {
+                  return const _ReportMessage(message: 'No files found.');
+                }
+                return Column(
+                  children: files
+                      .map(
+                        (file) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: _AttachmentLibraryTile(file: file),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AttachmentLibraryTile extends StatelessWidget {
+  const _AttachmentLibraryTile({required this.file});
+
+  final Map<String, dynamic> file;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _firstValue(file, const [
+      'original_file_name',
+      'label',
+      'stored_file_name',
+    ], fallback: 'Attachment');
+    final url = _firstValue(file, const ['attachment_url', 'file_path']);
+    return InkWell(
+      onTap: url.isEmpty
+          ? null
+          : () async {
+              final resolved = resolveApiFileUrl(url);
+              final uri = Uri.tryParse(resolved);
+              if (uri != null) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _peerBorder),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.attach_file_rounded, color: _peerPrimary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: _textStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricPill extends StatelessWidget {
+  const _MetricPill({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: _peerSoftBlue,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        '$label: $value',
+        style: _textStyle(fontSize: 11, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _ReportMessage extends StatelessWidget {
+  const _ReportMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: _textStyle(fontSize: 13, color: _peerMuted, height: 1.4),
+        ),
+      ),
+    );
+  }
+}
+
+String _firstValue(
+  Map<String, dynamic> item,
+  List<String> keys, {
+  String fallback = '',
+}) {
+  for (final key in keys) {
+    final value = item[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return fallback;
 }

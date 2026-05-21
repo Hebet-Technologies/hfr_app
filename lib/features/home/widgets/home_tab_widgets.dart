@@ -4245,6 +4245,8 @@ String _recentActivityTitle(StaffRequestRecord record) {
       return '${record.type.label} Submitted';
     case StaffRequestStatus.submitted:
       return '${record.type.label} Submitted';
+    case StaffRequestStatus.attachmentReturned:
+      return '${record.type.label} Needs Attachments';
   }
 }
 
@@ -4287,6 +4289,8 @@ Color _homeStatusColor(StaffRequestStatus status) {
       return const Color(0xFF667085);
     case StaffRequestStatus.submitted:
       return _homeBlue;
+    case StaffRequestStatus.attachmentReturned:
+      return const Color(0xFFB54708);
   }
 }
 
@@ -4302,6 +4306,8 @@ Color _homeStatusSoft(StaffRequestStatus status) {
       return const Color(0xFFF2F4F7);
     case StaffRequestStatus.submitted:
       return const Color(0xFFEAF2FF);
+    case StaffRequestStatus.attachmentReturned:
+      return const Color(0xFFFFF4E5);
   }
 }
 

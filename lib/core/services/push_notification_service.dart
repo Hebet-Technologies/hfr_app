@@ -13,6 +13,7 @@ import 'package:staffportal/firebase_options.dart';
 import 'package:staffportal/features/auth/models/user_model.dart';
 import 'app_navigation_service.dart';
 import 'app_session_store.dart';
+import 'conversation_encryption_service.dart';
 import 'device_metadata_service.dart';
 
 @pragma('vm:entry-point')
@@ -209,6 +210,10 @@ class PushNotificationService {
 
     final payload = await DeviceMetadataService.instance
         .buildDeviceRegistrationPayload();
+    final deviceKey = await ConversationEncryptionService.instance
+        .ensureDeviceKey();
+    payload['public_key'] = deviceKey.publicKey;
+    payload['public_key_algorithm'] = deviceKey.publicKeyAlgorithm;
     if ((payload['fcm_token']?.toString().trim() ?? '').isEmpty) {
       return;
     }

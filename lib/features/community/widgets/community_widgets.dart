@@ -1404,20 +1404,7 @@ Future<List<MultipartFile>> _platformFilesToMultipart(
 }
 
 String _resolvePeerAttachmentUrl(String filePath) {
-  final normalizedPath = filePath.trim();
-  final uri = Uri.tryParse(normalizedPath);
-  if (uri != null && uri.hasScheme) {
-    return normalizedPath;
-  }
-
-  if (normalizedPath.isEmpty) {
-    return '';
-  }
-
-  final apiUri = Uri.parse(ApiService.baseUrl);
-  final publicBase = '${apiUri.scheme}://${apiUri.host}';
-  final relativePath = normalizedPath.replaceFirst(RegExp(r'^/+'), '');
-  return '$publicBase/storage/$relativePath';
+  return resolveApiFileUrl(filePath);
 }
 
 Future<void> _openPeerAttachment(PeerAttachment attachment) async {

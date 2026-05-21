@@ -1281,6 +1281,76 @@ class StaffRequestsRepository {
     );
   }
 
+  Future<StaffRequestRecord> uploadTransferCorrectionAttachments({
+    required StaffRequestRecord request,
+    required List<String> filePaths,
+    required List<String> fileNames,
+    List<String> labels = const [],
+  }) async {
+    final transferRequestId = _requestSourceId(request, 'transfer-');
+    if (transferRequestId.isEmpty) {
+      throw Exception('Transfer request details are incomplete.');
+    }
+    if (filePaths.isEmpty) {
+      throw Exception('Select at least one attachment.');
+    }
+
+    final attachments = <MultipartFile>[];
+    for (var index = 0; index < filePaths.length; index += 1) {
+      attachments.add(
+        await MultipartFile.fromFile(
+          filePaths[index],
+          filename: index < fileNames.length ? fileNames[index] : null,
+        ),
+      );
+    }
+
+    final uploadResponse = await _postForm(
+      '/transfer-requests/$transferRequestId/attachments',
+      data: {
+        'attachments': attachments,
+        if (labels.isNotEmpty) 'attachment_labels': labels,
+      },
+    );
+    _ensureSuccessfulResponse(
+      uploadResponse,
+      fallback: 'Transfer attachments were not uploaded.',
+    );
+
+    final resubmitResponse = await _postJson(
+      '/transfer-requests/$transferRequestId/resubmit',
+      data: const <String, dynamic>{},
+    );
+    _ensureSuccessfulResponse(
+      resubmitResponse,
+      fallback: 'Transfer request was not resubmitted.',
+    );
+
+    final attachmentName = fileNames.isNotEmpty
+        ? fileNames.first
+        : request.attachmentName;
+    return request.copyWith(
+      status: StaffRequestStatus.pending,
+      stageLabel: 'Resubmitted',
+      attachmentName: attachmentName,
+      detailFields: [
+        ...request.detailFields.where(
+          (field) => field.label.toLowerCase() != 'status',
+        ),
+        if (attachmentName?.trim().isNotEmpty == true)
+          RequestDetailField(
+            label: 'Correction Attachment',
+            value: attachmentName!,
+          ),
+        const RequestDetailField(
+          label: 'Status',
+          value: 'Pending',
+          status: StaffRequestStatus.pending,
+        ),
+      ],
+    );
+  }
+
   Future<StaffRequestRecord> submitSickSheet({
     required UserModel user,
     required SickSheetDraft draft,
@@ -1356,11 +1426,26 @@ class StaffRequestsRepository {
   }) async {
     final payload = <String, dynamic>{
       'name': draft.name,
-      'activity_date': _toApiDate(draft.activityDate),
+      'description': draft.description,
+      'activity_date': _toApiDate(draft.startDate),
+      'start_date': _toApiDate(draft.startDate),
+      'end_date': _toApiDate(draft.endDate),
       'activity_area_type': draft.activityAreaType,
       if (draft.destinationName != null &&
           draft.destinationName!.trim().isNotEmpty)
         'destination_name': draft.destinationName!.trim(),
+      if ((draft.contactPersonName ?? '').trim().isNotEmpty)
+        'contact_person_name': draft.contactPersonName!.trim(),
+      if ((draft.contactPersonEmail ?? '').trim().isNotEmpty)
+        'contact_person_email': draft.contactPersonEmail!.trim(),
+      if ((draft.contactPersonPhone ?? '').trim().isNotEmpty)
+        'contact_person_phone': draft.contactPersonPhone!.trim(),
+      if ((draft.organizerName ?? '').trim().isNotEmpty)
+        'organizer_name': draft.organizerName!.trim(),
+      if ((draft.organizerEmail ?? '').trim().isNotEmpty)
+        'organizer_email': draft.organizerEmail!.trim(),
+      if ((draft.organizerPhone ?? '').trim().isNotEmpty)
+        'organizer_phone': draft.organizerPhone!.trim(),
       if ((draft.filePath ?? '').trim().isNotEmpty)
         'attachments': [
           await MultipartFile.fromFile(
@@ -1368,6 +1453,9 @@ class StaffRequestsRepository {
             filename: draft.fileName,
           ),
         ],
+      if ((draft.filePath ?? '').trim().isNotEmpty &&
+          (draft.attachmentLabel ?? '').trim().isNotEmpty)
+        'attachment_labels': [draft.attachmentLabel!.trim()],
     };
 
     final response = (draft.filePath ?? '').trim().isNotEmpty
@@ -1383,13 +1471,14 @@ class StaffRequestsRepository {
       id: reference,
       type: StaffRequestType.activity,
       title: draft.name,
-      summary: draft.description?.trim().isEmpty == true
+      summary: draft.description.trim().isEmpty
           ? 'Activity scope: ${draft.activityAreaType}'
-          : draft.description!.trim(),
+          : draft.description.trim(),
       status: StaffRequestStatus.submitted,
       submittedAt: DateTime.now(),
       referenceNumber: reference,
-      startDate: draft.activityDate,
+      startDate: draft.startDate,
+      endDate: draft.endDate,
       location: draft.destinationName,
       stageLabel: 'Submitted',
       isLive: true,
@@ -1401,8 +1490,22 @@ class StaffRequestsRepository {
         ),
         if (draft.destinationName?.trim().isNotEmpty == true)
           RequestDetailField(label: 'Location', value: draft.destinationName!),
-        if (draft.description?.trim().isNotEmpty == true)
-          RequestDetailField(label: 'Description', value: draft.description!),
+        RequestDetailField(
+          label: 'Start Date',
+          value: _displayDate(draft.startDate),
+        ),
+        RequestDetailField(
+          label: 'End Date',
+          value: _displayDate(draft.endDate),
+        ),
+        RequestDetailField(label: 'Description', value: draft.description),
+        if (draft.contactPersonName?.trim().isNotEmpty == true)
+          RequestDetailField(
+            label: 'Contact Person',
+            value: draft.contactPersonName!,
+          ),
+        if (draft.organizerName?.trim().isNotEmpty == true)
+          RequestDetailField(label: 'Organizer', value: draft.organizerName!),
         if (draft.fileName?.trim().isNotEmpty == true)
           RequestDetailField(label: 'Attachment', value: draft.fileName!),
         RequestDetailField(
@@ -1412,6 +1515,16 @@ class StaffRequestsRepository {
         ),
       ],
     );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchMissingActivityAttachmentsReport({
+    String groupBy = 'area',
+  }) async {
+    final response = await _get(
+      '/reports/staff-activities/missing-attachments',
+      queryParameters: {'group_by': groupBy},
+    );
+    return _extractListByKey(response.data, 'data');
   }
 
   Future<StaffRequestRecord> submitLoanRequest({
@@ -2233,6 +2346,11 @@ class StaffRequestsRepository {
         return StaffRequestStatus.rejected;
       case 'WITHDRAWN':
         return StaffRequestStatus.withdrawn;
+      case 'ATTACHMENT_RETURNED':
+      case 'ATTACHMENT RETURNED':
+      case 'RETURNED_FOR_ATTACHMENTS':
+      case 'RETURNED FOR ATTACHMENTS':
+        return StaffRequestStatus.attachmentReturned;
       case 'SUBMITTED':
       case 'RECEIVED':
         return StaffRequestStatus.submitted;

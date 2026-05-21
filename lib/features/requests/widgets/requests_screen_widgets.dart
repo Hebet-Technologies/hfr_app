@@ -1381,15 +1381,13 @@ class _RequestCategoryListScreenState
             ),
         ],
       ),
-      floatingActionButton: widget.type == StaffRequestType.sickLeave
-          ? null
-          : FloatingActionButton(
-              heroTag: 'request-list-${widget.type.name}-fab',
-              backgroundColor: _requestBlue,
-              mini: true,
-              onPressed: () => openRequestFormScreen(context, widget.type),
-              child: const Icon(Icons.add_rounded, color: Colors.white),
-            ),
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'request-list-${widget.type.name}-fab',
+        backgroundColor: _requestBlue,
+        mini: true,
+        onPressed: () => openRequestFormScreen(context, widget.type),
+        child: const Icon(Icons.add_rounded, color: Colors.white),
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [
@@ -1626,6 +1624,30 @@ class RequestDetailScreen extends ConsumerWidget {
             const SizedBox(height: 18),
             _LeaveDetailActions(request: currentRequest),
           ],
+          if (currentRequest.type == StaffRequestType.transfer &&
+              currentRequest.status ==
+                  StaffRequestStatus.attachmentReturned) ...[
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: _filledStyle(),
+                onPressed: requestState.isSubmitting
+                    ? null
+                    : () => _openTransferCorrectionSheet(
+                        context,
+                        ref,
+                        currentRequest,
+                      ),
+                icon: const Icon(Icons.upload_file_rounded, size: 18),
+                label: Text(
+                  requestState.isSubmitting
+                      ? 'Uploading...'
+                      : 'Upload Attachments and Resubmit',
+                ),
+              ),
+            ),
+          ],
           if (currentRequest.type == StaffRequestType.activity) ...[
             const SizedBox(height: 18),
             SizedBox(
@@ -1822,6 +1844,321 @@ class RequestSubmissionSuccessScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _openTransferCorrectionSheet(
+  BuildContext context,
+  WidgetRef ref,
+  StaffRequestRecord request,
+) async {
+  final labelController = TextEditingController(text: 'supporting_document');
+  final selectedFiles = <PlatformFile>[];
+
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) {
+      return StatefulBuilder(
+        builder: (context, setModalState) {
+          final isSubmitting = ref.watch(
+            staffRequestsViewModelProvider.select(
+              (state) => state.isSubmitting,
+            ),
+          );
+
+          return Container(
+            margin: const EdgeInsets.all(14),
+            padding: EdgeInsets.fromLTRB(
+              18,
+              18,
+              18,
+              MediaQuery.of(sheetContext).viewInsets.bottom + 18,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Transfer Attachments',
+                  style: _requestTextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Upload the missing documents, then the request will be resubmitted.',
+                  style: _requestTextStyle(
+                    fontSize: 12,
+                    color: _requestMuted,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  label: 'Attachment Label',
+                  controller: labelController,
+                  hintText: 'supporting_document',
+                ),
+                FileUploadField(
+                  title: 'Upload Documents',
+                  description: 'PDF, Word, Excel, PowerPoint or image files.',
+                  fileName: selectedFiles.isEmpty
+                      ? null
+                      : '${selectedFiles.length} file${selectedFiles.length == 1 ? '' : 's'} selected',
+                  onBrowse: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      allowMultiple: true,
+                      type: FileType.custom,
+                      allowedExtensions: const [
+                        'pdf',
+                        'doc',
+                        'docx',
+                        'xls',
+                        'xlsx',
+                        'ppt',
+                        'pptx',
+                        'txt',
+                        'csv',
+                        'png',
+                        'jpg',
+                        'jpeg',
+                      ],
+                      withData: false,
+                    );
+                    if (result == null || result.files.isEmpty) return;
+                    setModalState(() {
+                      selectedFiles
+                        ..clear()
+                        ..addAll(result.files);
+                    });
+                  },
+                ),
+                if (selectedFiles.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  ...selectedFiles.map(
+                    (file) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        file.name,
+                        style: _requestTextStyle(
+                          fontSize: 12,
+                          color: _requestMuted,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    style: _filledStyle(),
+                    onPressed: isSubmitting
+                        ? null
+                        : () async {
+                            final usableFiles = selectedFiles
+                                .where(
+                                  (file) =>
+                                      file.path != null &&
+                                      file.path!.trim().isNotEmpty,
+                                )
+                                .toList();
+                            if (usableFiles.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Select at least one file.'),
+                                ),
+                              );
+                              return;
+                            }
+                            final label = labelController.text.trim();
+                            try {
+                              await ref
+                                  .read(staffRequestsViewModelProvider.notifier)
+                                  .uploadTransferCorrectionAttachments(
+                                    request: request,
+                                    filePaths: usableFiles
+                                        .map((file) => file.path!)
+                                        .toList(),
+                                    fileNames: usableFiles
+                                        .map((file) => file.name)
+                                        .toList(),
+                                    labels: label.isEmpty
+                                        ? const []
+                                        : List.filled(
+                                            usableFiles.length,
+                                            label,
+                                          ),
+                                  );
+                            } catch (error) {
+                              if (!context.mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(friendlyErrorMessage(error)),
+                                ),
+                              );
+                              return;
+                            }
+                            if (!context.mounted || !sheetContext.mounted) {
+                              return;
+                            }
+                            Navigator.pop(sheetContext);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Transfer request resubmitted successfully.',
+                                ),
+                              ),
+                            );
+                          },
+                    child: Text(isSubmitting ? 'Submitting...' : 'Submit'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    },
+  );
+}
+
+class MissingActivityAttachmentsReportScreen extends ConsumerWidget {
+  const MissingActivityAttachmentsReportScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final future = ref
+        .watch(staffRequestsRepositoryProvider)
+        .fetchMissingActivityAttachmentsReport();
+
+    return Scaffold(
+      backgroundColor: _requestSurface,
+      appBar: AppBar(
+        backgroundColor: _requestSurface,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          'Missing Attachments',
+          style: _requestTextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        ),
+      ),
+      body: FutureBuilder<List<Map<String, dynamic>>>(
+        future: future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(
+              child: CircularProgressIndicator(color: _requestBlue),
+            );
+          }
+          if (snapshot.hasError) {
+            return _ReportEmptyMessage(
+              message: friendlyErrorMessage(snapshot.error!),
+            );
+          }
+          final items = snapshot.data ?? const [];
+          if (items.isEmpty) {
+            return const _ReportEmptyMessage(
+              message: 'No missing activity attachments found.',
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              final title = _reportValue(item, const [
+                'group_label',
+                'activity_area_type',
+                'department_name',
+                'location_name',
+                'user_name',
+                'working_station_name',
+              ], fallback: 'Missing attachment group');
+              final count = _reportValue(item, const [
+                'missing_count',
+                'total',
+                'count',
+              ], fallback: '0');
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _requestBorder),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.assignment_late_outlined,
+                      color: Color(0xFFB54708),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        title,
+                        style: _requestTextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      count,
+                      style: _requestTextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFFB54708),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
+            itemCount: items.length,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ReportEmptyMessage extends StatelessWidget {
+  const _ReportEmptyMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: _requestTextStyle(fontSize: 13, color: _requestMuted),
+        ),
+      ),
+    );
+  }
+}
+
+String _reportValue(
+  Map<String, dynamic> item,
+  List<String> keys, {
+  String fallback = '',
+}) {
+  for (final key in keys) {
+    final value = item[key]?.toString().trim() ?? '';
+    if (value.isNotEmpty) return value;
+  }
+  return fallback;
 }
 
 class _LeaveDetailActions extends ConsumerWidget {
@@ -3304,6 +3641,8 @@ Color _statusColor(StaffRequestStatus status) {
       return const Color(0xFF64748B);
     case StaffRequestStatus.submitted:
       return _requestBlue;
+    case StaffRequestStatus.attachmentReturned:
+      return const Color(0xFFB54708);
   }
 }
 
@@ -3319,14 +3658,7 @@ Color _statusSoft(StaffRequestStatus status) {
       return const Color(0xFFF1F5F9);
     case StaffRequestStatus.submitted:
       return const Color(0xFFEAF2FF);
-  }
-}
-
-extension<T> on Iterable<T> {
-  T? firstWhereOrNull(bool Function(T item) test) {
-    for (final item in this) {
-      if (test(item)) return item;
-    }
-    return null;
+    case StaffRequestStatus.attachmentReturned:
+      return const Color(0xFFFFF4E5);
   }
 }

@@ -292,8 +292,15 @@ class _LeaveRequestFormScreenState
 
   bool _canBackdateLeave(RequestLookupOption? leaveType) {
     final label = leaveType?.label.toLowerCase().trim() ?? '';
-    return label.contains('hospital') ||
+    return label.contains('sick') ||
+        label.contains('illness') ||
+        label.contains('medical') ||
+        label.contains('hospital') ||
         label.contains('emergency') ||
-        label.contains('emergence');
+        label.contains('emergence') ||
+        label.contains('maternity') ||
+        label.contains('childbirth') ||
+        label.contains('kujifungua') ||
+        label.contains('kuumwa');
   }
 }

@@ -5,6 +5,7 @@ import 'package:staffportal/features/auth/data/auth_repository.dart';
 import 'package:staffportal/features/requests/models/activity_request_rules.dart';
 import 'package:staffportal/features/auth/models/staff_portal_access.dart';
 import 'package:staffportal/features/community/data/peer_exchange_repository.dart';
+import 'package:staffportal/features/profile/data/device_session_repository.dart';
 import 'package:staffportal/features/profile/data/profile_records_repository.dart';
 import 'package:staffportal/features/requests/data/staff_requests_repository.dart';
 import 'package:staffportal/features/training/data/training_repository.dart';
@@ -34,6 +35,10 @@ final trainingRepositoryProvider = Provider<TrainingRepository>(
 
 final profileRecordsRepositoryProvider = Provider<ProfileRecordsRepository>(
   (_) => ProfileRecordsRepository(),
+);
+
+final deviceSessionRepositoryProvider = Provider<DeviceSessionRepository>(
+  (_) => DeviceSessionRepository(),
 );
 
 final activityRequestRulesProvider = Provider<ActivityRequestRules>(

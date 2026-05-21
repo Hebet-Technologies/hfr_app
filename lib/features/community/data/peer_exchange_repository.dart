@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:staffportal/core/network/api_service.dart';
+import 'package:staffportal/core/services/conversation_encryption_service.dart';
 import 'package:staffportal/features/community/models/peer_exchange_models.dart';
 
 class PeerExchangeRepository {
@@ -43,6 +44,17 @@ class PeerExchangeRepository {
     String conversationUuid,
   ) async {
     final response = await _get('/conversations/$conversationUuid');
+    final conversation = PeerConversation.fromJson(
+      _requireMap(response.data['conversation'], 'conversation'),
+    );
+    return _decryptConversation(conversation);
+  }
+
+  Future<PeerConversation> ensureDirectConversation(int receiverId) async {
+    final response = await _postJson(
+      '/conversations/direct',
+      data: {'receiver_id': receiverId},
+    );
     return PeerConversation.fromJson(
       _requireMap(response.data['conversation'], 'conversation'),
     );
@@ -55,22 +67,43 @@ class PeerExchangeRepository {
     String? replyToUuid,
     List<MultipartFile> attachments = const [],
   }) async {
+    var resolvedConversationUuid = conversationUuid;
+    if (resolvedConversationUuid == null && receiverId != null) {
+      final conversation = await ensureDirectConversation(receiverId);
+      resolvedConversationUuid = conversation.uuid;
+      receiverId = null;
+    }
+
+    final encryptionPayload = resolvedConversationUuid == null
+        ? null
+        : await _buildEncryptionPayload(
+            conversationUuid: resolvedConversationUuid,
+            message: message,
+          );
+    final candidateDevices =
+        encryptionPayload?.remove('_candidate_devices')
+            as List<Map<String, dynamic>>?;
     final response = await _postForm(
       '/conversations/messages',
       data: _cleanMap({
-        'conversation_uuid': conversationUuid,
+        'conversation_uuid': resolvedConversationUuid,
         'receiver_id': receiverId,
-        'message': message,
+        'message': encryptionPayload == null ? message : null,
+        ...?encryptionPayload,
         'reply_to_uuid': replyToUuid,
         'attachments': attachments.isEmpty ? null : attachments,
       }),
     );
 
-    return PeerMessage.fromJson(
-      _requireMap(
-        response.data['conversation_message'],
-        'conversation_message',
+    return _decryptMessage(
+      PeerMessage.fromJson(
+        _requireMap(
+          response.data['conversation_message'],
+          'conversation_message',
+        ),
       ),
+      conversationUuid: resolvedConversationUuid,
+      candidateDevices: candidateDevices,
     );
   }
 
@@ -130,6 +163,20 @@ class PeerExchangeRepository {
         'member_ids': memberIds.isEmpty ? null : memberIds,
       }),
       listFormat: ListFormat.multiCompatible,
+    );
+
+    return PeerConversation.fromJson(
+      _requireMap(response.data['group'], 'group'),
+    );
+  }
+
+  Future<PeerConversation> createStationGroup({
+    String? name,
+    String? description,
+  }) async {
+    final response = await _postJson(
+      '/conversations/groups/station',
+      data: _cleanMap({'name': name, 'description': description}),
     );
 
     return PeerConversation.fromJson(
@@ -448,10 +495,11 @@ class PeerExchangeRepository {
     int limit = 20,
   }) async {
     final response = await _get(
-      '/conversations/users/search',
+      '/conversations/users',
       queryParameters: _cleanMap({
         'search': search,
-        'limit': limit.clamp(1, 50),
+        'perPage': limit.clamp(1, 50),
+        'per_page': limit.clamp(1, 50),
       }),
     );
 
@@ -461,6 +509,141 @@ class PeerExchangeRepository {
     return _directoryPeopleFromResponse(
       response.data,
     ).where((person) => person.id.toString() != currentUserId).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> fetchQuestionCategoryReport() async {
+    final response = await _get('/community/reports/question-categories');
+    return _mapList(
+      _listPayload(response.data, const ['data', 'categories', 'report']),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchCommunityLeaderboard() async {
+    final response = await _get('/community/reports/leaderboard');
+    return _mapList(
+      _listPayload(response.data, const ['data', 'leaderboard', 'users']),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> fetchAttachmentLibrary({
+    required String scope,
+    required String uuid,
+    String? search,
+    String? fileTypeGroup,
+  }) async {
+    final response = await _get(
+      '/$scope/$uuid/attachments',
+      queryParameters: _cleanMap({
+        'search': search,
+        'file_type_group': fileTypeGroup,
+      }),
+    );
+    return _mapList(_listPayload(response.data, const ['data', 'attachments']));
+  }
+
+  Future<List<PeerDirectoryPerson>> fetchCategoryResponders(
+    String categoryUuid,
+  ) async {
+    final response = await _get(
+      '/question-categories/$categoryUuid/responders',
+    );
+    return _listFromResponse(
+      _listPayload(response.data, const ['responders', 'users', 'data']),
+      PeerDirectoryPerson.fromJson,
+    );
+  }
+
+  Future<void> saveCategoryResponders({
+    required String categoryUuid,
+    required List<int> userIds,
+    String role = 'RESPONDER',
+  }) async {
+    await _postJson(
+      '/question-categories/$categoryUuid/responders',
+      data: {'user_ids': userIds, 'role': role, 'is_active': true},
+    );
+  }
+
+  Future<void> deleteCategoryResponder({
+    required String categoryUuid,
+    required int userId,
+  }) async {
+    await _delete('/question-categories/$categoryUuid/responders/$userId');
+  }
+
+  Future<PeerMessage> decryptConversationMessage({
+    required String conversationUuid,
+    required PeerMessage message,
+  }) {
+    return _decryptMessage(message, conversationUuid: conversationUuid);
+  }
+
+  Future<Map<String, dynamic>?> _buildEncryptionPayload({
+    required String conversationUuid,
+    required String message,
+  }) async {
+    if (message.trim().isEmpty) return null;
+    final devices = await _fetchEncryptionDevices(conversationUuid);
+    final payload = await ConversationEncryptionService.instance.encryptMessage(
+      conversationUuid: conversationUuid,
+      message: message,
+      devices: devices,
+    );
+    if (payload == null) return null;
+    payload['_candidate_devices'] = devices;
+    return payload;
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchEncryptionDevices(
+    String conversationUuid,
+  ) async {
+    final response = await _get(
+      '/conversations/$conversationUuid/encryption-devices',
+    );
+    return _mapList(_listPayload(response.data, const ['devices', 'data']));
+  }
+
+  Future<PeerConversation> _decryptConversation(
+    PeerConversation conversation,
+  ) async {
+    final devices = await _fetchEncryptionDevices(conversation.uuid);
+    final recentMessages = <PeerMessage>[];
+    for (final message in conversation.recentMessages) {
+      recentMessages.add(
+        await _decryptMessage(
+          message,
+          conversationUuid: conversation.uuid,
+          candidateDevices: devices,
+        ),
+      );
+    }
+
+    return conversation.copyWith(recentMessages: recentMessages);
+  }
+
+  Future<PeerMessage> _decryptMessage(
+    PeerMessage message, {
+    String? conversationUuid,
+    List<Map<String, dynamic>>? candidateDevices,
+  }) async {
+    if (!message.isEncrypted || message.hasMessage) return message;
+    final devices =
+        candidateDevices ??
+        (conversationUuid == null
+            ? const <Map<String, dynamic>>[]
+            : await _fetchEncryptionDevices(conversationUuid));
+    final envelopes = message.encryptionEnvelopes
+        .map((envelope) => envelope.toJson())
+        .toList();
+    final decrypted = await ConversationEncryptionService.instance
+        .decryptMessage(
+          ciphertext: message.ciphertext,
+          nonce: message.nonce,
+          envelopes: envelopes,
+          candidateDevices: devices,
+        );
+    if (decrypted == null || decrypted.trim().isEmpty) return message;
+    return message.copyWith(message: decrypted);
   }
 
   Future<Response<dynamic>> _get(
@@ -634,6 +817,18 @@ class PeerExchangeRepository {
         source.map((key, value) => MapEntry(key.toString(), value)),
         keys,
       );
+    }
+    return const [];
+  }
+
+  List<Map<String, dynamic>> _mapList(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<Map>()
+          .map(
+            (item) => item.map((key, value) => MapEntry(key.toString(), value)),
+          )
+          .toList();
     }
     return const [];
   }

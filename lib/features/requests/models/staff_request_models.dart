@@ -47,7 +47,14 @@ extension StaffRequestTypeX on StaffRequestType {
   }
 }
 
-enum StaffRequestStatus { pending, approved, rejected, withdrawn, submitted }
+enum StaffRequestStatus {
+  pending,
+  approved,
+  rejected,
+  withdrawn,
+  submitted,
+  attachmentReturned,
+}
 
 extension StaffRequestStatusX on StaffRequestStatus {
   String get label {
@@ -62,12 +69,15 @@ extension StaffRequestStatusX on StaffRequestStatus {
         return 'Withdrawn';
       case StaffRequestStatus.submitted:
         return 'Submitted';
+      case StaffRequestStatus.attachmentReturned:
+        return 'Attachment Returned';
     }
   }
 
   bool get isOpen {
     return this == StaffRequestStatus.pending ||
-        this == StaffRequestStatus.submitted;
+        this == StaffRequestStatus.submitted ||
+        this == StaffRequestStatus.attachmentReturned;
   }
 }
 
@@ -599,21 +609,37 @@ class SickSheetDraft {
 class ActivityRequestDraft {
   const ActivityRequestDraft({
     required this.name,
-    required this.activityDate,
+    required this.startDate,
+    required this.endDate,
     required this.activityAreaType,
+    required this.description,
     this.destinationName,
-    this.description,
+    this.contactPersonName,
+    this.contactPersonEmail,
+    this.contactPersonPhone,
+    this.organizerName,
+    this.organizerEmail,
+    this.organizerPhone,
     this.filePath,
     this.fileName,
+    this.attachmentLabel,
   });
 
   final String name;
-  final DateTime activityDate;
+  final DateTime startDate;
+  final DateTime endDate;
   final String activityAreaType;
+  final String description;
   final String? destinationName;
-  final String? description;
+  final String? contactPersonName;
+  final String? contactPersonEmail;
+  final String? contactPersonPhone;
+  final String? organizerName;
+  final String? organizerEmail;
+  final String? organizerPhone;
   final String? filePath;
   final String? fileName;
+  final String? attachmentLabel;
 }
 
 class LoanRequestDraft {

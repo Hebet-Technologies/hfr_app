@@ -21,7 +21,14 @@ class _ActivityRequestFormScreenState
   final _formKey = GlobalKey<FormState>();
   final _locationController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _contactNameController = TextEditingController();
+  final _contactEmailController = TextEditingController();
+  final _contactPhoneController = TextEditingController();
+  final _organizerNameController = TextEditingController();
+  final _organizerEmailController = TextEditingController();
+  final _organizerPhoneController = TextEditingController();
   DateTime? _startDate;
+  DateTime? _endDate;
   String? _category;
   String? _scope;
   PlatformFile? _selectedFile;
@@ -40,6 +47,12 @@ class _ActivityRequestFormScreenState
   void dispose() {
     _locationController.dispose();
     _descriptionController.dispose();
+    _contactNameController.dispose();
+    _contactEmailController.dispose();
+    _contactPhoneController.dispose();
+    _organizerNameController.dispose();
+    _organizerEmailController.dispose();
+    _organizerPhoneController.dispose();
     super.dispose();
   }
 
@@ -95,20 +108,78 @@ class _ActivityRequestFormScreenState
                   hintText: 'Input',
                 ),
                 DateInputField(
-                  label: 'Activity Date',
+                  label: 'Start Date',
                   value: _startDate,
                   onTap: () async {
                     final picked = await pickDate(context, initial: _startDate);
                     if (picked != null) {
-                      setState(() => _startDate = picked);
+                      setState(() {
+                        _startDate = picked;
+                        if (_endDate != null && _endDate!.isBefore(picked)) {
+                          _endDate = picked;
+                        }
+                      });
+                    }
+                  },
+                ),
+                DateInputField(
+                  label: 'End Date',
+                  value: _endDate,
+                  onTap: () async {
+                    final picked = await pickDate(
+                      context,
+                      initial: _endDate ?? _startDate,
+                    );
+                    if (picked != null) {
+                      setState(() => _endDate = picked);
                     }
                   },
                 ),
                 AppTextField(
-                  label: 'Description (Optional)',
+                  label: 'Description',
                   controller: _descriptionController,
-                  hintText: 'Input',
+                  hintText: 'Describe the activity',
                   maxLines: 5,
+                ),
+                AppTextField(
+                  label: 'Contact Person Name (Optional)',
+                  controller: _contactNameController,
+                  hintText: 'Input',
+                  validator: (_) => null,
+                ),
+                AppTextField(
+                  label: 'Contact Person Email (Optional)',
+                  controller: _contactEmailController,
+                  hintText: 'Input',
+                  keyboardType: TextInputType.emailAddress,
+                  validator: _optionalEmailValidator,
+                ),
+                AppTextField(
+                  label: 'Contact Person Phone (Optional)',
+                  controller: _contactPhoneController,
+                  hintText: 'Input',
+                  keyboardType: TextInputType.phone,
+                  validator: (_) => null,
+                ),
+                AppTextField(
+                  label: 'Organizer Name (Optional)',
+                  controller: _organizerNameController,
+                  hintText: 'Input',
+                  validator: (_) => null,
+                ),
+                AppTextField(
+                  label: 'Organizer Email (Optional)',
+                  controller: _organizerEmailController,
+                  hintText: 'Input',
+                  keyboardType: TextInputType.emailAddress,
+                  validator: _optionalEmailValidator,
+                ),
+                AppTextField(
+                  label: 'Organizer Phone (Optional)',
+                  controller: _organizerPhoneController,
+                  hintText: 'Input',
+                  keyboardType: TextInputType.phone,
+                  validator: (_) => null,
                 ),
                 FileUploadField(
                   title: requiresAttachment
@@ -153,6 +224,13 @@ class _ActivityRequestFormScreenState
       );
       return;
     }
+    final endDate = _endDate ?? _startDate!;
+    if (endDate.isBefore(_startDate!)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('End date cannot be before start date.')),
+      );
+      return;
+    }
     if (isPastDate(_startDate!)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Activity date cannot be before today.')),
@@ -186,12 +264,22 @@ class _ActivityRequestFormScreenState
           .submitActivityRequest(
             ActivityRequestDraft(
               name: _category!,
-              activityDate: _startDate!,
+              startDate: _startDate!,
+              endDate: endDate,
               activityAreaType: scope.apiValue,
               destinationName: _locationController.text.trim(),
               description: _descriptionController.text.trim(),
+              contactPersonName: _contactNameController.text.trim(),
+              contactPersonEmail: _contactEmailController.text.trim(),
+              contactPersonPhone: _contactPhoneController.text.trim(),
+              organizerName: _organizerNameController.text.trim(),
+              organizerEmail: _organizerEmailController.text.trim(),
+              organizerPhone: _organizerPhoneController.text.trim(),
               filePath: filePath,
               fileName: file?.name,
+              attachmentLabel: scope.requiresAttachment
+                  ? 'invitation_letter'
+                  : null,
             ),
           );
 
@@ -225,5 +313,12 @@ class _ActivityRequestFormScreenState
       return;
     }
     setState(() => _selectedFile = file);
+  }
+
+  String? _optionalEmailValidator(String? value) {
+    final normalized = (value ?? '').trim();
+    if (normalized.isEmpty) return null;
+    if (!normalized.contains('@')) return 'Enter a valid email address';
+    return null;
   }
 }

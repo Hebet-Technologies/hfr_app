@@ -44,6 +44,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     Navigator.pushReplacementNamed(context, RoutesName.login);
   }
 
+  Future<void> _openDeviceSessions() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const DeviceSessionsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authViewModelProvider).user;
@@ -207,6 +213,23 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ),
                 const SizedBox(height: 18),
                 OutlinedButton.icon(
+                  onPressed: _openDeviceSessions,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF344054),
+                    side: const BorderSide(color: Color(0xFFE4E7EC)),
+                    minimumSize: const Size.fromHeight(48),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.devices_rounded, size: 18),
+                  label: const Text(
+                    'Manage Devices',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
                   onPressed: _logout,
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFFF04438),
@@ -277,5 +300,123 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'Dec',
     ];
     return '${parsed.day} ${monthNames[parsed.month - 1]} ${parsed.year}';
+  }
+}
+
+class DeviceSessionsScreen extends ConsumerWidget {
+  const DeviceSessionsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionsAsync = ref.watch(userDeviceSessionsProvider);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F8FA),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF7F8FA),
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Devices',
+          style: TextStyle(
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF101828),
+          ),
+        ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(userDeviceSessionsProvider);
+          await ref.read(userDeviceSessionsProvider.future);
+        },
+        child: sessionsAsync.when(
+          loading: () => const Center(
+            child: CircularProgressIndicator(color: Color(0xFF1F6BFF)),
+          ),
+          error: (error, _) => ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              ProfileInlineMessage(message: friendlyErrorMessage(error)),
+            ],
+          ),
+          data: (sessions) {
+            if (sessions.isEmpty) {
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: const [
+                  ProfileInlineMessage(message: 'No active devices found.'),
+                ],
+              );
+            }
+            return ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              itemBuilder: (context, index) {
+                final session = sessions[index];
+                return Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFE4E7EC)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.smartphone_rounded,
+                        color: Color(0xFF1F6BFF),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              session.title,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF101828),
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              session.subtitle,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF667085),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          try {
+                            await ref
+                                .read(deviceSessionActionsProvider)
+                                .revoke(session);
+                          } catch (error) {
+                            if (!context.mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(friendlyErrorMessage(error)),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Revoke'),
+                      ),
+                    ],
+                  ),
+                );
+              },
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
+              itemCount: sessions.length,
+            );
+          },
+        ),
+      ),
+    );
   }
 }

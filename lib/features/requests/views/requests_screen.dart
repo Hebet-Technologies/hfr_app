@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -11,6 +12,7 @@ import '../providers/staff_request_view_model.dart';
 import 'activity_request_form.dart';
 import 'leave_request_form.dart';
 import 'loan_request_form.dart';
+import 'request_form_widgets.dart';
 import 'sick_sheet_form.dart';
 import 'transfer_request_form.dart';
 
@@ -228,6 +230,19 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                       ),
                     ),
                   ),
+                  if (access.hasRequestApproverAccess) ...[
+                    const SizedBox(width: 8),
+                    IconButton.filledTonal(
+                      tooltip: 'Missing activity attachments',
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              const MissingActivityAttachmentsReportScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.assignment_late_outlined),
+                    ),
+                  ],
                 ],
               ),
               if (activeFilterLabels.isNotEmpty) ...[

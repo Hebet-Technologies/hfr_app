@@ -125,12 +125,22 @@ class PeerAttachment {
   });
 
   factory PeerAttachment.fromJson(Map<String, dynamic> json) {
+    final attachmentUrl = _asString(json['attachment_url']);
+    final legacyFilePath = _asString(json['file_path']);
+    final resolvedPath = attachmentUrl.isNotEmpty
+        ? attachmentUrl
+        : legacyFilePath.startsWith('storage/')
+        ? legacyFilePath
+        : legacyFilePath.isEmpty
+        ? ''
+        : 'storage/$legacyFilePath';
+
     return PeerAttachment(
       uuid: _asString(json['uuid']),
       category: _asString(json['category']),
       subCategory: _asString(json['sub_category']),
       originalFileName: _asString(json['original_file_name']),
-      filePath: _asString(json['file_path']),
+      filePath: resolvedPath,
       mimeType: _asString(json['mime_type']),
       fileSize: _asString(json['file_size']),
     );
@@ -196,6 +206,10 @@ class PeerMessage {
   final String messageType;
   final String status;
   final String message;
+  final String ciphertext;
+  final String nonce;
+  final int encryptionVersion;
+  final String keyId;
   final DateTime? sentAt;
   final DateTime? deliveredAt;
   final DateTime? readAt;
@@ -204,6 +218,7 @@ class PeerMessage {
   final DateTime? editedAt;
   final PeerMember? sender;
   final List<PeerAttachment> attachments;
+  final List<PeerEncryptionEnvelope> encryptionEnvelopes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -214,6 +229,10 @@ class PeerMessage {
     required this.messageType,
     required this.status,
     required this.message,
+    required this.ciphertext,
+    required this.nonce,
+    required this.encryptionVersion,
+    required this.keyId,
     required this.sentAt,
     required this.deliveredAt,
     required this.readAt,
@@ -222,6 +241,7 @@ class PeerMessage {
     required this.editedAt,
     required this.sender,
     required this.attachments,
+    required this.encryptionEnvelopes,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -234,6 +254,10 @@ class PeerMessage {
       messageType: _asString(json['message_type']),
       status: _asString(json['status']),
       message: _asString(json['message']),
+      ciphertext: _asString(json['ciphertext']),
+      nonce: _asString(json['nonce']),
+      encryptionVersion: _asInt(json['encryption_version']),
+      keyId: _asString(json['key_id']),
       sentAt: _asDateTime(json['sent_at']),
       deliveredAt: _asDateTime(json['delivered_at']),
       readAt: _asDateTime(json['read_at']),
@@ -246,12 +270,16 @@ class PeerMessage {
       attachments: _asList(
         json['attachments'],
       ).map((item) => PeerAttachment.fromJson(item)).toList(),
+      encryptionEnvelopes: _asList(
+        json['encryption_envelopes'],
+      ).map((item) => PeerEncryptionEnvelope.fromJson(item)).toList(),
       createdAt: _asDateTime(json['created_at']),
       updatedAt: _asDateTime(json['updated_at']),
     );
   }
 
   bool get hasMessage => message.trim().isNotEmpty;
+  bool get isEncrypted => ciphertext.trim().isNotEmpty;
 
   PeerMessage copyWith({
     String? uuid,
@@ -260,6 +288,10 @@ class PeerMessage {
     String? messageType,
     String? status,
     String? message,
+    String? ciphertext,
+    String? nonce,
+    int? encryptionVersion,
+    String? keyId,
     DateTime? sentAt,
     DateTime? deliveredAt,
     DateTime? readAt,
@@ -268,6 +300,7 @@ class PeerMessage {
     DateTime? editedAt,
     PeerMember? sender,
     List<PeerAttachment>? attachments,
+    List<PeerEncryptionEnvelope>? encryptionEnvelopes,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -278,6 +311,10 @@ class PeerMessage {
       messageType: messageType ?? this.messageType,
       status: status ?? this.status,
       message: message ?? this.message,
+      ciphertext: ciphertext ?? this.ciphertext,
+      nonce: nonce ?? this.nonce,
+      encryptionVersion: encryptionVersion ?? this.encryptionVersion,
+      keyId: keyId ?? this.keyId,
       sentAt: sentAt ?? this.sentAt,
       deliveredAt: deliveredAt ?? this.deliveredAt,
       readAt: readAt ?? this.readAt,
@@ -286,6 +323,7 @@ class PeerMessage {
       editedAt: editedAt ?? this.editedAt,
       sender: sender ?? this.sender,
       attachments: attachments ?? this.attachments,
+      encryptionEnvelopes: encryptionEnvelopes ?? this.encryptionEnvelopes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -296,12 +334,52 @@ class PeerMessage {
       return message.trim();
     }
 
+    if (isEncrypted) {
+      return 'Encrypted message unavailable';
+    }
+
     if (attachments.isNotEmpty) {
       final suffix = attachments.length == 1 ? 'attachment' : 'attachments';
       return '${attachments.length} $suffix';
     }
 
     return 'No message yet';
+  }
+}
+
+class PeerEncryptionEnvelope {
+  const PeerEncryptionEnvelope({
+    required this.userDeviceUuid,
+    required this.encryptedKey,
+    required this.keyId,
+    required this.algorithm,
+    required this.recipientUserId,
+  });
+
+  final String userDeviceUuid;
+  final String encryptedKey;
+  final String keyId;
+  final String algorithm;
+  final int recipientUserId;
+
+  factory PeerEncryptionEnvelope.fromJson(Map<String, dynamic> json) {
+    return PeerEncryptionEnvelope(
+      userDeviceUuid: _asString(json['user_device_uuid']),
+      encryptedKey: _asString(json['encrypted_key']),
+      keyId: _asString(json['key_id']),
+      algorithm: _asString(json['algorithm']),
+      recipientUserId: _asInt(json['recipient_user_id']),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'user_device_uuid': userDeviceUuid,
+      'encrypted_key': encryptedKey,
+      'key_id': keyId,
+      'algorithm': algorithm,
+      'recipient_user_id': recipientUserId,
+    };
   }
 }
 
@@ -379,6 +457,33 @@ class PeerConversation {
   }
 
   bool get isGroup => type.toLowerCase() == 'group';
+
+  PeerConversation copyWith({
+    PeerMessage? lastMessage,
+    List<PeerMessage>? recentMessages,
+  }) {
+    return PeerConversation(
+      uuid: uuid,
+      name: name,
+      displayName: displayName,
+      iconPath: iconPath,
+      type: type,
+      description: description,
+      lastMessageId: lastMessageId,
+      lastMessageAt: lastMessageAt,
+      isActive: isActive,
+      createdBy: createdBy,
+      updatedBy: updatedBy,
+      deletedAt: deletedAt,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      messagesCount: messagesCount,
+      usersCount: usersCount,
+      users: users,
+      lastMessage: lastMessage ?? this.lastMessage,
+      recentMessages: recentMessages ?? this.recentMessages,
+    );
+  }
 
   String get title {
     if (displayName.trim().isNotEmpty) return displayName.trim();
