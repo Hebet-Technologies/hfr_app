@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:staffportal/core/routing/routes_name.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'auth_styles.dart';
 
 class IntroScreen extends StatelessWidget {
@@ -13,8 +14,8 @@ class IntroScreen extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          DecoratedBox(
-            decoration: const BoxDecoration(
+          const DecoratedBox(
+            decoration: BoxDecoration(
               image: DecorationImage(
                 image: AssetImage('assets/images/background_1.png'),
                 fit: BoxFit.cover,
@@ -38,13 +39,13 @@ class IntroScreen extends StatelessWidget {
           SafeArea(
             top: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 18),
-              child: Column(
-                children: [
-                  const Spacer(),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 420),
-                    child: DecoratedBox(
+              padding: AppBreakpoints.pagePadding(context, bottom: 18),
+              child: ResponsiveWidth(
+                maxWidth: 460,
+                child: Column(
+                  children: [
+                    const Spacer(),
+                    DecoratedBox(
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(24),
@@ -156,8 +157,8 @@ class IntroScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

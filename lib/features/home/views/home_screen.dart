@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:staffportal/core/routing/routes_name.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -99,118 +100,121 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF43A047), Color(0xFF66BB6A)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Welcome Back!',
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Employee ID: ${user?.userId ?? 'N/A'}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white70,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Work Station: ${user?.workingStationName ?? 'N/A'}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white70,
-                          ),
-                        ),
-                      ],
-                    ),
+        padding: AppBreakpoints.pagePadding(context),
+        child: ResponsiveWidth(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF43A047), Color(0xFF66BB6A)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(50),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Welcome Back!',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Employee ID: ${user?.userId ?? 'N/A'}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.white70,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Work Station: ${user?.workingStationName ?? 'N/A'}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.person,
-                      size: 40,
-                      color: Colors.white,
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(50),
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        size: 40,
+                        color: Colors.white,
+                      ),
                     ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Quick Actions',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 16),
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: AppBreakpoints.isTablet(context) ? 4 : 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: AppBreakpoints.isTablet(context) ? 1.35 : 1.1,
+                children: [
+                  _buildActionCard(
+                    context,
+                    icon: Icons.person_outline,
+                    title: 'Profile',
+                    color: const Color(0xFF43A047),
+                    onTap: () =>
+                        Navigator.pushNamed(context, RoutesName.profile),
+                  ),
+                  _buildActionCard(
+                    context,
+                    icon: Icons.school_outlined,
+                    title: 'Trainings',
+                    color: const Color(0xFF1976D2),
+                    onTap: () =>
+                        Navigator.pushNamed(context, RoutesName.attendance),
+                  ),
+                  _buildActionCard(
+                    context,
+                    icon: Icons.task_outlined,
+                    title: 'Tasks',
+                    color: const Color(0xFFFFA726),
+                    onTap: () => Navigator.pushNamed(context, RoutesName.tasks),
+                  ),
+                  _buildActionCard(
+                    context,
+                    icon: Icons.settings,
+                    title: 'Settings',
+                    color: const Color(0xFF9E9E9E),
+                    onTap: () {},
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Quick Actions',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1A1A1A),
-              ),
-            ),
-            const SizedBox(height: 16),
-            GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: 2,
-              crossAxisSpacing: 16,
-              mainAxisSpacing: 16,
-              childAspectRatio: 1.1,
-              children: [
-                _buildActionCard(
-                  context,
-                  icon: Icons.person_outline,
-                  title: 'Profile',
-                  color: const Color(0xFF43A047),
-                  onTap: () => Navigator.pushNamed(context, RoutesName.profile),
-                ),
-                _buildActionCard(
-                  context,
-                  icon: Icons.school_outlined,
-                  title: 'Trainings',
-                  color: const Color(0xFF1976D2),
-                  onTap: () =>
-                      Navigator.pushNamed(context, RoutesName.attendance),
-                ),
-                _buildActionCard(
-                  context,
-                  icon: Icons.task_outlined,
-                  title: 'Tasks',
-                  color: const Color(0xFFFFA726),
-                  onTap: () => Navigator.pushNamed(context, RoutesName.tasks),
-                ),
-                _buildActionCard(
-                  context,
-                  icon: Icons.settings,
-                  title: 'Settings',
-                  color: const Color(0xFF9E9E9E),
-                  onTap: () {},
-                ),
-              ],
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

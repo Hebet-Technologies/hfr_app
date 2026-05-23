@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:staffportal/features/auth/models/registration_model.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'auth_styles.dart';
 
 class VerifyPersonalInfoScreen extends ConsumerStatefulWidget {
@@ -205,170 +206,67 @@ class _VerifyPersonalInfoScreenState
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 20),
-                authHeaderSection(
-                  title: 'Verify your identity',
-                  subtitle:
-                      'Enter your payroll number and date of birth to verify.',
-                ),
-                const SizedBox(height: 24),
-                authLabeledField(
-                  label: 'Payroll Number',
-                  child: TextFormField(
-                    controller: _payrollController,
-                    style: authTextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    decoration: authInputDecoration(
-                      hintText: 'Enter payroll number',
-                      prefixIcon: Icons.badge_outlined,
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your payroll number';
-                      }
-                      return null;
-                    },
+          padding: AppBreakpoints.pagePadding(context, bottom: 32),
+          child: ResponsiveWidth(
+            maxWidth: AppBreakpoints.maxFormWidth,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 20),
+                  authHeaderSection(
+                    title: 'Verify your identity',
+                    subtitle:
+                        'Enter your payroll number and date of birth to verify.',
                   ),
-                ),
-                authLabeledField(
-                  label: 'Date of Birth',
-                  margin: EdgeInsets.zero,
-                  child: TextFormField(
-                    controller: _dobController,
-                    style: authTextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    decoration: authInputDecoration(
-                      hintText: 'YYYY-MM-DD',
-                      prefixIcon: Icons.calendar_today_outlined,
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your date of birth';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: authState.isLoading || _isVerified
-                      ? null
-                      : _verifyPersonalInfo,
-                  style: authPrimaryButtonStyle(),
-                  child: authState.isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
-                            ),
-                          ),
-                        )
-                      : Text(_isVerified ? 'Verified' : 'Verify'),
-                ),
-                if (_isVerified) ...[
                   const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFF),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: authBorder),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Verified Staff Information',
-                          style: authTextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          _verifiedName(_personalInfo!),
-                          style: authTextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          _asString(_personalInfo!['working_station_name']),
-                          style: authTextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: authTextSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Payroll: ${_asString(_personalInfo!['payroll'])}',
-                          style: authTextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            color: authTextSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   authLabeledField(
-                    label: 'Approval Path',
-                    margin: EdgeInsets.zero,
-                    child: DropdownButtonFormField<String>(
-                      key: ValueKey('approval-path::$_selectedPathId'),
-                      initialValue: _selectedPathId,
-                      isExpanded: true,
+                    label: 'Payroll Number',
+                    child: TextFormField(
+                      controller: _payrollController,
                       style: authTextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                       ),
-                      iconEnabledColor: authIconColor,
                       decoration: authInputDecoration(
-                        hintText: 'Select approval path',
-                        prefixIcon: Icons.alt_route_rounded,
+                        hintText: 'Enter payroll number',
+                        prefixIcon: Icons.badge_outlined,
                       ),
-                      items: _pathOptions.map((item) {
-                        final pathId = _asString(item['leave_path_id']);
-                        final pathName = _asString(item['leave_path_name']);
-                        return DropdownMenuItem<String>(
-                          value: pathId,
-                          child: Text(
-                            pathName,
-                            style: authTextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedPathId = value;
-                        });
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your payroll number';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
+                  authLabeledField(
+                    label: 'Date of Birth',
+                    margin: EdgeInsets.zero,
+                    child: TextFormField(
+                      controller: _dobController,
+                      style: authTextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      decoration: authInputDecoration(
+                        hintText: 'YYYY-MM-DD',
+                        prefixIcon: Icons.calendar_today_outlined,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your date of birth';
+                        }
+                        return null;
                       },
                     ),
                   ),
                   const SizedBox(height: 24),
                   ElevatedButton(
-                    onPressed: authState.isLoading
+                    onPressed: authState.isLoading || _isVerified
                         ? null
-                        : _completeRegistration,
+                        : _verifyPersonalInfo,
                     style: authPrimaryButtonStyle(),
                     child: authState.isLoading
                         ? const SizedBox(
@@ -381,10 +279,116 @@ class _VerifyPersonalInfoScreenState
                               ),
                             ),
                           )
-                        : const Text('Complete Registration'),
+                        : Text(_isVerified ? 'Verified' : 'Verify'),
                   ),
+                  if (_isVerified) ...[
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8FAFF),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: authBorder),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Verified Staff Information',
+                            style: authTextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _verifiedName(_personalInfo!),
+                            style: authTextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _asString(_personalInfo!['working_station_name']),
+                            style: authTextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: authTextSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Payroll: ${_asString(_personalInfo!['payroll'])}',
+                            style: authTextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: authTextSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    authLabeledField(
+                      label: 'Approval Path',
+                      margin: EdgeInsets.zero,
+                      child: DropdownButtonFormField<String>(
+                        key: ValueKey('approval-path::$_selectedPathId'),
+                        initialValue: _selectedPathId,
+                        isExpanded: true,
+                        style: authTextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        iconEnabledColor: authIconColor,
+                        decoration: authInputDecoration(
+                          hintText: 'Select approval path',
+                          prefixIcon: Icons.alt_route_rounded,
+                        ),
+                        items: _pathOptions.map((item) {
+                          final pathId = _asString(item['leave_path_id']);
+                          final pathName = _asString(item['leave_path_name']);
+                          return DropdownMenuItem<String>(
+                            value: pathId,
+                            child: Text(
+                              pathName,
+                              style: authTextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedPathId = value;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: authState.isLoading
+                          ? null
+                          : _completeRegistration,
+                      style: authPrimaryButtonStyle(),
+                      child: authState.isLoading
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Text('Complete Registration'),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'package:staffportal/core/routing/routes_name.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 
 class SplashView extends ConsumerStatefulWidget {
   const SplashView({super.key});
@@ -128,40 +129,43 @@ class _SplashViewState extends ConsumerState<SplashView> {
               ),
               Positioned(
                 top: contentTop,
-                left: 24,
-                right: 24,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset(
-                      'assets/images/logo.png',
-                      width: 128,
-                      fit: BoxFit.contain,
-                    ),
-                    const SizedBox(height: 28),
-                    Text(
-                      'HRH Staff Portal',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.manrope(
-                        fontSize: 31,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF2D3654),
-                        letterSpacing: -0.5,
-                        height: 1.04,
+                left: AppBreakpoints.pagePadding(context).left,
+                right: AppBreakpoints.pagePadding(context).right,
+                child: ResponsiveWidth(
+                  maxWidth: 520,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/images/logo.png',
+                        width: 128,
+                        fit: BoxFit.contain,
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Human Resource for Health\nMinistry of Health - Zanzibar',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.manrope(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        height: 1.55,
-                        color: const Color(0xFF97A6BF),
+                      const SizedBox(height: 28),
+                      Text(
+                        'HRH Staff Portal',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.manrope(
+                          fontSize: 31,
+                          fontWeight: FontWeight.w800,
+                          color: const Color(0xFF2D3654),
+                          letterSpacing: -0.5,
+                          height: 1.04,
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 14),
+                      Text(
+                        'Human Resource for Health\nMinistry of Health - Zanzibar',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.manrope(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          height: 1.55,
+                          color: const Color(0xFF97A6BF),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:staffportal/features/profile/models/profile_record_models.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import '../providers/profile_records_view_model.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
 import '../widgets/profile_record_widgets.dart';
@@ -38,8 +39,8 @@ class _ProfileRecordsScreenState extends ConsumerState<ProfileRecordsScreen> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+      body: ResponsiveListView(
+        padding: AppBreakpoints.pagePadding(context),
         children: [
           if (modules.isEmpty)
             const EmptyProfileRecords(
@@ -187,8 +188,8 @@ class _ProfileRecordListScreenState
           ref.invalidate(profileRecordListProvider(widget.module));
           await ref.read(profileRecordListProvider(widget.module).future);
         },
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 96),
+        child: ResponsiveListView(
+          padding: AppBreakpoints.pagePadding(context, bottom: 96),
           children: [
             if (_isSubmitting) ...[
               const LinearProgressIndicator(color: _profileBlue),
@@ -353,92 +354,98 @@ class _ProfileRecordFormSheetState extends State<_ProfileRecordFormSheet> {
           color: Colors.white,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        child: ListView(
-          shrinkWrap: true,
-          padding: EdgeInsets.fromLTRB(
-            18,
-            18,
-            18,
-            18 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          children: [
-            Text(
-              widget.record == null
-                  ? 'Add ${widget.module.title}'
-                  : 'Edit ${widget.module.title}',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        child: ResponsiveWidth(
+          maxWidth: AppBreakpoints.maxFormWidth,
+          child: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.fromLTRB(
+              18,
+              18,
+              18,
+              18 + MediaQuery.of(context).viewInsets.bottom,
             ),
-            const SizedBox(height: 14),
-            if (_isLoadingLookups) ...[
-              const LinearProgressIndicator(color: _profileBlue),
-              const SizedBox(height: 12),
-            ],
-            for (final field in widget.module.fields) ...[
-              if (field.isFile)
-                OutlinedButton.icon(
-                  onPressed: _pickFile,
-                  icon: const Icon(Icons.attach_file_rounded, size: 18),
-                  label: Text(_fileName ?? field.label),
-                )
-              else if (field.lookup != null &&
-                  (_lookups[field.key] ?? const []).isNotEmpty)
-                DropdownButtonFormField<String>(
-                  initialValue: _dropdownValue(field),
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: field.required
-                        ? '${field.label} *'
-                        : field.label,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  items: _lookups[field.key]!
-                      .map(
-                        (option) => DropdownMenuItem<String>(
-                          value: option.id,
-                          child: Text(
-                            option.label,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (value) {
-                    if (value == null) return;
-                    _controllers[field.key]?.text = value;
-                  },
-                )
-              else
-                TextField(
-                  controller: _controllers[field.key],
-                  keyboardType: field.isDate
-                      ? TextInputType.datetime
-                      : TextInputType.text,
-                  decoration: InputDecoration(
-                    labelText: field.required
-                        ? '${field.label} *'
-                        : field.label,
-                    hintText: field.isDate ? 'YYYY-MM-DD' : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 12),
-            ],
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: _profileBlue,
-                minimumSize: const Size.fromHeight(48),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+            children: [
+              Text(
+                widget.record == null
+                    ? 'Add ${widget.module.title}'
+                    : 'Edit ${widget.module.title}',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              onPressed: _submit,
-              child: const Text('Save'),
-            ),
-          ],
+              const SizedBox(height: 14),
+              if (_isLoadingLookups) ...[
+                const LinearProgressIndicator(color: _profileBlue),
+                const SizedBox(height: 12),
+              ],
+              for (final field in widget.module.fields) ...[
+                if (field.isFile)
+                  OutlinedButton.icon(
+                    onPressed: _pickFile,
+                    icon: const Icon(Icons.attach_file_rounded, size: 18),
+                    label: Text(_fileName ?? field.label),
+                  )
+                else if (field.lookup != null &&
+                    (_lookups[field.key] ?? const []).isNotEmpty)
+                  DropdownButtonFormField<String>(
+                    initialValue: _dropdownValue(field),
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: field.required
+                          ? '${field.label} *'
+                          : field.label,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    items: _lookups[field.key]!
+                        .map(
+                          (option) => DropdownMenuItem<String>(
+                            value: option.id,
+                            child: Text(
+                              option.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      _controllers[field.key]?.text = value;
+                    },
+                  )
+                else
+                  TextField(
+                    controller: _controllers[field.key],
+                    keyboardType: field.isDate
+                        ? TextInputType.datetime
+                        : TextInputType.text,
+                    decoration: InputDecoration(
+                      labelText: field.required
+                          ? '${field.label} *'
+                          : field.label,
+                      hintText: field.isDate ? 'YYYY-MM-DD' : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+              ],
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _profileBlue,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: _submit,
+                child: const Text('Save'),
+              ),
+            ],
+          ),
         ),
       ),
     );

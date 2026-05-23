@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:staffportal/features/profile/models/profile_details.dart';
 import 'package:staffportal/core/utils/error_messages.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import '../providers/profile_view_model.dart';
 import '../widgets/edit_profile_form_widgets.dart';
 import '../widgets/profile_summary_widgets.dart';
@@ -146,8 +147,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       ),
       body: Form(
         key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        child: ResponsiveListView(
+          maxWidth: AppBreakpoints.maxFormWidth,
+          padding: AppBreakpoints.pagePadding(context),
           children: [
             ProfileSectionLabel(title: 'PERSONAL DETAILS'),
             const SizedBox(height: 10),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:staffportal/core/widgets/responsive_layout.dart';
+
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
 
@@ -7,7 +9,9 @@ class TasksScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Tasks')),
-      body: const Center(child: Text('Tasks screen coming soon')),
+      body: const ResponsiveWidth(
+        child: Center(child: Text('Tasks screen coming soon')),
+      ),
     );
   }
 }

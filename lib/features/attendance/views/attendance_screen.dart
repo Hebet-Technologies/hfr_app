@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:staffportal/core/widgets/responsive_layout.dart';
+
 class AttendanceScreen extends StatelessWidget {
   const AttendanceScreen({super.key});
 
@@ -12,58 +14,57 @@ class AttendanceScreen extends StatelessWidget {
         backgroundColor: Colors.white,
         elevation: 0,
       ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // Today's Status Card
-            Container(
-              margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.blue[400]!, Colors.blue[600]!],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+      body: ResponsiveListView(
+        padding: AppBreakpoints.pagePadding(context),
+        children: [
+          Column(
+            children: [
+              // Today's Status Card
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.blue[400]!, Colors.blue[600]!],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  const Text(
-                    'Today',
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    '09:00 AM',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
+                child: Column(
+                  children: [
+                    const Text(
+                      'Today',
+                      style: TextStyle(color: Colors.white, fontSize: 16),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Check In Time',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildTimeInfo('Check In', '09:00 AM'),
-                      Container(height: 40, width: 1, color: Colors.white30),
-                      _buildTimeInfo('Check Out', '--:--'),
-                    ],
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    const Text(
+                      '09:00 AM',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Check In Time',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildTimeInfo('Check In', '09:00 AM'),
+                        Container(height: 40, width: 1, color: Colors.white30),
+                        _buildTimeInfo('Check Out', '--:--'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            // Monthly Summary
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
+              // Monthly Summary
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
@@ -71,87 +72,84 @@ class AttendanceScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 16),
-                  Row(
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: AppBreakpoints.isTablet(context) ? 4 : 2,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: AppBreakpoints.isTablet(context)
+                        ? 1.35
+                        : 1.15,
                     children: [
-                      Expanded(
-                        child: _buildSummaryCard(
-                          'Present',
-                          '18',
-                          Colors.green,
-                          Icons.check_circle,
-                        ),
+                      _buildSummaryCard(
+                        'Present',
+                        '18',
+                        Colors.green,
+                        Icons.check_circle,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildSummaryCard(
-                          'Absent',
-                          '2',
-                          Colors.red,
-                          Icons.cancel,
-                        ),
+                      _buildSummaryCard(
+                        'Absent',
+                        '2',
+                        Colors.red,
+                        Icons.cancel,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildSummaryCard(
-                          'Late',
-                          '3',
-                          Colors.orange,
-                          Icons.access_time,
-                        ),
+                      _buildSummaryCard(
+                        'Late',
+                        '3',
+                        Colors.orange,
+                        Icons.access_time,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildSummaryCard(
-                          'Leave',
-                          '1',
-                          Colors.blue,
-                          Icons.event_available,
-                        ),
+                      _buildSummaryCard(
+                        'Leave',
+                        '1',
+                        Colors.blue,
+                        Icons.event_available,
                       ),
                     ],
                   ),
                 ],
               ),
-            ),
 
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-            // Recent History
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Recent History',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildHistoryItem('Today', '09:00 AM', '--:--', 'Present'),
-                  _buildHistoryItem(
-                    'Yesterday',
-                    '09:15 AM',
-                    '05:30 PM',
-                    'Present',
-                  ),
-                  _buildHistoryItem('Mar 23', '09:30 AM', '05:45 PM', 'Late'),
-                  _buildHistoryItem('Mar 22', '--:--', '--:--', 'Absent'),
-                  _buildHistoryItem(
-                    'Mar 21',
-                    '09:00 AM',
-                    '05:00 PM',
-                    'Present',
-                  ),
-                ],
+              // Recent History
+              Container(
+                width: double.infinity,
+                color: Colors.white,
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Recent History',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildHistoryItem('Today', '09:00 AM', '--:--', 'Present'),
+                    _buildHistoryItem(
+                      'Yesterday',
+                      '09:15 AM',
+                      '05:30 PM',
+                      'Present',
+                    ),
+                    _buildHistoryItem('Mar 23', '09:30 AM', '05:45 PM', 'Late'),
+                    _buildHistoryItem('Mar 22', '--:--', '--:--', 'Absent'),
+                    _buildHistoryItem(
+                      'Mar 21',
+                      '09:00 AM',
+                      '05:00 PM',
+                      'Present',
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:staffportal/core/routing/routes_name.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -42,107 +43,109 @@ class ProfileScreen extends ConsumerWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: const Color(0xFF43A047),
-                    child: Text(
-                      user?.fullName.isNotEmpty == true
-                          ? user!.fullName[0].toUpperCase()
-                          : 'U',
-                      style: const TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+        padding: AppBreakpoints.pagePadding(context),
+        child: ResponsiveWidth(
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 50,
+                      backgroundColor: const Color(0xFF43A047),
+                      child: Text(
+                        user?.fullName.isNotEmpty == true
+                            ? user!.fullName[0].toUpperCase()
+                            : 'U',
+                        style: const TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    user?.fullName ?? 'User',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF1A1A1A),
+                    const SizedBox(height: 16),
+                    Text(
+                      user?.fullName ?? 'User',
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1A1A),
+                      ),
                     ),
+                    const SizedBox(height: 4),
+                    Text(
+                      user?.email ?? '',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              _buildInfoCard(
+                context,
+                title: 'Account Information',
+                items: [
+                  _buildInfoRow(
+                    Icons.email_outlined,
+                    'Email',
+                    user?.email ?? 'N/A',
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    user?.email ?? '',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  _buildInfoRow(
+                    Icons.business_outlined,
+                    'Department',
+                    user?.workingStationName ?? 'N/A',
+                  ),
+                  _buildInfoRow(
+                    Icons.badge_outlined,
+                    'Employee ID',
+                    user?.userId ?? 'N/A',
+                  ),
+                  _buildInfoRow(
+                    Icons.location_on_outlined,
+                    'Work Station',
+                    user?.workingStationName ?? 'N/A',
+                  ),
+                  _buildInfoRow(
+                    Icons.phone_outlined,
+                    'Phone',
+                    '+255 700 000 000',
+                  ),
+                  _buildInfoRow(
+                    Icons.verified_outlined,
+                    'Status',
+                    user?.loginStatus ?? 'Active',
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-            _buildInfoCard(
-              context,
-              title: 'Account Information',
-              items: [
-                _buildInfoRow(
-                  Icons.email_outlined,
-                  'Email',
-                  user?.email ?? 'N/A',
-                ),
-                _buildInfoRow(
-                  Icons.business_outlined,
-                  'Department',
-                  user?.workingStationName ?? 'N/A',
-                ),
-                _buildInfoRow(
-                  Icons.badge_outlined,
-                  'Employee ID',
-                  user?.userId ?? 'N/A',
-                ),
-                _buildInfoRow(
-                  Icons.location_on_outlined,
-                  'Work Station',
-                  user?.workingStationName ?? 'N/A',
-                ),
-                _buildInfoRow(
-                  Icons.phone_outlined,
-                  'Phone',
-                  '+255 700 000 000',
-                ),
-                _buildInfoRow(
-                  Icons.verified_outlined,
-                  'Status',
-                  user?.loginStatus ?? 'Active',
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF43A047),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {},
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF43A047),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
                   ),
-                  elevation: 0,
-                ),
-                icon: const Icon(Icons.edit),
-                label: const Text(
-                  'Edit Profile',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  icon: const Icon(Icons.edit),
+                  label: const Text(
+                    'Edit Profile',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: Container(

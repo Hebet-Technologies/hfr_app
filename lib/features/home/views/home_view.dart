@@ -7,6 +7,7 @@ import 'package:staffportal/core/utils/colors.dart';
 import 'package:staffportal/core/providers/app_providers.dart';
 import 'package:staffportal/core/widgets/button_widget.dart';
 import 'package:staffportal/core/widgets/dashboard_card.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({super.key});
@@ -85,7 +86,6 @@ class _HomeViewState extends ConsumerState<HomeView> {
       ),
       body: Container(
         color: Colors.black12,
-        padding: const EdgeInsets.all(8),
         height: MediaQuery.of(context).size.height,
         width: MediaQuery.of(context).size.width,
         child: dash.isDashboardLoading
@@ -116,222 +116,233 @@ class _HomeViewState extends ConsumerState<HomeView> {
             : RefreshIndicator(
                 onRefresh: () =>
                     ref.read(userViewModelProvider.notifier).loadDashboard(),
-                child: SingleChildScrollView(
-                  child: Column(
-                    children: [
-                      const Text(
-                        "EMPLOYEE DASHBOARD",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      GridView.count(
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 3,
-                        shrinkWrap: true,
-                        children: [
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allEmployee
-                                : 0,
-                            title: 'All',
-                            onPressed: () {},
-                          ),
-                          if (dash.selectedStationId == null)
+                child: ResponsiveListView(
+                  padding: AppBreakpoints.pagePadding(context),
+                  children: [
+                    Column(
+                      children: [
+                        const Text(
+                          "EMPLOYEE DASHBOARD",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                        GridView.count(
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisCount: AppBreakpoints.isTablet(context)
+                              ? 4
+                              : 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          shrinkWrap: true,
+                          children: [
                             DashboardCard(
                               count: dash.dashboard.isNotEmpty
-                                  ? dash.dashboard.first.ungujaEmployee!
+                                  ? dash.dashboard.first.allEmployee
                                   : 0,
-                              title: 'Unguja',
+                              title: 'All',
                               onPressed: () {},
                             ),
-                          if (dash.selectedStationId == null)
+                            if (dash.selectedStationId == null)
+                              DashboardCard(
+                                count: dash.dashboard.isNotEmpty
+                                    ? dash.dashboard.first.ungujaEmployee!
+                                    : 0,
+                                title: 'Unguja',
+                                onPressed: () {},
+                              ),
+                            if (dash.selectedStationId == null)
+                              DashboardCard(
+                                count: dash.dashboard.isNotEmpty
+                                    ? dash.dashboard.first.pembaEmployee!
+                                    : 0,
+                                title: 'Pemba',
+                                onPressed: () {},
+                              ),
+                            if (dash.selectedStationId == null)
+                              DashboardCard(
+                                count: dash.dashboard.isNotEmpty
+                                    ? dash.dashboard.first.allMedical
+                                    : 0,
+                                title: 'Medical',
+                                onPressed: () {},
+                              ),
+                            if (dash.selectedStationId == null)
+                              DashboardCard(
+                                count: dash.dashboard.isNotEmpty
+                                    ? dash.dashboard.first.allNonMedical
+                                    : 0,
+                                title: 'Non Medical',
+                                onPressed: () {},
+                              ),
                             DashboardCard(
                               count: dash.dashboard.isNotEmpty
-                                  ? dash.dashboard.first.pembaEmployee!
+                                  ? dash.dashboard.first.activeEmployee
                                   : 0,
-                              title: 'Pemba',
+                              title: 'Active',
                               onPressed: () {},
                             ),
-                          if (dash.selectedStationId == null)
                             DashboardCard(
                               count: dash.dashboard.isNotEmpty
-                                  ? dash.dashboard.first.allMedical
+                                  ? dash.dashboard.first.inactiveEmployee
                                   : 0,
-                              title: 'Medical',
+                              title: 'Inactive',
                               onPressed: () {},
                             ),
-                          if (dash.selectedStationId == null)
                             DashboardCard(
                               count: dash.dashboard.isNotEmpty
-                                  ? dash.dashboard.first.allNonMedical
+                                  ? dash.dashboard.first.permanentEmployee
                                   : 0,
-                              title: 'Non Medical',
+                              title: 'Permanent',
                               onPressed: () {},
                             ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.activeEmployee
-                                : 0,
-                            title: 'Active',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.inactiveEmployee
-                                : 0,
-                            title: 'Inactive',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.permanentEmployee
-                                : 0,
-                            title: 'Permanent',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.contractEmployee
-                                : 0,
-                            title: 'Contract',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.soonRetireEmployee
-                                : 0,
-                            title: 'Nearly To\nRetire',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.needToRetire
-                                : 0,
-                            title: 'Need To\nRetire',
-                            onPressed: () {},
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      const Text(
-                        "EMPLOYEE BY CADRE",
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                      GridView.count(
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 3,
-                        shrinkWrap: true,
-                        children: [
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allSuperSpecialists
-                                : 0,
-                            title: 'Super\nSpecialists',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allSpecialists
-                                : 0,
-                            title: 'Specialists',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allDoctors
-                                : 0,
-                            title: 'Medical\nDoctors',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allAmoOfficers
-                                : 0,
-                            title: 'AMO',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allClinicalOfficers
-                                : 0,
-                            title: 'Clinical\nOfficers',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allDentists
-                                : 0,
-                            title: 'Medical\nDentist',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allAdoOfficers
-                                : 0,
-                            title: 'ADO',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allDiplomaDentists
-                                : 0,
-                            title: 'Clinical\nDentist',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allNursesSpecialist
-                                : 0,
-                            title: 'Nurses\nSpecialists',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allNurses
-                                : 0,
-                            title: 'Degree\nNurses',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allDiplomaNurses
-                                : 0,
-                            title: 'Diploma\nNurses',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allPharmacies
-                                : 0,
-                            title: 'Pharmacists',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allDiplomaPharmacies
-                                : 0,
-                            title: 'Pharmacy\nTechnicians',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allLaboratories
-                                : 0,
-                            title: 'Lab\nScientists',
-                            onPressed: () {},
-                          ),
-                          DashboardCard(
-                            count: dash.dashboard.isNotEmpty
-                                ? dash.dashboard.first.allDiplomaLabolatories
-                                : 0,
-                            title: 'Lab\nTechnicians',
-                            onPressed: () {},
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.contractEmployee
+                                  : 0,
+                              title: 'Contract',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.soonRetireEmployee
+                                  : 0,
+                              title: 'Nearly To\nRetire',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.needToRetire
+                                  : 0,
+                              title: 'Need To\nRetire',
+                              onPressed: () {},
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "EMPLOYEE BY CADRE",
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                        GridView.count(
+                          physics: const NeverScrollableScrollPhysics(),
+                          crossAxisCount: AppBreakpoints.isTablet(context)
+                              ? 5
+                              : 3,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
+                          shrinkWrap: true,
+                          children: [
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allSuperSpecialists
+                                  : 0,
+                              title: 'Super\nSpecialists',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allSpecialists
+                                  : 0,
+                              title: 'Specialists',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allDoctors
+                                  : 0,
+                              title: 'Medical\nDoctors',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allAmoOfficers
+                                  : 0,
+                              title: 'AMO',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allClinicalOfficers
+                                  : 0,
+                              title: 'Clinical\nOfficers',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allDentists
+                                  : 0,
+                              title: 'Medical\nDentist',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allAdoOfficers
+                                  : 0,
+                              title: 'ADO',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allDiplomaDentists
+                                  : 0,
+                              title: 'Clinical\nDentist',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allNursesSpecialist
+                                  : 0,
+                              title: 'Nurses\nSpecialists',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allNurses
+                                  : 0,
+                              title: 'Degree\nNurses',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allDiplomaNurses
+                                  : 0,
+                              title: 'Diploma\nNurses',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allPharmacies
+                                  : 0,
+                              title: 'Pharmacists',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allDiplomaPharmacies
+                                  : 0,
+                              title: 'Pharmacy\nTechnicians',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allLaboratories
+                                  : 0,
+                              title: 'Lab\nScientists',
+                              onPressed: () {},
+                            ),
+                            DashboardCard(
+                              count: dash.dashboard.isNotEmpty
+                                  ? dash.dashboard.first.allDiplomaLabolatories
+                                  : 0,
+                              title: 'Lab\nTechnicians',
+                              onPressed: () {},
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
       ),

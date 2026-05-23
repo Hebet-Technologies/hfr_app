@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:another_flushbar/flushbar.dart';
 import 'package:staffportal/core/utils/validators.dart';
+import 'package:staffportal/core/widgets/responsive_layout.dart';
 import 'auth_styles.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -54,80 +55,83 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       appBar: authAppBar(context: context, title: 'Forgot Password'),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 40),
-                authHeaderSection(
-                  title: 'Forgot your password?',
-                  subtitle:
-                      'Enter your email and we\'ll send you a link to reset it.',
-                ),
-                const SizedBox(height: 24),
-                authLabeledField(
-                  label: 'Email Address',
-                  child: TextFormField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    style: authTextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    decoration: authInputDecoration(
-                      hintText: 'Enter your email',
-                      prefixIcon: Icons.email_outlined,
-                    ),
-                    validator: Validators.validateEmail,
+          padding: AppBreakpoints.pagePadding(context, bottom: 32),
+          child: ResponsiveWidth(
+            maxWidth: AppBreakpoints.maxFormWidth,
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 40),
+                  authHeaderSection(
+                    title: 'Forgot your password?',
+                    subtitle:
+                        'Enter your email and we\'ll send you a link to reset it.',
                   ),
-                ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _handleResetPassword,
-                  style: authPrimaryButtonStyle(),
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white,
+                  const SizedBox(height: 24),
+                  authLabeledField(
+                    label: 'Email Address',
+                    child: TextFormField(
+                      controller: _emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      style: authTextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      decoration: authInputDecoration(
+                        hintText: 'Enter your email',
+                        prefixIcon: Icons.email_outlined,
+                      ),
+                      validator: Validators.validateEmail,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _handleResetPassword,
+                    style: authPrimaryButtonStyle(),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.white,
+                              ),
                             ),
-                          ),
-                        )
-                      : const Text('Reset Password'),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      size: 14,
-                      color: authTextSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: authTextSecondary,
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          )
+                        : const Text('Reset Password'),
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 14,
+                        color: authTextSecondary,
                       ),
-                      child: Text(
-                        'Back to Login',
-                        style: authUnderlineLinkStyle(),
+                      const SizedBox(width: 4),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        style: TextButton.styleFrom(
+                          foregroundColor: authTextSecondary,
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          'Back to Login',
+                          style: authUnderlineLinkStyle(),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
