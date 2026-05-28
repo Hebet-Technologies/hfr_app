@@ -31,13 +31,20 @@ extension TrainingParticipationStatusX on TrainingParticipationStatus {
       case 'REQUESTED':
       case 'FORWARDED':
       case 'SUBMITTED':
+      case 'AWAITING_TRAINING_CONTRACT':
+      case 'RETURNS':
+      case 'RETURNED':
         return TrainingParticipationStatus.pending;
       case 'APPROVED':
+      case 'APPROVED_SHORT_COURSE':
         return TrainingParticipationStatus.approved;
       case 'REJECTED':
       case 'DENIED':
+      case 'CANCELLED':
+      case 'CANCELED':
         return TrainingParticipationStatus.rejected;
       case 'COMPLETED':
+      case 'DONE':
         return TrainingParticipationStatus.completed;
       default:
         return TrainingParticipationStatus.notApplied;
@@ -111,6 +118,7 @@ class TrainingProgram {
     this.workingStationName,
     this.batchYear,
     this.workingExperienceLabel,
+    this.rawStatus,
     this.isLive = false,
     this.canApplyLive = false,
   });
@@ -139,6 +147,7 @@ class TrainingProgram {
   final String? workingStationName;
   final String? batchYear;
   final String? workingExperienceLabel;
+  final String? rawStatus;
   final bool isLive;
   final bool canApplyLive;
 
@@ -169,6 +178,7 @@ class TrainingProgram {
     String? workingStationName,
     String? batchYear,
     String? workingExperienceLabel,
+    String? rawStatus,
     bool? isLive,
     bool? canApplyLive,
   }) {
@@ -201,6 +211,7 @@ class TrainingProgram {
       batchYear: batchYear ?? this.batchYear,
       workingExperienceLabel:
           workingExperienceLabel ?? this.workingExperienceLabel,
+      rawStatus: rawStatus ?? this.rawStatus,
       isLive: isLive ?? this.isLive,
       canApplyLive: canApplyLive ?? this.canApplyLive,
     );

@@ -2465,46 +2465,34 @@ class StaffRequestsRepository {
   }
 
   String _extractMessage(dynamic responseData, {required String fallback}) {
-    if (responseData is Map<String, dynamic>) {
-      final message = responseData['message'];
-      if (message is Map && message.isNotEmpty) {
-        final firstEntry = message.values.first;
-        return _extractMessage(firstEntry, fallback: fallback);
-      }
-      if (message is List && message.isNotEmpty) {
-        return _extractMessage(message.first, fallback: fallback);
-      }
-      if (message != null && message.toString().trim().isNotEmpty) {
-        return message.toString().trim();
-      }
+    return _extractMessageValue(responseData) ?? fallback;
+  }
 
-      final messages = responseData['messages'];
-      if (messages is Map && messages.isNotEmpty) {
-        final firstEntry = messages.values.first;
-        return _extractMessage(firstEntry, fallback: fallback);
-      }
-      if (messages is List && messages.isNotEmpty) {
-        return _extractMessage(messages.first, fallback: fallback);
-      }
-
-      final error = responseData['error'];
-      if (error is String && error.trim().isNotEmpty) {
-        return error.trim();
-      }
+  String? _extractMessageValue(dynamic value) {
+    if (value is String) {
+      final text = value.trim();
+      return text.isEmpty ? null : text;
     }
-    if (responseData is Map) {
-      return _extractMessage(
-        responseData.map((key, value) => MapEntry(key.toString(), value)),
-        fallback: fallback,
+
+    if (value is List) {
+      for (final item in value) {
+        final message = _extractMessageValue(item);
+        if (message != null) return message;
+      }
+      return null;
+    }
+
+    if (value is Map) {
+      final responseData = value.map(
+        (key, value) => MapEntry(key.toString(), value),
       );
+      for (final key in const ['message', 'messages', 'error', 'errors']) {
+        final message = _extractMessageValue(responseData[key]);
+        if (message != null) return message;
+      }
     }
-    if (responseData is List && responseData.isNotEmpty) {
-      return _extractMessage(responseData.first, fallback: fallback);
-    }
-    if (responseData is String && responseData.trim().isNotEmpty) {
-      return responseData.trim();
-    }
-    return fallback;
+
+    return null;
   }
 
   void _ensureSuccessfulResponse(

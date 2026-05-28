@@ -94,7 +94,10 @@ class StaffPortalAccess {
         ]);
     final canViewTrainingRequests =
         isAdmin ||
-        _containsAny(values, const ['view training request', 'view training']);
+        _containsAny(values, const [
+          'view training request',
+          'view training sequence',
+        ]);
     final canForwardTrainingRequests =
         isAdmin ||
         _containsAny(values, const [

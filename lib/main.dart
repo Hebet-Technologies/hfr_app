@@ -10,6 +10,7 @@ import 'package:staffportal/core/services/app_navigation_service.dart';
 import 'package:staffportal/core/services/push_notification_service.dart';
 import 'package:staffportal/core/services/realtime_service.dart';
 import 'package:staffportal/core/services/session_expiry_service.dart';
+import 'package:staffportal/core/services/shorebird_update_service.dart';
 import 'package:staffportal/features/auth/providers/auth_view_model.dart';
 
 Future<void> main() async {
@@ -28,10 +29,19 @@ class MyApp extends ConsumerStatefulWidget {
 class _MyAppState extends ConsumerState<MyApp> {
   ProviderSubscription<AuthState>? _authSubscription;
   StreamSubscription<void>? _sessionExpirySubscription;
+  late final AppLifecycleListener _lifecycleListener;
 
   @override
   void initState() {
     super.initState();
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () {
+        unawaited(ShorebirdUpdateService.instance.checkForUpdate());
+      },
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(ShorebirdUpdateService.instance.checkForUpdate());
+    });
     _authSubscription = ref.listenManual<AuthState>(authViewModelProvider, (
       previous,
       next,
@@ -63,6 +73,7 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   void dispose() {
+    _lifecycleListener.dispose();
     _authSubscription?.close();
     _sessionExpirySubscription?.cancel();
     super.dispose();

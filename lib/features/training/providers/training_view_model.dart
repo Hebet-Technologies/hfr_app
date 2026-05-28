@@ -341,15 +341,28 @@ class TrainingViewModel extends Notifier<TrainingState> {
     }
   }
 
-  Future<TrainingProgram> applyForTraining(TrainingProgram training) async {
+  Future<TrainingProgram> applyForTraining(
+    TrainingProgram training, {
+    String? admissionLetterPath,
+    String? admissionLetterName,
+  }) async {
     final user = _currentUser ?? await _authRepository.getSavedUser();
-    final current = state.resolveProgram(training);
+    final current = _mergeRequestInput(
+      state.resolveProgram(training),
+      training,
+    );
 
     state = state.copyWith(isSubmitting: true, errorMessage: null);
     try {
-      final updated = user == null
-          ? _repository.buildOptimisticAppliedProgram(current)
-          : await _repository.applyForTraining(user: user, training: current);
+      if (user == null) {
+        throw Exception('Your employee profile is not linked to this session.');
+      }
+      final updated = await _repository.applyForTraining(
+        user: user,
+        training: current,
+        admissionLetterPath: admissionLetterPath,
+        admissionLetterName: admissionLetterName,
+      );
       _upsertTraining(updated, addToMyTrainingApplications: true);
       state = state.copyWith(isSubmitting: false);
       return updated;
@@ -376,6 +389,7 @@ class TrainingViewModel extends Notifier<TrainingState> {
           return item.copyWith(
             status: TrainingParticipationStatus.notApplied,
             trainingApplicationId: '',
+            rawStatus: '',
             canApplyLive: true,
           );
         }
@@ -674,6 +688,7 @@ class TrainingViewModel extends Notifier<TrainingState> {
           workingStationName: updated.workingStationName,
           batchYear: updated.batchYear,
           workingExperienceLabel: updated.workingExperienceLabel,
+          rawStatus: updated.rawStatus,
           isLive: updated.isLive,
           canApplyLive: updated.canApplyLive,
         );
@@ -704,6 +719,39 @@ class TrainingViewModel extends Notifier<TrainingState> {
     }
 
     return null;
+  }
+
+  TrainingProgram _mergeRequestInput(
+    TrainingProgram resolved,
+    TrainingProgram submitted,
+  ) {
+    final submittedInstituteId = submitted.instituteId?.trim() ?? '';
+    final submittedDevelopmentPlanId =
+        submitted.developmentPlanVendorId?.trim() ?? '';
+    final submittedShortCourseId =
+        submitted.shortCourseDescriptionId?.trim() ?? '';
+    final submittedProgramId = submitted.programId?.trim() ?? '';
+
+    return resolved.copyWith(
+      location: submitted.location.trim().isNotEmpty
+          ? submitted.location
+          : resolved.location,
+      startDate: submitted.startDate ?? resolved.startDate,
+      endDate: submitted.endDate ?? resolved.endDate,
+      instituteId: submittedInstituteId.isNotEmpty
+          ? submitted.instituteId
+          : resolved.instituteId,
+      developmentPlanVendorId: submittedDevelopmentPlanId.isNotEmpty
+          ? submitted.developmentPlanVendorId
+          : resolved.developmentPlanVendorId,
+      shortCourseDescriptionId: submittedShortCourseId.isNotEmpty
+          ? submitted.shortCourseDescriptionId
+          : resolved.shortCourseDescriptionId,
+      programId: submittedProgramId.isNotEmpty
+          ? submitted.programId
+          : resolved.programId,
+      canApplyLive: submitted.canApplyLive || resolved.canApplyLive,
+    );
   }
 }
 

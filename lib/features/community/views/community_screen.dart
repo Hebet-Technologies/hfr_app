@@ -3591,19 +3591,23 @@ class _CommunityScreenState extends ConsumerState<CommunityScreen> {
                                 return;
                               }
 
-                              final result = await ref
+                              final conversation = await ref
                                   .read(peerExchangeViewModelProvider.notifier)
                                   .startConversation(
                                     receiverId: selectedPerson.id,
                                     message: message,
                                   );
-                              if (result == null || !mounted) return;
-                              if (!sheetContext.mounted) return;
-                              Navigator.pop(sheetContext);
+                              if (conversation == null || !mounted) return;
+                              if (sheetContext.mounted) {
+                                Navigator.pop(sheetContext);
+                              }
+                              await Future<void>.delayed(Duration.zero);
+                              if (!mounted) return;
                               setState(
                                 () => _section = _CommunitySection.inbox,
                               );
                               _showMessage('Conversation started.');
+                              await _openConversation(conversation);
                             },
                     ),
                   ],
@@ -3642,6 +3646,7 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
   List<PlatformFile> _selectedFiles = const [];
   List<PeerComment> _comments = const [];
+  late int _commentsCount;
   bool _isLoading = true;
   bool _isPosting = false;
   String? _error;
@@ -3649,6 +3654,7 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _commentsCount = widget.question.commentsCount;
     _loadComments();
   }
 
@@ -3670,7 +3676,11 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
           .fetchQuestionComments(widget.question.uuid);
       if (!mounted) return;
       setState(() {
-        _comments = comments;
+        final mergedComments = _mergePeerComments(comments, _comments);
+        _comments = mergedComments;
+        if (mergedComments.length > _commentsCount) {
+          _commentsCount = mergedComments.length;
+        }
         _isLoading = false;
       });
     } catch (error) {
@@ -3692,18 +3702,31 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
 
     try {
       final attachments = await _platformFilesToMultipart(_selectedFiles);
-      await ref
+      final comment = await ref
           .read(peerExchangeRepositoryProvider)
           .createQuestionComment(
             questionUuid: widget.question.uuid,
             message: message,
             attachments: attachments,
           );
+      if (!mounted) return;
       _commentController.clear();
+      final shouldAppend =
+          comment.uuid.isEmpty ||
+          !_comments.any((item) => item.uuid == comment.uuid);
       setState(() {
         _selectedFiles = const [];
+        if (shouldAppend) {
+          _comments = [..._comments, comment];
+          _commentsCount += 1;
+        }
       });
-      await _loadComments();
+      ref
+          .read(peerExchangeViewModelProvider.notifier)
+          .recordQuestionComment(
+            questionUuid: widget.question.uuid,
+            comment: comment,
+          );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -3767,7 +3790,7 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
                               textColor: _peerPrimary,
                             ),
                             _MetaChip(
-                              label: '${widget.question.commentsCount} replies',
+                              label: '$_commentsCount replies',
                               color: _peerSoftOrange,
                               textColor: const Color(0xFFB95817),
                             ),
@@ -3848,6 +3871,23 @@ class _QuestionDetailScreenState extends ConsumerState<QuestionDetailScreen> {
   }
 }
 
+List<PeerComment> _mergePeerComments(
+  List<PeerComment> incoming,
+  List<PeerComment> existing,
+) {
+  final merged = <PeerComment>[];
+  final seen = <String>{};
+  for (final comment in [...incoming, ...existing]) {
+    final key = comment.uuid.isNotEmpty
+        ? comment.uuid
+        : '${comment.commentedBy}-${comment.createdAt?.toIso8601String() ?? ''}-${comment.comment}';
+    if (seen.add(key)) {
+      merged.add(comment);
+    }
+  }
+  return merged;
+}
+
 class TopicDetailScreen extends ConsumerStatefulWidget {
   const TopicDetailScreen({super.key, required this.topic});
 
@@ -3861,6 +3901,7 @@ class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
   final TextEditingController _commentController = TextEditingController();
   List<PlatformFile> _selectedFiles = const [];
   List<PeerComment> _comments = const [];
+  late int _commentsCount;
   bool _isLoading = true;
   bool _isPosting = false;
   String? _error;
@@ -3868,6 +3909,7 @@ class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
   @override
   void initState() {
     super.initState();
+    _commentsCount = widget.topic.commentsCount;
     _loadComments();
   }
 
@@ -3889,7 +3931,11 @@ class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
           .fetchTopicComments(widget.topic.uuid);
       if (!mounted) return;
       setState(() {
-        _comments = comments;
+        final mergedComments = _mergePeerComments(comments, _comments);
+        _comments = mergedComments;
+        if (mergedComments.length > _commentsCount) {
+          _commentsCount = mergedComments.length;
+        }
         _isLoading = false;
       });
     } catch (error) {
@@ -3911,18 +3957,28 @@ class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
 
     try {
       final attachments = await _platformFilesToMultipart(_selectedFiles);
-      await ref
+      final comment = await ref
           .read(peerExchangeRepositoryProvider)
           .createTopicComment(
             topicUuid: widget.topic.uuid,
             message: message,
             attachments: attachments,
           );
+      if (!mounted) return;
       _commentController.clear();
+      final shouldAppend =
+          comment.uuid.isEmpty ||
+          !_comments.any((item) => item.uuid == comment.uuid);
       setState(() {
         _selectedFiles = const [];
+        if (shouldAppend) {
+          _comments = [..._comments, comment];
+          _commentsCount += 1;
+        }
       });
-      await _loadComments();
+      ref
+          .read(peerExchangeViewModelProvider.notifier)
+          .recordTopicComment(topicUuid: widget.topic.uuid, comment: comment);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -3986,7 +4042,7 @@ class _TopicDetailScreenState extends ConsumerState<TopicDetailScreen> {
                               ),
                             ),
                             _MetaChip(
-                              label: '${widget.topic.commentsCount} comments',
+                              label: '$_commentsCount comments',
                               color: _peerSoftGreen,
                               textColor: const Color(0xFF0B8F55),
                             ),

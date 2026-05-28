@@ -27,7 +27,6 @@ class _ActivityRequestFormScreenState
   final _contactPhoneController = TextEditingController();
   final _organizerNameController = TextEditingController();
   final _organizerEmailController = TextEditingController();
-  final _organizerPhoneController = TextEditingController();
   DateTime? _startDate;
   DateTime? _endDate;
   String? _category;
@@ -53,7 +52,6 @@ class _ActivityRequestFormScreenState
     _contactPhoneController.dispose();
     _organizerNameController.dispose();
     _organizerEmailController.dispose();
-    _organizerPhoneController.dispose();
     super.dispose();
   }
 
@@ -63,6 +61,7 @@ class _ActivityRequestFormScreenState
     final rules = ref.watch(activityRequestRulesProvider);
     final selectedScope = rules.scopeFromLabel(_scope);
     final requiresAttachment = selectedScope?.requiresAttachment ?? false;
+    final requiresOrganizer = selectedScope?.requiresOrganizer ?? false;
 
     return Scaffold(
       backgroundColor: requestSurface,
@@ -99,14 +98,18 @@ class _ActivityRequestFormScreenState
                     onChanged: (value) {
                       setState(() {
                         _scope = value;
-                        if (!rules.requiresAttachment(value)) {
+                        final scope = rules.scopeFromLabel(value);
+                        if (scope?.requiresAttachment != true) {
                           _selectedFile = null;
+                        }
+                        if (scope?.requiresOrganizer != true) {
+                          _clearOrganizerFields();
                         }
                       });
                     },
                   ),
                   AppTextField(
-                    label: 'Destination Name (Optional)',
+                    label: 'Destination Name',
                     controller: _locationController,
                     hintText: 'Input',
                   ),
@@ -148,45 +151,27 @@ class _ActivityRequestFormScreenState
                     maxLines: 5,
                   ),
                   AppTextField(
-                    label: 'Contact Person Name (Optional)',
-                    controller: _contactNameController,
-                    hintText: 'Input',
-                    validator: (_) => null,
-                  ),
-                  AppTextField(
-                    label: 'Contact Person Email (Optional)',
-                    controller: _contactEmailController,
-                    hintText: 'Input',
-                    keyboardType: TextInputType.emailAddress,
-                    validator: _optionalEmailValidator,
-                  ),
-                  AppTextField(
-                    label: 'Contact Person Phone (Optional)',
+                    label: 'Contact Person Phone Number (Optional)',
                     controller: _contactPhoneController,
                     hintText: 'Input',
                     keyboardType: TextInputType.phone,
                     validator: (_) => null,
                   ),
-                  AppTextField(
-                    label: 'Organizer Name (Optional)',
-                    controller: _organizerNameController,
-                    hintText: 'Input',
-                    validator: (_) => null,
-                  ),
-                  AppTextField(
-                    label: 'Organizer Email (Optional)',
-                    controller: _organizerEmailController,
-                    hintText: 'Input',
-                    keyboardType: TextInputType.emailAddress,
-                    validator: _optionalEmailValidator,
-                  ),
-                  AppTextField(
-                    label: 'Organizer Phone (Optional)',
-                    controller: _organizerPhoneController,
-                    hintText: 'Input',
-                    keyboardType: TextInputType.phone,
-                    validator: (_) => null,
-                  ),
+                  if (requiresOrganizer) ...[
+                    AppTextField(
+                      label: 'Organizer Name',
+                      controller: _organizerNameController,
+                      hintText: 'Input',
+                      validator: _requiredTextValidator,
+                    ),
+                    AppTextField(
+                      label: 'Organizer Email',
+                      controller: _organizerEmailController,
+                      hintText: 'Input',
+                      keyboardType: TextInputType.emailAddress,
+                      validator: _requiredEmailValidator,
+                    ),
+                  ],
                   FileUploadField(
                     title: requiresAttachment
                         ? 'Upload Letter or Supporting Documents'
@@ -254,6 +239,14 @@ class _ActivityRequestFormScreenState
       );
       return;
     }
+    if (scope.requiresOrganizer &&
+        (_organizerNameController.text.trim().isEmpty ||
+            _organizerEmailController.text.trim().isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Fill organizer name and email.')),
+      );
+      return;
+    }
 
     final file = _selectedFile;
     final filePath = file?.path;
@@ -278,12 +271,16 @@ class _ActivityRequestFormScreenState
               activityAreaType: scope.apiValue,
               destinationName: _locationController.text.trim(),
               description: _descriptionController.text.trim(),
-              contactPersonName: _contactNameController.text.trim(),
-              contactPersonEmail: _contactEmailController.text.trim(),
+              contactPersonName: null,
+              contactPersonEmail: null,
               contactPersonPhone: _contactPhoneController.text.trim(),
-              organizerName: _organizerNameController.text.trim(),
-              organizerEmail: _organizerEmailController.text.trim(),
-              organizerPhone: _organizerPhoneController.text.trim(),
+              organizerName: scope.requiresOrganizer
+                  ? _organizerNameController.text.trim()
+                  : null,
+              organizerEmail: scope.requiresOrganizer
+                  ? _organizerEmailController.text.trim()
+                  : null,
+              organizerPhone: null,
               filePath: filePath,
               fileName: file?.name,
               attachmentLabel: scope.requiresAttachment
@@ -324,10 +321,20 @@ class _ActivityRequestFormScreenState
     setState(() => _selectedFile = file);
   }
 
-  String? _optionalEmailValidator(String? value) {
+  String? _requiredTextValidator(String? value) {
+    if ((value ?? '').trim().isEmpty) return 'This field is required';
+    return null;
+  }
+
+  String? _requiredEmailValidator(String? value) {
     final normalized = (value ?? '').trim();
-    if (normalized.isEmpty) return null;
+    if (normalized.isEmpty) return 'This field is required';
     if (!normalized.contains('@')) return 'Enter a valid email address';
     return null;
+  }
+
+  void _clearOrganizerFields() {
+    _organizerNameController.clear();
+    _organizerEmailController.clear();
   }
 }

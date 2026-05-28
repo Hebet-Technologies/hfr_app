@@ -24,6 +24,50 @@ class _TrainingAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const Size.fromHeight(kToolbarHeight);
 }
 
+class _TrainingStickyHeaderDelegate extends SliverPersistentHeaderDelegate {
+  const _TrainingStickyHeaderDelegate({
+    required this.height,
+    required this.child,
+  });
+
+  final double height;
+  final Widget child;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _trainingSurface,
+        boxShadow: overlapsContent
+            ? const [
+                BoxShadow(
+                  color: Color(0x14000000),
+                  blurRadius: 12,
+                  offset: Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _TrainingStickyHeaderDelegate oldDelegate) {
+    return oldDelegate.height != height || oldDelegate.child != child;
+  }
+}
+
 class _SearchToolbar extends StatelessWidget {
   const _SearchToolbar({
     required this.hintText,
@@ -131,26 +175,6 @@ class _ToolbarButton extends StatelessWidget {
   }
 }
 
-class _TrainingCarouselShimmer extends StatelessWidget {
-  const _TrainingCarouselShimmer();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 320,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: 2,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
-        itemBuilder: (_, _) => const SizedBox(
-          width: 280,
-          child: _TrainingSkeletonCard(tall: true),
-        ),
-      ),
-    );
-  }
-}
-
 class _TrainingListShimmer extends StatelessWidget {
   const _TrainingListShimmer();
 
@@ -186,9 +210,8 @@ class _TrainingApprovalShimmer extends StatelessWidget {
 }
 
 class _TrainingSkeletonCard extends StatelessWidget {
-  const _TrainingSkeletonCard({this.tall = false, this.compact = false});
+  const _TrainingSkeletonCard({this.compact = false});
 
-  final bool tall;
   final bool compact;
 
   @override
@@ -205,10 +228,6 @@ class _TrainingSkeletonCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (tall) ...[
-              const _TrainingSkeletonBox(height: 104, radius: 18),
-              const SizedBox(height: 12),
-            ],
             const _TrainingSkeletonBox(width: 86, height: 22, radius: 999),
             const SizedBox(height: 12),
             const _TrainingSkeletonBox(height: 16, radius: 8),
@@ -311,142 +330,48 @@ class _TrainingSkeletonBox extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-    required this.actionLabel,
-    required this.onTap,
+class _TrainingPagingFooter extends StatelessWidget {
+  const _TrainingPagingFooter({
+    required this.visibleCount,
+    required this.totalCount,
+    required this.label,
   });
 
-  final String title;
-  final String actionLabel;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: _trainingTextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        TextButton(
-          onPressed: onTap,
-          style: TextButton.styleFrom(
-            visualDensity: VisualDensity.compact,
-            foregroundColor: _trainingMuted,
-          ),
-          child: Text(
-            actionLabel,
-            style: _trainingTextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
-              color: _trainingMuted,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _TrainingPickerSheet extends StatelessWidget {
-  const _TrainingPickerSheet({
-    required this.title,
-    required this.subtitle,
-    required this.searchHint,
-    required this.onSearchChanged,
-    required this.emptyMessage,
-    required this.itemCount,
-    required this.itemBuilder,
-  });
-
-  final String title;
-  final String subtitle;
-  final String searchHint;
-  final ValueChanged<String> onSearchChanged;
-  final String emptyMessage;
-  final int itemCount;
-  final IndexedWidgetBuilder itemBuilder;
+  final int visibleCount;
+  final int totalCount;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.all(12),
-      padding: EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        MediaQuery.of(context).viewInsets.bottom + 16,
-      ),
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.76,
-      ),
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 2, bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: _trainingBorder),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(
-            title,
-            style: _trainingTextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-            ),
+          const Icon(
+            Icons.keyboard_double_arrow_down_rounded,
+            size: 18,
+            color: _trainingMuted,
           ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: _trainingTextStyle(fontSize: 12, color: _trainingMuted),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            autofocus: true,
-            onChanged: onSearchChanged,
-            decoration: InputDecoration(
-              hintText: searchHint,
-              prefixIcon: const Icon(Icons.search_rounded),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: _trainingBorder),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: _trainingBorder),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: const BorderSide(color: _trainingBlue),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(width: 8),
           Flexible(
-            child: itemCount == 0
-                ? Center(
-                    child: Text(
-                      emptyMessage,
-                      style: _trainingTextStyle(
-                        fontSize: 13,
-                        color: _trainingMuted,
-                      ),
-                    ),
-                  )
-                : ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: itemCount,
-                    separatorBuilder: (_, _) => const Divider(height: 1),
-                    itemBuilder: itemBuilder,
-                  ),
+            child: Text(
+              'Showing $visibleCount of $totalCount $label',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _trainingTextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _trainingMuted,
+              ),
+            ),
           ),
         ],
       ),
@@ -558,6 +483,136 @@ class _LatestTrainingCard extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _AvailableTrainingCard extends StatelessWidget {
+  const _AvailableTrainingCard({required this.program, required this.onView});
+
+  final TrainingProgram program;
+  final VoidCallback onView;
+
+  @override
+  Widget build(BuildContext context) {
+    final cadreLabel = program.targetCadres.isEmpty
+        ? 'Staff Members'
+        : program.targetCadres.take(2).join(', ');
+    final educationLabel = (program.educationLevelName ?? '').trim().isNotEmpty
+        ? program.educationLevelName!.trim()
+        : program.trainingType;
+
+    return InkWell(
+      onTap: onView,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _trainingCard,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _trainingBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _BadgePill(label: program.badge),
+                      const SizedBox(height: 10),
+                      Text(
+                        program.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: _trainingTextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded, color: _trainingMuted),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _AvailableTrainingInfoLine(
+              icon: Icons.badge_outlined,
+              label: 'Cadre',
+              value: cadreLabel,
+            ),
+            const SizedBox(height: 8),
+            _AvailableTrainingInfoLine(
+              icon: Icons.business_center_outlined,
+              label: 'Sponsor',
+              value: program.organizer.trim().isEmpty
+                  ? 'N/A'
+                  : program.organizer,
+            ),
+            const SizedBox(height: 8),
+            _AvailableTrainingInfoLine(
+              icon: Icons.school_outlined,
+              label: 'Education',
+              value: educationLabel,
+            ),
+            const SizedBox(height: 8),
+            _AvailableTrainingInfoLine(
+              icon: Icons.calendar_today_outlined,
+              label: 'Period',
+              value: _trainingPeriodLabel(program),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AvailableTrainingInfoLine extends StatelessWidget {
+  const _AvailableTrainingInfoLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: _trainingMuted),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 72,
+          child: Text(
+            label,
+            style: _trainingTextStyle(fontSize: 11, color: _trainingMuted),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: _trainingTextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF475467),
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -733,6 +788,1010 @@ class _TrainingActionChip extends StatelessWidget {
   }
 }
 
+class _TrainingRequestFormResult {
+  const _TrainingRequestFormResult({
+    required this.institute,
+    required this.startDate,
+    required this.endDate,
+    this.admissionLetterPath,
+    this.admissionLetterName,
+  });
+
+  final TrainingInstitute institute;
+  final DateTime startDate;
+  final DateTime endDate;
+  final String? admissionLetterPath;
+  final String? admissionLetterName;
+}
+
+class _TrainingRequestSheet extends StatefulWidget {
+  const _TrainingRequestSheet({
+    required this.program,
+    required this.requiresAdmissionLetter,
+    required this.onLoadCountries,
+    required this.onLoadInstitutes,
+    required this.onPickAdmissionLetter,
+  });
+
+  final TrainingProgram program;
+  final bool requiresAdmissionLetter;
+  final Future<List<TrainingCountry>> Function(bool forceRefresh)
+  onLoadCountries;
+  final Future<List<TrainingInstitute>> Function(
+    TrainingCountry country,
+    bool forceRefresh,
+  )
+  onLoadInstitutes;
+  final Future<(String, String)?> Function() onPickAdmissionLetter;
+
+  @override
+  State<_TrainingRequestSheet> createState() => _TrainingRequestSheetState();
+}
+
+class _TrainingRequestSheetState extends State<_TrainingRequestSheet> {
+  List<TrainingCountry> _countries = const [];
+  List<TrainingInstitute> _institutes = const [];
+  TrainingCountry? _country;
+  TrainingInstitute? _institute;
+  late DateTime _startDate = _initialRequestDate(widget.program.startDate);
+  late DateTime _endDate = _initialEndDate();
+  String? _filePath;
+  String? _fileName;
+  String? _errorMessage;
+  String? _countryError;
+  String? _instituteError;
+  bool _loadingCountries = true;
+  bool _loadingInstitutes = false;
+  bool _countryLoadFailed = false;
+  bool _instituteLoadFailed = false;
+  int _countryLoadRequestId = 0;
+  int _instituteLoadRequestId = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCountries();
+  }
+
+  DateTime get _today {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  DateTime _initialRequestDate(DateTime? value) {
+    return _dateOnly(value ?? _today);
+  }
+
+  DateTime _initialEndDate() {
+    final end = _dateOnly(widget.program.endDate ?? _startDate);
+    return end.isBefore(_startDate) ? _startDate : end;
+  }
+
+  DateTime _dateOnly(DateTime value) {
+    return DateTime(value.year, value.month, value.day);
+  }
+
+  DateTime _earlierDate(DateTime first, DateTime second) {
+    return first.isBefore(second) ? first : second;
+  }
+
+  DateTime _laterDate(DateTime first, DateTime second) {
+    return first.isAfter(second) ? first : second;
+  }
+
+  Future<void> _loadCountries({bool forceRefresh = false}) async {
+    final requestId = ++_countryLoadRequestId;
+    setState(() {
+      _loadingCountries = true;
+      _countryError = null;
+      _countryLoadFailed = false;
+      _errorMessage = null;
+    });
+    try {
+      final countries = await widget.onLoadCountries(forceRefresh);
+      if (!mounted || requestId != _countryLoadRequestId) return;
+      setState(() {
+        _countries = countries;
+        _loadingCountries = false;
+        _countryLoadFailed = false;
+        _countryError = countries.isEmpty
+            ? 'No institute countries are available.'
+            : null;
+      });
+    } catch (error) {
+      if (!mounted || requestId != _countryLoadRequestId) return;
+      setState(() {
+        _loadingCountries = false;
+        _countryLoadFailed = true;
+        _countryError = friendlyErrorMessage(error).trim().isEmpty
+            ? 'Unable to load institute countries.'
+            : friendlyErrorMessage(error);
+      });
+    }
+  }
+
+  Future<void> _loadInstitutes(
+    TrainingCountry country, {
+    bool forceRefresh = false,
+  }) async {
+    final requestId = ++_instituteLoadRequestId;
+    setState(() {
+      _loadingInstitutes = true;
+      _institutes = const [];
+      _institute = null;
+      _instituteError = null;
+      _instituteLoadFailed = false;
+      _errorMessage = null;
+    });
+    try {
+      final institutes = await widget.onLoadInstitutes(country, forceRefresh);
+      if (!mounted ||
+          requestId != _instituteLoadRequestId ||
+          _country?.code != country.code) {
+        return;
+      }
+      setState(() {
+        _institutes = institutes;
+        _loadingInstitutes = false;
+        _instituteLoadFailed = false;
+        _instituteError = institutes.isEmpty
+            ? 'No institutes found for ${country.name} and this education level.'
+            : null;
+      });
+    } catch (error) {
+      if (!mounted ||
+          requestId != _instituteLoadRequestId ||
+          _country?.code != country.code) {
+        return;
+      }
+      setState(() {
+        _loadingInstitutes = false;
+        _instituteLoadFailed = true;
+        _instituteError = friendlyErrorMessage(error).trim().isEmpty
+            ? 'Unable to load training institutes.'
+            : friendlyErrorMessage(error);
+      });
+    }
+  }
+
+  void _selectCountry(TrainingCountry country) {
+    setState(() {
+      _country = country;
+    });
+    _loadInstitutes(country);
+  }
+
+  void _selectInstitute(TrainingInstitute institute) {
+    setState(() {
+      _institute = institute;
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _pickDate({required bool isStart}) async {
+    final current = isStart ? _startDate : _endDate;
+    final firstDate = isStart
+        ? _earlierDate(_today, current)
+        : _earlierDate(_startDate, current);
+    final initialDate = current.isBefore(firstDate) ? firstDate : current;
+    final lastDate = _laterDate(DateTime(_today.year + 8, 12, 31), initialDate);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: lastDate,
+    );
+    if (picked == null) return;
+    setState(() {
+      if (isStart) {
+        _startDate = picked;
+        if (_endDate.isBefore(_startDate)) {
+          _endDate = _startDate;
+        }
+      } else {
+        _endDate = picked;
+      }
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _pickAdmissionLetter() async {
+    final file = await widget.onPickAdmissionLetter();
+    if (!mounted || file == null) return;
+    setState(() {
+      _filePath = file.$1;
+      _fileName = file.$2;
+      _errorMessage = null;
+    });
+  }
+
+  void _submit() {
+    if (_country == null) {
+      setState(() => _errorMessage = 'Select the institute country.');
+      return;
+    }
+    final institute = _institute;
+    if (institute == null) {
+      setState(() => _errorMessage = 'Select a training institute.');
+      return;
+    }
+    if (widget.requiresAdmissionLetter && (_filePath ?? '').trim().isEmpty) {
+      setState(() => _errorMessage = 'Upload the admission letter PDF.');
+      return;
+    }
+    Navigator.of(context).pop(
+      _TrainingRequestFormResult(
+        institute: institute,
+        startDate: _startDate,
+        endDate: _endDate,
+        admissionLetterPath: _filePath,
+        admissionLetterName: _fileName,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final canSubmit = !_loadingCountries && !_loadingInstitutes;
+    return SafeArea(
+      top: false,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.88,
+        ),
+        padding: EdgeInsets.fromLTRB(
+          18,
+          18,
+          18,
+          18 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFD7DEE8),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Request Training',
+                            style: _trainingTextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.program.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: _trainingTextStyle(
+                        fontSize: 13,
+                        color: _trainingMuted,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (_errorMessage != null) ...[
+                      _TrainingRequestMessage(
+                        icon: Icons.error_outline_rounded,
+                        message: _errorMessage!,
+                        tone: _TrainingRequestMessageTone.error,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    _buildCountrySection(),
+                    const SizedBox(height: 14),
+                    _buildInstituteSection(),
+                    const SizedBox(height: 14),
+                    _buildPeriodSection(),
+                    if (widget.requiresAdmissionLetter) ...[
+                      const SizedBox(height: 14),
+                      _buildAdmissionSection(),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _trainingBlue,
+                  minimumSize: const Size.fromHeight(48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                onPressed: canSubmit ? _submit : null,
+                child: Text(canSubmit ? 'Submit Request' : 'Loading...'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCountrySection() {
+    final country = _country;
+    return _TrainingRequestSection(
+      title: 'Institute Country',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_loadingCountries)
+            const _TrainingDropdownLoading(
+              icon: Icons.public_rounded,
+              label: 'Country',
+              message: 'Loading countries...',
+            )
+          else if (_countryError != null)
+            _TrainingRequestMessage(
+              icon: Icons.info_outline_rounded,
+              message: _countryError!,
+              tone: _countryLoadFailed
+                  ? _TrainingRequestMessageTone.error
+                  : _TrainingRequestMessageTone.neutral,
+              actionLabel: 'Try again',
+              onAction: () => _loadCountries(forceRefresh: true),
+            )
+          else
+            _TrainingSearchDropdown<TrainingCountry>(
+              icon: Icons.public_rounded,
+              label: 'Country',
+              placeholder: 'Select country',
+              selected: country,
+              options: _countries,
+              optionTitle: (item) => item.name,
+              optionSubtitle: (item) => item.code,
+              searchHint: 'Search country',
+              emptyMessage: 'No country matches your search.',
+              onSelected: _selectCountry,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInstituteSection() {
+    final country = _country;
+    final institute = _institute;
+    return _TrainingRequestSection(
+      title: 'Training Institute',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (country == null)
+            const _TrainingRequestMessage(
+              icon: Icons.account_balance_outlined,
+              message: 'Select a country first to load institutes.',
+            )
+          else if (_loadingInstitutes)
+            _TrainingDropdownLoading(
+              icon: Icons.account_balance_outlined,
+              label: 'Institute',
+              message: 'Loading institutes in ${country.name}...',
+            )
+          else if (_instituteError != null)
+            _TrainingRequestMessage(
+              icon: Icons.info_outline_rounded,
+              message: _instituteError!,
+              tone: _instituteLoadFailed
+                  ? _TrainingRequestMessageTone.error
+                  : _TrainingRequestMessageTone.neutral,
+              actionLabel: 'Try again',
+              onAction: () => _loadInstitutes(country, forceRefresh: true),
+            )
+          else
+            _TrainingSearchDropdown<TrainingInstitute>(
+              icon: Icons.account_balance_outlined,
+              label: 'Institute',
+              placeholder: 'Select institute',
+              selected: institute,
+              options: _institutes,
+              optionTitle: (item) => item.name,
+              optionSubtitle: (item) => item.countryName ?? country.name,
+              searchHint: 'Search institute',
+              emptyMessage: 'No institute matches your search.',
+              onSelected: _selectInstitute,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPeriodSection() {
+    final buttonStyle = OutlinedButton.styleFrom(
+      foregroundColor: _trainingText,
+      minimumSize: const Size.fromHeight(48),
+      side: const BorderSide(color: _trainingBorder),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      textStyle: _trainingTextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+    );
+    return _TrainingRequestSection(
+      title: 'Training Period',
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              style: buttonStyle,
+              onPressed: () => _pickDate(isStart: true),
+              icon: const Icon(Icons.event_rounded, size: 18),
+              label: Text(
+                _formatShortDate(_startDate),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: OutlinedButton.icon(
+              style: buttonStyle,
+              onPressed: () => _pickDate(isStart: false),
+              icon: const Icon(Icons.event_available_rounded, size: 18),
+              label: Text(
+                _formatShortDate(_endDate),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdmissionSection() {
+    return _TrainingRequestSection(
+      title: 'Admission Letter',
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _trainingText,
+            minimumSize: const Size.fromHeight(48),
+            side: const BorderSide(color: _trainingBorder),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+            textStyle: _trainingTextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          onPressed: _pickAdmissionLetter,
+          icon: const Icon(Icons.attach_file_rounded, size: 18),
+          label: Text(
+            _fileName ?? 'Upload PDF, max 1MB',
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingRequestSection extends StatelessWidget {
+  const _TrainingRequestSection({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFBFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _trainingBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: _trainingTextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _TrainingSearchDropdown<T> extends StatelessWidget {
+  const _TrainingSearchDropdown({
+    required this.icon,
+    required this.label,
+    required this.placeholder,
+    required this.selected,
+    required this.options,
+    required this.optionTitle,
+    required this.optionSubtitle,
+    required this.searchHint,
+    required this.emptyMessage,
+    required this.onSelected,
+  });
+
+  final IconData icon;
+  final String label;
+  final String placeholder;
+  final T? selected;
+  final List<T> options;
+  final String Function(T item) optionTitle;
+  final String Function(T item) optionSubtitle;
+  final String searchHint;
+  final String emptyMessage;
+  final ValueChanged<T> onSelected;
+
+  Future<void> _openPicker(BuildContext context) async {
+    final result = await showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TrainingSearchPickerSheet<T>(
+        title: label,
+        options: options,
+        optionTitle: optionTitle,
+        optionSubtitle: optionSubtitle,
+        searchHint: searchHint,
+        emptyMessage: emptyMessage,
+      ),
+    );
+    if (result != null) {
+      onSelected(result);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = selected;
+    final title = value == null ? placeholder : optionTitle(value);
+    final subtitle = value == null ? searchHint : optionSubtitle(value);
+    final isSelected = value != null;
+
+    return InkWell(
+      onTap: options.isEmpty ? null : () => _openPicker(context),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFD8E6FF) : _trainingBorder,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? _trainingBlue : _trainingMuted,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _trainingTextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: isSelected ? _trainingText : _trainingMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _trainingTextStyle(
+                      fontSize: 11,
+                      color: _trainingMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.expand_more_rounded, color: _trainingMuted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TrainingDropdownLoading extends StatefulWidget {
+  const _TrainingDropdownLoading({
+    required this.icon,
+    required this.label,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String label;
+  final String message;
+
+  @override
+  State<_TrainingDropdownLoading> createState() =>
+      _TrainingDropdownLoadingState();
+}
+
+class _TrainingDropdownLoadingState extends State<_TrainingDropdownLoading>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 58),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _trainingBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(widget.icon, color: _trainingMuted, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  widget.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _trainingTextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: _trainingText,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  widget.message,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _trainingTextStyle(
+                    fontSize: 11,
+                    color: _trainingMuted,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _shimmerBar(widthFactor: 0.72, height: 8),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Icon(Icons.expand_more_rounded, color: Color(0xFFCBD5E1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _shimmerBar({required double widthFactor, required double height}) {
+    return FractionallySizedBox(
+      widthFactor: widthFactor,
+      alignment: Alignment.centerLeft,
+      child: AnimatedBuilder(
+        animation: _controller,
+        child: Container(
+          height: height,
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8EEF6),
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        builder: (context, child) {
+          final slide = (_controller.value * 2) - 1;
+          return ShaderMask(
+            blendMode: BlendMode.srcATop,
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment(-1 + slide, 0),
+              end: Alignment(1 + slide, 0),
+              colors: const [
+                Color(0xFFE8EEF6),
+                Colors.white,
+                Color(0xFFE8EEF6),
+              ],
+              stops: const [0.25, 0.5, 0.75],
+            ).createShader(bounds),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TrainingSearchPickerSheet<T> extends StatefulWidget {
+  const _TrainingSearchPickerSheet({
+    required this.title,
+    required this.options,
+    required this.optionTitle,
+    required this.optionSubtitle,
+    required this.searchHint,
+    required this.emptyMessage,
+  });
+
+  final String title;
+  final List<T> options;
+  final String Function(T item) optionTitle;
+  final String Function(T item) optionSubtitle;
+  final String searchHint;
+  final String emptyMessage;
+
+  @override
+  State<_TrainingSearchPickerSheet<T>> createState() =>
+      _TrainingSearchPickerSheetState<T>();
+}
+
+class _TrainingSearchPickerSheetState<T>
+    extends State<_TrainingSearchPickerSheet<T>> {
+  String _query = '';
+
+  List<T> get _filtered {
+    final query = _query.trim().toLowerCase();
+    if (query.isEmpty) return widget.options;
+    return widget.options.where((item) {
+      return widget.optionTitle(item).toLowerCase().contains(query) ||
+          widget.optionSubtitle(item).toLowerCase().contains(query);
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filtered;
+    return SafeArea(
+      top: false,
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.78,
+        ),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          12,
+          20,
+          16 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD7DEE8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    style: _trainingTextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              autofocus: true,
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                hintText: widget.searchHint,
+                prefixIcon: const Icon(Icons.search_rounded),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _trainingBorder),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _trainingBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _trainingBlue),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Flexible(
+              child: filtered.isEmpty
+                  ? _TrainingRequestMessage(
+                      icon: Icons.search_off_rounded,
+                      message: widget.emptyMessage,
+                    )
+                  : ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: filtered.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 2),
+                      itemBuilder: (context, index) {
+                        final item = filtered[index];
+                        final subtitle = widget.optionSubtitle(item).trim();
+                        return ListTile(
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          title: Text(
+                            widget.optionTitle(item),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _trainingTextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          subtitle: subtitle.isEmpty
+                              ? null
+                              : Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                          trailing: const Icon(Icons.chevron_right_rounded),
+                          onTap: () => Navigator.of(context).pop(item),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _TrainingRequestMessageTone { neutral, error }
+
+class _TrainingRequestMessage extends StatelessWidget {
+  const _TrainingRequestMessage({
+    required this.icon,
+    required this.message,
+    this.tone = _TrainingRequestMessageTone.neutral,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final IconData icon;
+  final String message;
+  final _TrainingRequestMessageTone tone;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final isError = tone == _TrainingRequestMessageTone.error;
+    final borderColor = isError
+        ? const Color(0xFFFFD0D0)
+        : const Color(0xFFD8E6FF);
+    final backgroundColor = isError ? const Color(0xFFFFF3F3) : Colors.white;
+    final textColor = isError ? const Color(0xFFD92D20) : _trainingMuted;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: textColor),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: _trainingTextStyle(
+                fontSize: 12,
+                color: textColor,
+                fontWeight: isError ? FontWeight.w700 : FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 8),
+            TextButton(
+              onPressed: onAction,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 32),
+              ),
+              child: Text(actionLabel!),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _TrainingEditSheet extends StatefulWidget {
   const _TrainingEditSheet({required this.program});
 
@@ -769,7 +1828,10 @@ class _TrainingEditSheetState extends State<_TrainingEditSheet> {
   }
 
   Future<void> _pickFile() async {
-    final file = await _pickTrainingPdf();
+    final file = await _pickTrainingPdf(
+      context: context,
+      maxBytes: _trainingAdmissionLetterMaxBytes,
+    );
     if (file == null) return;
     setState(() {
       _filePath = file.$1;
@@ -1172,15 +2234,37 @@ class _TrainingSimpleSheet extends StatelessWidget {
   }
 }
 
-Future<(String, String)?> _pickTrainingPdf() async {
+Future<(String, String)?> _pickTrainingPdf({
+  BuildContext? context,
+  int? maxBytes,
+}) async {
+  final messenger = context == null ? null : ScaffoldMessenger.maybeOf(context);
   final result = await FilePicker.platform.pickFiles(
     type: FileType.custom,
     allowedExtensions: const ['pdf'],
   );
   if (result == null || result.files.isEmpty) return null;
   final file = result.files.single;
+  final extension = (file.extension ?? file.name.split('.').last)
+      .trim()
+      .toLowerCase();
+  if (extension != 'pdf') {
+    _showTrainingFileMessage(messenger, 'Only PDF files are allowed.');
+    return null;
+  }
+  if (maxBytes != null && file.size > maxBytes) {
+    _showTrainingFileMessage(messenger, 'Maximum file size is 1MB.');
+    return null;
+  }
   if (file.path == null) return null;
   return (file.path!, file.name);
+}
+
+void _showTrainingFileMessage(
+  ScaffoldMessengerState? messenger,
+  String message,
+) {
+  messenger?.showSnackBar(SnackBar(content: Text(message)));
 }
 
 class _ResourceTile extends StatelessWidget {
@@ -1725,6 +2809,55 @@ class _TrainingStatusFilterSheetState
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _EmployeeTrainingTabSelector extends StatelessWidget {
+  const _EmployeeTrainingTabSelector({
+    required this.selectedTab,
+    required this.onSelected,
+  });
+
+  final _EmployeeTrainingTab selectedTab;
+  final ValueChanged<_EmployeeTrainingTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _trainingBorder),
+      ),
+      child: Row(
+        children: [
+          _ApproverTabButton(
+            label: 'Available',
+            isSelected: selectedTab == _EmployeeTrainingTab.available,
+            onTap: () => onSelected(_EmployeeTrainingTab.available),
+          ),
+          const SizedBox(width: 6),
+          _ApproverTabButton(
+            label: 'Applications',
+            isSelected: selectedTab == _EmployeeTrainingTab.applications,
+            onTap: () => onSelected(_EmployeeTrainingTab.applications),
+          ),
+          const SizedBox(width: 6),
+          _ApproverTabButton(
+            label: 'Training',
+            isSelected: selectedTab == _EmployeeTrainingTab.training,
+            onTap: () => onSelected(_EmployeeTrainingTab.training),
+          ),
+          const SizedBox(width: 6),
+          _ApproverTabButton(
+            label: 'Resources',
+            isSelected: selectedTab == _EmployeeTrainingTab.resources,
+            onTap: () => onSelected(_EmployeeTrainingTab.resources),
+          ),
+        ],
       ),
     );
   }
@@ -2464,6 +3597,69 @@ String _normalizedTrainingKey(String value) {
   return value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 }
 
+bool _requiresAdmissionLetter(TrainingProgram program) {
+  return _normalizedTrainingKey(program.trainingType) == 'short course' &&
+      (program.shortCourseDescriptionId ?? '').trim().isEmpty &&
+      (program.developmentPlanVendorId ?? '').trim().isNotEmpty;
+}
+
+bool _isRequestableAvailableTraining(TrainingProgram program) {
+  return program.status == TrainingParticipationStatus.notApplied &&
+      program.canApplyLive;
+}
+
+bool _canEditTrainingApplication(TrainingProgram program) {
+  return _canDeleteTrainingApplication(program);
+}
+
+bool _canDeleteTrainingApplication(TrainingProgram program) {
+  final rawStatus = _normalizedTrainingStatus(program);
+  final isRequested =
+      rawStatus == 'REQUESTED' ||
+      (rawStatus.isEmpty &&
+          program.status == TrainingParticipationStatus.pending);
+  return isRequested && _isWithinTrainingDeadline(program.endDate);
+}
+
+bool _canPrintTrainingLetter(TrainingProgram program) {
+  return _normalizedTrainingStatus(program) == 'APPROVED_SHORT_COURSE';
+}
+
+String _normalizedTrainingStatus(TrainingProgram program) {
+  return (program.rawStatus ?? '').trim().toUpperCase();
+}
+
+bool _isWithinTrainingDeadline(DateTime? deadline) {
+  if (deadline == null) return true;
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final lastDay = DateTime(deadline.year, deadline.month, deadline.day);
+  return !today.isAfter(lastDay);
+}
+
+String _employeeTrainingSearchHint(_EmployeeTrainingTab tab) {
+  switch (tab) {
+    case _EmployeeTrainingTab.available:
+      return 'Search available trainings';
+    case _EmployeeTrainingTab.applications:
+      return 'Search applications';
+    case _EmployeeTrainingTab.training:
+      return 'Search my training';
+    case _EmployeeTrainingTab.resources:
+      return 'Search resources';
+  }
+}
+
+String _trainingPeriodLabel(TrainingProgram program) {
+  final start = _formatShortDate(program.startDate);
+  final end = _formatShortDate(program.endDate);
+  if (program.startDate == null && program.endDate == null) {
+    return start;
+  }
+  if (start == end) return start;
+  return '$start to $end';
+}
+
 String _fileTypeFromName(String fileName) {
   final extension = fileName.split('.').last.toLowerCase();
   if (extension == fileName.toLowerCase()) return 'file';
@@ -2488,6 +3684,12 @@ List<TrainingProgram> _filterPrograms(
       item.organizer,
       item.location,
       item.trainingType,
+      item.badge,
+      item.educationLevelName ?? '',
+      item.workingStationName ?? '',
+      item.batchYear ?? '',
+      item.rawStatus ?? '',
+      ...item.targetCadres,
       item.status.label,
     ].any((value) => value.toLowerCase().contains(normalizedQuery));
   }).toList();
@@ -2525,12 +3727,29 @@ List<TrainingApprovalRecord> _filterApprovalRecords(
     return [
       item.title,
       item.applicantName,
+      item.applicantPhone,
+      item.applicantEmail,
+      item.applicantGender,
+      item.vendorName,
+      item.cadreName,
+      item.educationLevelName,
+      item.batchYear,
       item.workingStationName,
       item.instituteName,
       item.workflowLabel,
       item.rawStatus,
     ].any((value) => value.toLowerCase().contains(normalizedQuery));
   }).toList();
+}
+
+List<T> _pagedItems<T>(List<T> items, int visibleCount) {
+  if (visibleCount >= items.length) return items;
+  return items.take(visibleCount).toList();
+}
+
+int _nextPageCount(int currentCount, int totalCount) {
+  final nextCount = currentCount + _trainingPageSize;
+  return nextCount > totalCount ? totalCount : nextCount;
 }
 
 bool _isTrainingInDateRange(

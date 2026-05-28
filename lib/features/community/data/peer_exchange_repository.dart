@@ -60,6 +60,35 @@ class PeerExchangeRepository {
     );
   }
 
+  Future<PeerConversation> startDirectConversation({
+    required int receiverId,
+    required String message,
+  }) async {
+    final response = await _postForm(
+      '/conversations/messages',
+      data: _cleanMap({'receiver_id': receiverId, 'message': message}),
+    );
+    final conversation = PeerConversation.fromJson(
+      _requireMap(response.data['conversation'], 'conversation'),
+    );
+    final sentMessage = PeerMessage.fromJson(
+      _requireMap(
+        response.data['conversation_message'],
+        'conversation_message',
+      ),
+    );
+
+    return conversation.copyWith(
+      lastMessage: sentMessage,
+      recentMessages: [
+        ...conversation.recentMessages.where(
+          (item) => item.uuid != sentMessage.uuid,
+        ),
+        sentMessage,
+      ],
+    );
+  }
+
   Future<PeerMessage> sendConversationMessage({
     String? conversationUuid,
     int? receiverId,
@@ -67,12 +96,7 @@ class PeerExchangeRepository {
     String? replyToUuid,
     List<MultipartFile> attachments = const [],
   }) async {
-    var resolvedConversationUuid = conversationUuid;
-    if (resolvedConversationUuid == null && receiverId != null) {
-      final conversation = await ensureDirectConversation(receiverId);
-      resolvedConversationUuid = conversation.uuid;
-      receiverId = null;
-    }
+    final resolvedConversationUuid = conversationUuid;
 
     final encryptionPayload = resolvedConversationUuid == null
         ? null

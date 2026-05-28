@@ -3,37 +3,44 @@ enum ActivityRequestScope {
     label: 'Within Facility',
     apiValue: 'WITHIN_WORKING_AREA',
     requiresAttachment: false,
+    requiresOrganizer: false,
   ),
   withinDistrict(
     label: 'Within District',
     apiValue: 'WITHIN_WORKING_AREA',
     requiresAttachment: false,
+    requiresOrganizer: true,
   ),
   zanzibar(
     label: 'Within Zanzibar',
     apiValue: 'ZANZIBAR',
     requiresAttachment: false,
+    requiresOrganizer: true,
   ),
   mainland(
     label: 'Mainland Tanzania',
     apiValue: 'MAINLAND',
     requiresAttachment: true,
+    requiresOrganizer: true,
   ),
   international(
     label: 'International',
     apiValue: 'INTERNATIONAL',
     requiresAttachment: true,
+    requiresOrganizer: true,
   );
 
   const ActivityRequestScope({
     required this.label,
     required this.apiValue,
     required this.requiresAttachment,
+    required this.requiresOrganizer,
   });
 
   final String label;
   final String apiValue;
   final bool requiresAttachment;
+  final bool requiresOrganizer;
 
   static ActivityRequestScope? fromLabel(String? label) {
     final normalized = label?.trim() ?? '';
@@ -62,5 +69,9 @@ class ActivityRequestRules {
 
   bool requiresAttachment(String? scopeLabel) {
     return scopeFromLabel(scopeLabel)?.requiresAttachment ?? false;
+  }
+
+  bool requiresOrganizer(String? scopeLabel) {
+    return scopeFromLabel(scopeLabel)?.requiresOrganizer ?? false;
   }
 }

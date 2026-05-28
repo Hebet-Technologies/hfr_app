@@ -21,6 +21,10 @@ const _trainingBorder = Color(0xFFE7ECF3);
 const _trainingText = Color(0xFF101828);
 const _trainingMuted = Color(0xFF6B7280);
 const _trainingSoftBlue = Color(0xFFF4F8FF);
+const _trainingAdmissionLetterMaxBytes = 1024 * 1024;
+const _trainingPageSize = 12;
+const _trainingLoadMoreThreshold = 420.0;
+const _trainingStickyHeaderHeight = 144.0;
 
 void openTrainingHubScreen(BuildContext context) {
   Navigator.of(context).push(
@@ -38,6 +42,8 @@ void openTrainingDetailsScreen(BuildContext context, TrainingProgram program) {
   );
 }
 
+enum _EmployeeTrainingTab { available, applications, training, resources }
+
 class TrainingScreen extends ConsumerStatefulWidget {
   const TrainingScreen({super.key, this.standalone = false});
 
@@ -47,44 +53,41 @@ class TrainingScreen extends ConsumerStatefulWidget {
   ConsumerState<TrainingScreen> createState() => _TrainingScreenState();
 }
 
-class _TrainingScreenState extends ConsumerState<TrainingScreen> {
-  late final PageController _pageController;
-  int _currentPage = 0;
+class _TrainingScreenState extends ConsumerState<TrainingScreen>
+    with _TrainingApplicationFlow<TrainingScreen> {
+  _EmployeeTrainingTab _selectedTab = _EmployeeTrainingTab.available;
   String _query = '';
   TrainingParticipationStatus? _selectedStatus;
   DateTimeRange? _dateRange;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(viewportFraction: 0.88);
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
+  int _visibleAvailableTrainings = _trainingPageSize;
+  int _visibleApplications = _trainingPageSize;
+  int _visibleMyTrainings = _trainingPageSize;
+  int _visibleResources = _trainingPageSize;
 
   @override
   Widget build(BuildContext context) {
     final access = ref.watch(staffPortalAccessProvider);
-    if (access.canReviewTrainingRequests) {
+    final canOpenTrainingApprovals =
+        access.canViewTrainingRequests ||
+        access.canForwardTrainingRequests ||
+        access.canApproveTrainingRequests ||
+        access.canDenyTrainingRequests ||
+        access.canCreateTrainingResult;
+    if (!access.hasEmployeeProfile && canOpenTrainingApprovals) {
       return _ApproverTrainingHub(standalone: widget.standalone);
     }
 
     final state = ref.watch(trainingViewModelProvider);
     final sharedState = ref.watch(staffRequestsViewModelProvider);
-    final latestTrainings = _mergeTrainingPrograms(
-      state.latestTrainings,
-      _programsFromHomeAnnouncements(sharedState.announcements),
-    );
     final trainingResources = _mergeTrainingResources(
       state.resources,
       _resourcesFromHomeResources(sharedState.resources),
     );
-    final latest = _filterPrograms(
-      latestTrainings,
+    final availableTrainingSource = state.latestTrainings
+        .where(_isRequestableAvailableTraining)
+        .toList();
+    final availableTrainings = _filterPrograms(
+      availableTrainingSource,
       _query,
       status: _selectedStatus,
       dateRange: _dateRange,
@@ -103,6 +106,8 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
     );
     final resources = _filterResources(trainingResources, _query);
     final isLoading = state.isLoading || sharedState.isLoading;
+    final showTrainingFilters = _selectedTab != _EmployeeTrainingTab.resources;
+    final pagePadding = AppBreakpoints.pagePadding(context);
 
     return Scaffold(
       backgroundColor: _trainingSurface,
@@ -119,191 +124,350 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           : null,
       body: SafeArea(
         top: !widget.standalone,
-        child: RefreshIndicator(
-          color: _trainingBlue,
-          onRefresh: () =>
-              ref.read(trainingViewModelProvider.notifier).refresh(),
-          child: ResponsiveListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: AppBreakpoints.pagePadding(context),
-            children: [
-              Text(
-                'Trainings',
-                style: _trainingTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 14),
-              _SearchToolbar(
-                hintText: 'Search...',
-                onChanged: (value) => setState(() => _query = value),
-                filterCount: _trainingFilterCount(
-                  status: _selectedStatus,
-                  dateRange: _dateRange,
-                ),
-                onFilterPressed: _openStatusFilter,
-                onCalendarPressed: _openDateFilter,
-              ),
-              const SizedBox(height: 20),
-              _SectionHeader(
-                title: 'Announcements',
-                actionLabel: 'See All',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const LatestTrainingsScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              if (isLoading && latestTrainings.isEmpty)
-                const _TrainingCarouselShimmer()
-              else if (latest.isEmpty)
-                const _EmptyCard(message: 'No trainings found')
-              else ...[
-                SizedBox(
-                  height: 320,
-                  child: PageView.builder(
-                    controller: _pageController,
-                    itemCount: latest.length,
-                    onPageChanged: (index) =>
-                        setState(() => _currentPage = index),
-                    itemBuilder: (context, index) {
-                      final item = latest[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 12),
-                        child: _LatestTrainingCard(
-                          program: item,
-                          onPressed: () => _openTrainingDetails(context, item),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                if (latest.length > 1) ...[
-                  const SizedBox(height: 10),
-                  Center(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) => _handleEmployeeScroll(
+            notification,
+            availableCount: availableTrainings.length,
+            applicationCount: myApplications.length,
+            trainingCount: myTrainings.length,
+            resourceCount: resources.length,
+          ),
+          child: RefreshIndicator(
+            color: _trainingBlue,
+            onRefresh: () =>
+                ref.read(trainingViewModelProvider.notifier).refresh(),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: ResponsiveWidth(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        pagePadding.left,
+                        pagePadding.top,
+                        pagePadding.right,
+                        0,
+                      ),
                       child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: List.generate(
-                          latest.length,
-                          (index) => AnimatedContainer(
-                            duration: const Duration(milliseconds: 180),
-                            margin: const EdgeInsets.symmetric(horizontal: 4),
-                            height: 6,
-                            width:
-                                index ==
-                                    _currentPage.clamp(0, latest.length - 1)
-                                ? 18
-                                : 6,
-                            decoration: BoxDecoration(
-                              color:
-                                  index ==
-                                      _currentPage.clamp(0, latest.length - 1)
-                                  ? _trainingBlue
-                                  : const Color(0xFFD6DFEB),
-                              borderRadius: BorderRadius.circular(999),
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Trainings',
+                              style: _trainingTextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
+                          if (canOpenTrainingApprovals)
+                            IconButton(
+                              tooltip: 'Training approvals',
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => const _ApproverTrainingHub(
+                                      standalone: true,
+                                    ),
+                                  ),
+                                );
+                              },
+                              icon: const Icon(
+                                Icons.assignment_turned_in_outlined,
+                                color: _trainingBlue,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TrainingStickyHeaderDelegate(
+                    height: _trainingStickyHeaderHeight,
+                    child: ResponsiveWidth(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          pagePadding.left,
+                          12,
+                          pagePadding.right,
+                          12,
+                        ),
+                        child: Column(
+                          children: [
+                            _SearchToolbar(
+                              hintText: _employeeTrainingSearchHint(
+                                _selectedTab,
+                              ),
+                              onChanged: (value) => setState(() {
+                                _query = value;
+                                _resetEmployeePaging();
+                              }),
+                              filterCount: showTrainingFilters
+                                  ? _trainingFilterCount(
+                                      status: _selectedStatus,
+                                      dateRange: _dateRange,
+                                    )
+                                  : 0,
+                              onFilterPressed: showTrainingFilters
+                                  ? _openStatusFilter
+                                  : null,
+                              onCalendarPressed: showTrainingFilters
+                                  ? _openDateFilter
+                                  : null,
+                              showFilterActions: showTrainingFilters,
+                            ),
+                            const SizedBox(height: 14),
+                            _EmployeeTrainingTabSelector(
+                              selectedTab: _selectedTab,
+                              onSelected: _selectEmployeeTab,
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                ],
+                ),
+                SliverToBoxAdapter(
+                  child: ResponsiveWidth(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        pagePadding.left,
+                        16,
+                        pagePadding.right,
+                        pagePadding.bottom,
+                      ),
+                      child: _selectedTab == _EmployeeTrainingTab.available
+                          ? _buildAvailableTrainings(
+                              availableTrainings,
+                              visibleCount: _visibleAvailableTrainings,
+                              isLoading: state.isLoading,
+                              sourceIsEmpty: availableTrainingSource.isEmpty,
+                            )
+                          : _selectedTab == _EmployeeTrainingTab.applications
+                          ? _buildMyApplications(
+                              myApplications,
+                              visibleCount: _visibleApplications,
+                            )
+                          : _selectedTab == _EmployeeTrainingTab.training
+                          ? _buildMyTraining(
+                              myTrainings,
+                              visibleCount: _visibleMyTrainings,
+                            )
+                          : _buildTrainingResources(
+                              resources,
+                              visibleCount: _visibleResources,
+                              isLoading: isLoading,
+                              sourceIsEmpty: trainingResources.isEmpty,
+                            ),
+                    ),
+                  ),
+                ),
               ],
-              const SizedBox(height: 22),
-              _SectionHeader(
-                title: 'My Applications',
-                actionLabel: 'See All',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const MyTrainingApplicationsScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              if (myApplications.isEmpty)
-                const _EmptyCard(message: 'No training applications yet')
-              else
-                ...myApplications
-                    .take(3)
-                    .map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _TrainingStatusTile(
-                          program: item,
-                          onTap: () => _openTrainingDetails(context, item),
-                        ),
-                      ),
-                    ),
-              const SizedBox(height: 22),
-              _SectionHeader(
-                title: 'My Training',
-                actionLabel: 'See All',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const MyTrainingsScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              if (myTrainings.isEmpty)
-                const _EmptyCard(message: 'No training history found')
-              else
-                ...myTrainings
-                    .take(3)
-                    .map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _TrainingStatusTile(
-                          program: item,
-                          onTap: () => _openTrainingDetails(context, item),
-                        ),
-                      ),
-                    ),
-              const SizedBox(height: 22),
-              _SectionHeader(
-                title: 'Resources',
-                actionLabel: 'See All',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const TrainingResourcesScreen(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              if (isLoading && trainingResources.isEmpty)
-                const _TrainingListShimmer()
-              else if (resources.isEmpty)
-                const _EmptyCard(message: 'No resources available')
-              else
-                ...resources
-                    .take(3)
-                    .map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _ResourceTile(
-                          resource: item,
-                          onTap: () => _openResource(context, item),
-                        ),
-                      ),
-                    ),
-            ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildAvailableTrainings(
+    List<TrainingProgram> items, {
+    required int visibleCount,
+    required bool isLoading,
+    required bool sourceIsEmpty,
+  }) {
+    if (isLoading && sourceIsEmpty) {
+      return const _TrainingListShimmer();
+    }
+    if (items.isEmpty) {
+      return const _EmptyCard(message: 'No available trainings found');
+    }
+    final visibleItems = _pagedItems(items, visibleCount);
+    return Column(
+      children: [
+        ...visibleItems.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _AvailableTrainingCard(
+              program: item,
+              onView: () => _openTrainingDetails(context, item),
+            ),
+          ),
+        ),
+        if (visibleItems.length < items.length)
+          _TrainingPagingFooter(
+            visibleCount: visibleItems.length,
+            totalCount: items.length,
+            label: 'trainings',
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMyApplications(
+    List<TrainingProgram> items, {
+    required int visibleCount,
+  }) {
+    if (items.isEmpty) {
+      return const _EmptyCard(message: 'No training applications found');
+    }
+    final visibleItems = _pagedItems(items, visibleCount);
+    return Column(
+      children: [
+        ...visibleItems.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _TrainingStatusTile(
+              program: item,
+              onTap: () => _openTrainingDetails(context, item),
+            ),
+          ),
+        ),
+        if (visibleItems.length < items.length)
+          _TrainingPagingFooter(
+            visibleCount: visibleItems.length,
+            totalCount: items.length,
+            label: 'applications',
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMyTraining(
+    List<TrainingProgram> items, {
+    required int visibleCount,
+  }) {
+    if (items.isEmpty) {
+      return const _EmptyCard(message: 'No training history found');
+    }
+    final visibleItems = _pagedItems(items, visibleCount);
+    return Column(
+      children: [
+        ...visibleItems.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _TrainingStatusTile(
+              program: item,
+              onTap: () => _openTrainingDetails(context, item),
+            ),
+          ),
+        ),
+        if (visibleItems.length < items.length)
+          _TrainingPagingFooter(
+            visibleCount: visibleItems.length,
+            totalCount: items.length,
+            label: 'records',
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTrainingResources(
+    List<TrainingResource> items, {
+    required int visibleCount,
+    required bool isLoading,
+    required bool sourceIsEmpty,
+  }) {
+    if (isLoading && sourceIsEmpty) {
+      return const _TrainingListShimmer();
+    }
+    if (items.isEmpty) {
+      return const _EmptyCard(message: 'No resources available');
+    }
+    final visibleItems = _pagedItems(items, visibleCount);
+    return Column(
+      children: [
+        ...visibleItems.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _ResourceTile(
+              resource: item,
+              onTap: () => _openResource(context, item),
+            ),
+          ),
+        ),
+        if (visibleItems.length < items.length)
+          _TrainingPagingFooter(
+            visibleCount: visibleItems.length,
+            totalCount: items.length,
+            label: 'resources',
+          ),
+      ],
+    );
+  }
+
+  void _selectEmployeeTab(_EmployeeTrainingTab tab) {
+    if (_selectedTab == tab) return;
+    setState(() {
+      _selectedTab = tab;
+      _resetEmployeePaging();
+      if (tab == _EmployeeTrainingTab.resources) {
+        _selectedStatus = null;
+        _dateRange = null;
+      }
+    });
+  }
+
+  bool _handleEmployeeScroll(
+    ScrollNotification notification, {
+    required int availableCount,
+    required int applicationCount,
+    required int trainingCount,
+    required int resourceCount,
+  }) {
+    if (notification.metrics.axis != Axis.vertical ||
+        notification.metrics.extentAfter > _trainingLoadMoreThreshold) {
+      return false;
+    }
+
+    switch (_selectedTab) {
+      case _EmployeeTrainingTab.available:
+        _increaseVisibleCount(
+          totalCount: availableCount,
+          currentCount: _visibleAvailableTrainings,
+          update: (value) => _visibleAvailableTrainings = value,
+        );
+        break;
+      case _EmployeeTrainingTab.applications:
+        _increaseVisibleCount(
+          totalCount: applicationCount,
+          currentCount: _visibleApplications,
+          update: (value) => _visibleApplications = value,
+        );
+        break;
+      case _EmployeeTrainingTab.training:
+        _increaseVisibleCount(
+          totalCount: trainingCount,
+          currentCount: _visibleMyTrainings,
+          update: (value) => _visibleMyTrainings = value,
+        );
+        break;
+      case _EmployeeTrainingTab.resources:
+        _increaseVisibleCount(
+          totalCount: resourceCount,
+          currentCount: _visibleResources,
+          update: (value) => _visibleResources = value,
+        );
+        break;
+    }
+    return false;
+  }
+
+  void _increaseVisibleCount({
+    required int totalCount,
+    required int currentCount,
+    required ValueChanged<int> update,
+  }) {
+    if (currentCount >= totalCount) return;
+    setState(() => update(_nextPageCount(currentCount, totalCount)));
+  }
+
+  void _resetEmployeePaging() {
+    _visibleAvailableTrainings = _trainingPageSize;
+    _visibleApplications = _trainingPageSize;
+    _visibleMyTrainings = _trainingPageSize;
+    _visibleResources = _trainingPageSize;
   }
 
   Future<void> _openStatusFilter() async {
@@ -314,13 +478,128 @@ class _TrainingScreenState extends ConsumerState<TrainingScreen> {
           _TrainingStatusFilterSheet(selectedStatus: _selectedStatus),
     );
     if (!mounted || result == null) return;
-    setState(() => _selectedStatus = result.status);
+    setState(() {
+      _selectedStatus = result.status;
+      _resetEmployeePaging();
+    });
   }
 
   Future<void> _openDateFilter() async {
     final range = await _pickTrainingDateRange(context, _dateRange);
     if (!mounted || range == _dateRange) return;
-    setState(() => _dateRange = range);
+    setState(() {
+      _dateRange = range;
+      _resetEmployeePaging();
+    });
+  }
+}
+
+mixin _TrainingApplicationFlow<T extends ConsumerStatefulWidget>
+    on ConsumerState<T> {
+  Future<void> _submitApplication(TrainingProgram program) async {
+    final messenger = ScaffoldMessenger.of(context);
+    var application = program;
+    String? admissionLetterPath;
+    String? admissionLetterName;
+
+    final needsInstitute =
+        (application.shortCourseDescriptionId ?? '').trim().isEmpty &&
+        (application.instituteId ?? '').trim().isEmpty;
+    if (needsInstitute) {
+      final request = await showModalBottomSheet<_TrainingRequestFormResult>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => _TrainingRequestSheet(
+          program: application,
+          requiresAdmissionLetter: _requiresAdmissionLetter(application),
+          onLoadCountries: (forceRefresh) =>
+              _loadTrainingCountries(forceRefresh: forceRefresh),
+          onLoadInstitutes: (country, forceRefresh) => _loadTrainingInstitutes(
+            application,
+            country,
+            forceRefresh: forceRefresh,
+          ),
+          onPickAdmissionLetter: () => _pickTrainingPdf(
+            context: context,
+            maxBytes: _trainingAdmissionLetterMaxBytes,
+          ),
+        ),
+      );
+      if (!mounted || request == null) return;
+      application = application.copyWith(
+        instituteId: request.institute.id,
+        location: request.institute.name,
+        startDate: request.startDate,
+        endDate: request.endDate,
+      );
+      admissionLetterPath = request.admissionLetterPath;
+      admissionLetterName = request.admissionLetterName;
+    }
+
+    if (_requiresAdmissionLetter(application) &&
+        (admissionLetterPath ?? '').trim().isEmpty) {
+      final file = await _pickTrainingPdf(
+        context: context,
+        maxBytes: _trainingAdmissionLetterMaxBytes,
+      );
+      if (!mounted || file == null) return;
+      admissionLetterPath = file.$1;
+      admissionLetterName = file.$2;
+    }
+
+    try {
+      await ref
+          .read(trainingViewModelProvider.notifier)
+          .applyForTraining(
+            application,
+            admissionLetterPath: admissionLetterPath,
+            admissionLetterName: admissionLetterName,
+          );
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Training request submitted successfully.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            ref.read(trainingViewModelProvider).errorMessage ??
+                'Unable to submit the training request.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<List<TrainingCountry>> _loadTrainingCountries({
+    bool forceRefresh = false,
+  }) {
+    return ref
+        .read(trainingRepositoryProvider)
+        .fetchTrainingCountries(forceRefresh: forceRefresh);
+  }
+
+  Future<List<TrainingInstitute>> _loadTrainingInstitutes(
+    TrainingProgram program,
+    TrainingCountry country, {
+    bool forceRefresh = false,
+  }) {
+    final educationLevelId = (program.educationLevelId ?? '').trim();
+    if (educationLevelId.isEmpty) {
+      throw Exception('This training is missing an education level.');
+    }
+
+    return ref
+        .read(trainingRepositoryProvider)
+        .fetchInstitutes(
+          countryCode: country.code,
+          educationLevelId: educationLevelId,
+          forceRefresh: forceRefresh,
+        );
   }
 }
 
@@ -341,6 +620,9 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
   String _query = '';
   TrainingParticipationStatus? _selectedStatus;
   DateTimeRange? _dateRange;
+  int _visibleApproverTrainings = _trainingPageSize;
+  int _visibleApprovals = _trainingPageSize;
+  int _visibleApproverResources = _trainingPageSize;
 
   @override
   Widget build(BuildContext context) {
@@ -377,8 +659,12 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
         )
         .length;
     final resources = _filterResources(trainingResources, _query);
+    final visibleTrainings = _pagedItems(trainings, _visibleApproverTrainings);
+    final visibleApprovals = _pagedItems(approvals, _visibleApprovals);
+    final visibleResources = _pagedItems(resources, _visibleApproverResources);
     final isLoading = state.isLoading || sharedState.isLoading;
     final actionLabels = _trainingApprovalActions(access);
+    final pagePadding = AppBreakpoints.pagePadding(context);
 
     return Scaffold(
       backgroundColor: _trainingSurface,
@@ -395,125 +681,264 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
           : null,
       body: SafeArea(
         top: !widget.standalone,
-        child: RefreshIndicator(
-          color: _trainingBlue,
-          onRefresh: () =>
-              ref.read(trainingViewModelProvider.notifier).refresh(),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-            children: [
-              Text(
-                'Training',
-                style: _trainingTextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 14),
-              if (state.errorMessage != null) ...[
-                _InlineBanner(
-                  message: state.errorMessage!,
-                  onClose: () =>
-                      ref.read(trainingViewModelProvider.notifier).clearError(),
-                  actionLabel: 'Retry',
-                  onAction: () => ref
-                      .read(trainingViewModelProvider.notifier)
-                      .refreshApprovalRequests(),
-                ),
-                const SizedBox(height: 14),
-              ],
-              _ApproverTabSelector(
-                selectedTab: _selectedTab,
-                onSelected: _selectApproverTab,
-              ),
-              const SizedBox(height: 16),
-              _SearchToolbar(
-                hintText: 'Search...',
-                onChanged: (value) => setState(() => _query = value),
-                filterCount: _trainingFilterCount(
-                  status: _selectedStatus,
-                  dateRange: _dateRange,
-                ),
-                onFilterPressed: _openStatusFilter,
-                onCalendarPressed: _openDateFilter,
-              ),
-              const SizedBox(height: 18),
-              if (_selectedTab == _ApproverTrainingTab.allTrainings) ...[
-                if (isLoading && latestTrainings.isEmpty)
-                  const _TrainingListShimmer()
-                else if (trainings.isEmpty)
-                  const _EmptyCard(message: 'No trainings found')
-                else
-                  ...trainings.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 14),
-                      child: _LatestTrainingCard(
-                        program: item,
-                        onPressed: () => _openTrainingDetails(context, item),
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) => _handleApproverScroll(
+            notification,
+            trainingCount: trainings.length,
+            approvalCount: approvals.length,
+            resourceCount: resources.length,
+          ),
+          child: RefreshIndicator(
+            color: _trainingBlue,
+            onRefresh: () =>
+                ref.read(trainingViewModelProvider.notifier).refresh(),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: ResponsiveWidth(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        pagePadding.left,
+                        pagePadding.top,
+                        pagePadding.right,
+                        0,
                       ),
-                    ),
-                  ),
-              ] else if (_selectedTab == _ApproverTrainingTab.applications) ...[
-                _QueueSummaryCard(
-                  count: approvals.length,
-                  actionableCount: actionableCount,
-                ),
-                const SizedBox(height: 14),
-                if (state.isLoading &&
-                    state.approvalQueue.isEmpty &&
-                    state.trainingRequests.isEmpty)
-                  const _TrainingApprovalShimmer()
-                else if (approvals.isEmpty)
-                  const _EmptyCard(
-                    message: 'No training applications are waiting for review.',
-                  )
-                else
-                  ...approvals.map((record) {
-                    final actionableRecord = _findActionableApproval(
-                      state.approvalQueue,
-                      record,
-                    );
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _TrainingApprovalCard(
-                        record: record,
-                        actionLabels: actionLabels,
-                        isSubmitting: state.isSubmittingApproval,
-                        onOpen: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) =>
-                                _TrainingApprovalDetailsScreen(record: record),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Training',
+                            style: _trainingTextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        onAction:
-                            actionLabels.isNotEmpty && actionableRecord != null
-                            ? (action) =>
-                                  _submitAction(actionableRecord, action)
-                            : null,
-                      ),
-                    );
-                  }),
-              ] else ...[
-                if (isLoading && trainingResources.isEmpty)
-                  const _TrainingListShimmer()
-                else if (resources.isEmpty)
-                  const _EmptyCard(message: 'No resources found')
-                else
-                  ...resources.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _ResourceTile(
-                        resource: item,
-                        onTap: () => _openResource(context, item),
+                          if (state.errorMessage != null) ...[
+                            const SizedBox(height: 14),
+                            _InlineBanner(
+                              message: state.errorMessage!,
+                              onClose: () => ref
+                                  .read(trainingViewModelProvider.notifier)
+                                  .clearError(),
+                              actionLabel: 'Retry',
+                              onAction: () => ref
+                                  .read(trainingViewModelProvider.notifier)
+                                  .refreshApprovalRequests(),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                   ),
+                ),
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _TrainingStickyHeaderDelegate(
+                    height: _trainingStickyHeaderHeight,
+                    child: ResponsiveWidth(
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          pagePadding.left,
+                          12,
+                          pagePadding.right,
+                          12,
+                        ),
+                        child: Column(
+                          children: [
+                            _ApproverTabSelector(
+                              selectedTab: _selectedTab,
+                              onSelected: _selectApproverTab,
+                            ),
+                            const SizedBox(height: 14),
+                            _SearchToolbar(
+                              hintText: 'Search...',
+                              onChanged: (value) => setState(() {
+                                _query = value;
+                                _resetApproverPaging();
+                              }),
+                              filterCount: _trainingFilterCount(
+                                status: _selectedStatus,
+                                dateRange: _dateRange,
+                              ),
+                              onFilterPressed: _openStatusFilter,
+                              onCalendarPressed: _openDateFilter,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: ResponsiveWidth(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        pagePadding.left,
+                        18,
+                        pagePadding.right,
+                        pagePadding.bottom,
+                      ),
+                      child: _selectedTab == _ApproverTrainingTab.allTrainings
+                          ? _buildApproverTrainings(
+                              trainings: trainings,
+                              visibleTrainings: visibleTrainings,
+                              isLoading: isLoading,
+                              sourceIsEmpty: latestTrainings.isEmpty,
+                            )
+                          : _selectedTab == _ApproverTrainingTab.applications
+                          ? _buildApproverApplications(
+                              approvals: approvals,
+                              visibleApprovals: visibleApprovals,
+                              actionableCount: actionableCount,
+                              actionLabels: actionLabels,
+                              approvalQueue: state.approvalQueue,
+                              isLoading: state.isLoading,
+                              isSubmitting: state.isSubmittingApproval,
+                              sourceIsEmpty:
+                                  state.approvalQueue.isEmpty &&
+                                  state.trainingRequests.isEmpty,
+                            )
+                          : _buildApproverResources(
+                              resources: resources,
+                              visibleResources: visibleResources,
+                              isLoading: isLoading,
+                              sourceIsEmpty: trainingResources.isEmpty,
+                            ),
+                    ),
+                  ),
+                ),
               ],
-            ],
+            ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildApproverTrainings({
+    required List<TrainingProgram> trainings,
+    required List<TrainingProgram> visibleTrainings,
+    required bool isLoading,
+    required bool sourceIsEmpty,
+  }) {
+    if (isLoading && sourceIsEmpty) {
+      return const _TrainingListShimmer();
+    }
+    if (trainings.isEmpty) {
+      return const _EmptyCard(message: 'No trainings found');
+    }
+
+    return Column(
+      children: [
+        ...visibleTrainings.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: _LatestTrainingCard(
+              program: item,
+              onPressed: () => _openTrainingDetails(context, item),
+            ),
+          ),
+        ),
+        if (visibleTrainings.length < trainings.length)
+          _TrainingPagingFooter(
+            visibleCount: visibleTrainings.length,
+            totalCount: trainings.length,
+            label: 'trainings',
+          ),
+      ],
+    );
+  }
+
+  Widget _buildApproverApplications({
+    required List<TrainingApprovalRecord> approvals,
+    required List<TrainingApprovalRecord> visibleApprovals,
+    required int actionableCount,
+    required List<String> actionLabels,
+    required List<TrainingApprovalRecord> approvalQueue,
+    required bool isLoading,
+    required bool isSubmitting,
+    required bool sourceIsEmpty,
+  }) {
+    return Column(
+      children: [
+        _QueueSummaryCard(
+          count: approvals.length,
+          actionableCount: actionableCount,
+        ),
+        const SizedBox(height: 14),
+        if (isLoading && sourceIsEmpty)
+          const _TrainingApprovalShimmer()
+        else if (approvals.isEmpty)
+          const _EmptyCard(
+            message: 'No training applications are waiting for review.',
+          )
+        else ...[
+          ...visibleApprovals.map((record) {
+            final actionableRecord = _findActionableApproval(
+              approvalQueue,
+              record,
+            );
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _TrainingApprovalCard(
+                record: record,
+                actionLabels: actionLabels,
+                isSubmitting: isSubmitting,
+                onOpen: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        _TrainingApprovalDetailsScreen(record: record),
+                  ),
+                ),
+                onAction: actionLabels.isNotEmpty && actionableRecord != null
+                    ? (action) => _submitAction(actionableRecord, action)
+                    : null,
+              ),
+            );
+          }),
+          if (visibleApprovals.length < approvals.length)
+            _TrainingPagingFooter(
+              visibleCount: visibleApprovals.length,
+              totalCount: approvals.length,
+              label: 'applications',
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildApproverResources({
+    required List<TrainingResource> resources,
+    required List<TrainingResource> visibleResources,
+    required bool isLoading,
+    required bool sourceIsEmpty,
+  }) {
+    if (isLoading && sourceIsEmpty) {
+      return const _TrainingListShimmer();
+    }
+    if (resources.isEmpty) {
+      return const _EmptyCard(message: 'No resources found');
+    }
+
+    return Column(
+      children: [
+        ...visibleResources.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _ResourceTile(
+              resource: item,
+              onTap: () => _openResource(context, item),
+            ),
+          ),
+        ),
+        if (visibleResources.length < resources.length)
+          _TrainingPagingFooter(
+            visibleCount: visibleResources.length,
+            totalCount: resources.length,
+            label: 'resources',
+          ),
+      ],
     );
   }
 
@@ -547,7 +972,10 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
 
   void _selectApproverTab(_ApproverTrainingTab tab) {
     if (_selectedTab == tab) return;
-    setState(() => _selectedTab = tab);
+    setState(() {
+      _selectedTab = tab;
+      _resetApproverPaging();
+    });
 
     final notifier = ref.read(trainingViewModelProvider.notifier);
     switch (tab) {
@@ -571,13 +999,71 @@ class _ApproverTrainingHubState extends ConsumerState<_ApproverTrainingHub> {
           _TrainingStatusFilterSheet(selectedStatus: _selectedStatus),
     );
     if (!mounted || result == null) return;
-    setState(() => _selectedStatus = result.status);
+    setState(() {
+      _selectedStatus = result.status;
+      _resetApproverPaging();
+    });
   }
 
   Future<void> _openDateFilter() async {
     final range = await _pickTrainingDateRange(context, _dateRange);
     if (!mounted || range == _dateRange) return;
-    setState(() => _dateRange = range);
+    setState(() {
+      _dateRange = range;
+      _resetApproverPaging();
+    });
+  }
+
+  bool _handleApproverScroll(
+    ScrollNotification notification, {
+    required int trainingCount,
+    required int approvalCount,
+    required int resourceCount,
+  }) {
+    if (notification.metrics.axis != Axis.vertical ||
+        notification.metrics.extentAfter > _trainingLoadMoreThreshold) {
+      return false;
+    }
+
+    switch (_selectedTab) {
+      case _ApproverTrainingTab.allTrainings:
+        _increaseVisibleCount(
+          totalCount: trainingCount,
+          currentCount: _visibleApproverTrainings,
+          update: (value) => _visibleApproverTrainings = value,
+        );
+        break;
+      case _ApproverTrainingTab.applications:
+        _increaseVisibleCount(
+          totalCount: approvalCount,
+          currentCount: _visibleApprovals,
+          update: (value) => _visibleApprovals = value,
+        );
+        break;
+      case _ApproverTrainingTab.resources:
+        _increaseVisibleCount(
+          totalCount: resourceCount,
+          currentCount: _visibleApproverResources,
+          update: (value) => _visibleApproverResources = value,
+        );
+        break;
+    }
+    return false;
+  }
+
+  void _increaseVisibleCount({
+    required int totalCount,
+    required int currentCount,
+    required ValueChanged<int> update,
+  }) {
+    if (currentCount >= totalCount) return;
+    setState(() => update(_nextPageCount(currentCount, totalCount)));
+  }
+
+  void _resetApproverPaging() {
+    _visibleApproverTrainings = _trainingPageSize;
+    _visibleApprovals = _trainingPageSize;
+    _visibleApproverResources = _trainingPageSize;
   }
 }
 
@@ -872,7 +1358,8 @@ class LatestTrainingsScreen extends ConsumerStatefulWidget {
       _LatestTrainingsScreenState();
 }
 
-class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen> {
+class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen>
+    with _TrainingApplicationFlow<LatestTrainingsScreen> {
   String _query = '';
   TrainingParticipationStatus? _selectedStatus;
   DateTimeRange? _dateRange;
@@ -880,27 +1367,21 @@ class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(trainingViewModelProvider);
-    final sharedState = ref.watch(staffRequestsViewModelProvider);
-    final latestTrainings = _mergeTrainingPrograms(
-      state.latestTrainings,
-      _programsFromHomeAnnouncements(sharedState.announcements),
-    );
     final items = _filterPrograms(
-      latestTrainings,
+      state.latestTrainings.where(_isRequestableAvailableTraining).toList(),
       _query,
       status: _selectedStatus,
       dateRange: _dateRange,
     );
-    final isLoading = state.isLoading || sharedState.isLoading;
 
     return Scaffold(
       backgroundColor: _trainingSurface,
-      appBar: _TrainingAppBar(title: 'Announcements'),
+      appBar: _TrainingAppBar(title: 'Available Trainings'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
         children: [
           _SearchToolbar(
-            hintText: 'Search...',
+            hintText: 'Search available trainings',
             onChanged: (value) => setState(() => _query = value),
             filterCount: _trainingFilterCount(
               status: _selectedStatus,
@@ -910,17 +1391,19 @@ class _LatestTrainingsScreenState extends ConsumerState<LatestTrainingsScreen> {
             onCalendarPressed: _openDateFilter,
           ),
           const SizedBox(height: 16),
-          if (isLoading && latestTrainings.isEmpty)
+          if (state.isLoading && state.latestTrainings.isEmpty)
             const _TrainingListShimmer()
           else if (items.isEmpty)
-            const _EmptyCard(message: 'No announcements match your search')
+            const _EmptyCard(
+              message: 'No available trainings match your search',
+            )
           else
             ...items.map(
               (item) => Padding(
-                padding: const EdgeInsets.only(bottom: 14),
-                child: _LatestTrainingCard(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _AvailableTrainingCard(
                   program: item,
-                  onPressed: () => _openTrainingDetails(context, item),
+                  onView: () => _openTrainingDetails(context, item),
                 ),
               ),
             ),
@@ -998,15 +1481,14 @@ class _MyTrainingsScreenState extends ConsumerState<MyTrainingsScreen> {
                     _TrainingStatusTile(
                       program: item,
                       onTap: () => _openTrainingDetails(context, item),
-                      onDelete:
-                          item.status == TrainingParticipationStatus.pending
+                      onDelete: _canDeleteTrainingApplication(item)
                           ? () => _deleteTrainingApplication(item)
                           : null,
                     ),
                     const SizedBox(height: 8),
                     _TrainingEmployeeActions(
                       program: item,
-                      onEdit: item.status == TrainingParticipationStatus.pending
+                      onEdit: _canEditTrainingApplication(item)
                           ? () => _editTrainingApplication(item)
                           : null,
                       onUploadContract: () => _uploadContract(item),
@@ -1318,15 +1800,61 @@ class _MyTrainingApplicationsScreenState
           ] else if (items.isEmpty)
             const _EmptyCard(message: 'No training applications found')
           else
-            ...items.map(
-              (item) => Padding(
+            ...items.map((item) {
+              final attachment = item.resources.isNotEmpty
+                  ? item.resources.first
+                  : null;
+              final canEdit = _canEditTrainingApplication(item);
+              final canDelete = _canDeleteTrainingApplication(item);
+              final canPrintLetter = _canPrintTrainingLetter(item);
+              final hasActions =
+                  canEdit || canDelete || attachment != null || canPrintLetter;
+
+              return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: _TrainingStatusTile(
-                  program: item,
-                  onTap: () => _openTrainingDetails(context, item),
+                child: Column(
+                  children: [
+                    _TrainingStatusTile(
+                      program: item,
+                      onTap: () => _openTrainingDetails(context, item),
+                      onDelete: canDelete
+                          ? () => _deleteTrainingApplication(item)
+                          : null,
+                    ),
+                    if (hasActions) ...[
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (canEdit)
+                              _TrainingActionChip(
+                                icon: Icons.edit_outlined,
+                                label: 'Edit',
+                                onTap: () => _editTrainingApplication(item),
+                              ),
+                            if (attachment != null)
+                              _TrainingActionChip(
+                                icon: Icons.attach_file_rounded,
+                                label: 'Admission',
+                                onTap: () => _openResource(context, attachment),
+                              ),
+                            if (canPrintLetter)
+                              _TrainingActionChip(
+                                icon: Icons.description_outlined,
+                                label: 'Letter',
+                                onTap: () => _openTrainingLetter(item),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
-            ),
+              );
+            }),
         ],
       ),
     );
@@ -1347,6 +1875,85 @@ class _MyTrainingApplicationsScreenState
     final range = await _pickTrainingDateRange(context, _dateRange);
     if (!mounted || range == _dateRange) return;
     setState(() => _dateRange = range);
+  }
+
+  Future<void> _deleteTrainingApplication(TrainingProgram program) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete training application'),
+        content: const Text(
+          'This will delete the training application if it is still editable.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep Application'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: _trainingBlue),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final message = await ref
+          .read(trainingViewModelProvider.notifier)
+          .deleteTrainingRequest(program);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(error))));
+    }
+  }
+
+  Future<void> _editTrainingApplication(TrainingProgram program) async {
+    final result = await showModalBottomSheet<_TrainingEditResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _TrainingEditSheet(program: program),
+    );
+    if (result == null || !mounted) return;
+    try {
+      final message = await ref
+          .read(trainingViewModelProvider.notifier)
+          .updateTrainingRequest(
+            training: program,
+            startDate: result.startDate,
+            endDate: result.endDate,
+            admissionLetterPath: result.filePath,
+            admissionLetterName: result.fileName,
+          );
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(friendlyErrorMessage(error))));
+    }
+  }
+
+  Future<void> _openTrainingLetter(TrainingProgram program) async {
+    final url = ref.read(trainingRepositoryProvider).trainingLetterUrl(program);
+    final uri = Uri.tryParse(url);
+    if (uri == null) return;
+    var opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!opened) {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 }
 
@@ -1415,213 +2022,14 @@ class TrainingDetailsScreen extends ConsumerStatefulWidget {
       _TrainingDetailsScreenState();
 }
 
-class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen> {
+class _TrainingDetailsScreenState extends ConsumerState<TrainingDetailsScreen>
+    with _TrainingApplicationFlow<TrainingDetailsScreen> {
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(trainingViewModelProvider.notifier).loadDetail(widget.training);
     });
-  }
-
-  Future<void> _submitApplication(TrainingProgram program) async {
-    final messenger = ScaffoldMessenger.of(context);
-    var application = program;
-
-    final needsInstitute =
-        (application.shortCourseDescriptionId ?? '').trim().isEmpty &&
-        (application.instituteId ?? '').trim().isEmpty;
-    if (needsInstitute) {
-      final institute = await _pickTrainingInstitute(application);
-      if (!mounted || institute == null) return;
-      application = application.copyWith(
-        instituteId: institute.id,
-        location: institute.name,
-      );
-    }
-
-    try {
-      await ref
-          .read(trainingViewModelProvider.notifier)
-          .applyForTraining(application);
-      if (!mounted) return;
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Training request submitted successfully.'),
-        ),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            ref.read(trainingViewModelProvider).errorMessage ??
-                'Unable to submit the training request.',
-          ),
-        ),
-      );
-    }
-  }
-
-  Future<TrainingCountry?> _pickTrainingCountry() async {
-    List<TrainingCountry> countries;
-    try {
-      countries = await ref
-          .read(trainingRepositoryProvider)
-          .fetchTrainingCountries();
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to load institute countries.')),
-        );
-      }
-      return null;
-    }
-
-    if (!mounted) return null;
-    if (countries.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No institute countries found.')),
-      );
-      return null;
-    }
-
-    return showModalBottomSheet<TrainingCountry>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        var query = '';
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final normalizedQuery = query.trim().toLowerCase();
-            final filtered = normalizedQuery.isEmpty
-                ? countries
-                : countries
-                      .where(
-                        (item) =>
-                            item.name.toLowerCase().contains(normalizedQuery) ||
-                            item.code.toLowerCase().contains(normalizedQuery),
-                      )
-                      .toList();
-
-            return _TrainingPickerSheet(
-              title: 'Select Institute Country',
-              subtitle: 'Choose the country where the institute is registered.',
-              searchHint: 'Search country',
-              onSearchChanged: (value) => setModalState(() => query = value),
-              emptyMessage: 'No country matches your search.',
-              itemCount: filtered.length,
-              itemBuilder: (context, index) {
-                final country = filtered[index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    country.name,
-                    style: _trainingTextStyle(fontSize: 14),
-                  ),
-                  subtitle: Text(country.code),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.of(sheetContext).pop(country),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<TrainingInstitute?> _pickTrainingInstitute(
-    TrainingProgram program,
-  ) async {
-    final country = await _pickTrainingCountry();
-    if (!mounted || country == null) return null;
-
-    final educationLevelId = (program.educationLevelId ?? '').trim();
-    if (educationLevelId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('This training is missing an education level.'),
-        ),
-      );
-      return null;
-    }
-
-    List<TrainingInstitute> institutes;
-    try {
-      institutes = await ref
-          .read(trainingRepositoryProvider)
-          .fetchInstitutes(
-            countryCode: country.code,
-            educationLevelId: educationLevelId,
-          );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to load training institutes.')),
-        );
-      }
-      return null;
-    }
-
-    if (!mounted) return null;
-    if (institutes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No training institutes found.')),
-      );
-      return null;
-    }
-
-    return showModalBottomSheet<TrainingInstitute>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) {
-        var query = '';
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            final normalizedQuery = query.trim().toLowerCase();
-            final filtered = normalizedQuery.isEmpty
-                ? institutes
-                : institutes
-                      .where(
-                        (item) =>
-                            item.name.toLowerCase().contains(normalizedQuery) ||
-                            (item.countryName ?? '').toLowerCase().contains(
-                              normalizedQuery,
-                            ),
-                      )
-                      .toList();
-
-            return _TrainingPickerSheet(
-              title: 'Select Training Institute',
-              subtitle:
-                  'Showing institutes for ${country.name} and this education level.',
-              searchHint: 'Search institute',
-              onSearchChanged: (value) => setModalState(() => query = value),
-              emptyMessage: 'No institute matches your search.',
-              itemCount: filtered.length,
-              itemBuilder: (context, index) {
-                final institute = filtered[index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    institute.name,
-                    style: _trainingTextStyle(fontSize: 14),
-                  ),
-                  subtitle: (institute.countryName ?? '').trim().isEmpty
-                      ? null
-                      : Text(institute.countryName!),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => Navigator.of(sheetContext).pop(institute),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
   }
 
   @override

@@ -147,8 +147,10 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
         content: content,
         attachments: attachments,
       );
-      await loadAll();
-      state = state.copyWith(isSubmitting: false);
+      state = state.copyWith(
+        isSubmitting: false,
+        questions: _upsertQuestion(state.questions, question),
+      );
       return question;
     } catch (error) {
       state = state.copyWith(
@@ -157,6 +159,24 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
       );
       return null;
     }
+  }
+
+  void recordQuestionComment({
+    required String questionUuid,
+    required PeerComment comment,
+  }) {
+    state = state.copyWith(
+      questions: _recordQuestionComment(state.questions, questionUuid, comment),
+    );
+  }
+
+  void recordTopicComment({
+    required String topicUuid,
+    required PeerComment comment,
+  }) {
+    state = state.copyWith(
+      topics: _recordTopicComment(state.topics, topicUuid, comment),
+    );
   }
 
   Future<PeerTopic?> createTopic({
@@ -214,19 +234,21 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
     }
   }
 
-  Future<PeerMessage?> startConversation({
+  Future<PeerConversation?> startConversation({
     required int receiverId,
     required String message,
   }) async {
     state = state.copyWith(isSubmitting: true, errorMessage: null);
     try {
-      final result = await _repository.sendConversationMessage(
+      final conversation = await _repository.startDirectConversation(
         receiverId: receiverId,
         message: message,
       );
-      await loadAll();
-      state = state.copyWith(isSubmitting: false);
-      return result;
+      state = state.copyWith(
+        isSubmitting: false,
+        conversations: _upsertConversation(state.conversations, conversation),
+      );
+      return conversation;
     } catch (error) {
       state = state.copyWith(
         isSubmitting: false,
@@ -246,6 +268,129 @@ class PeerExchangeViewModel extends Notifier<PeerExchangeState> {
     } catch (_) {
       return [];
     }
+  }
+
+  List<PeerConversation> _upsertConversation(
+    List<PeerConversation> source,
+    PeerConversation conversation,
+  ) {
+    final next = [
+      conversation,
+      ...source.where((item) => item.uuid != conversation.uuid),
+    ];
+    next.sort((left, right) {
+      final leftDate =
+          left.lastMessageAt ?? left.updatedAt ?? left.createdAt ?? DateTime(0);
+      final rightDate =
+          right.lastMessageAt ??
+          right.updatedAt ??
+          right.createdAt ??
+          DateTime(0);
+      return rightDate.compareTo(leftDate);
+    });
+    return next;
+  }
+
+  List<PeerQuestion> _upsertQuestion(
+    List<PeerQuestion> source,
+    PeerQuestion question,
+  ) {
+    if (!_questionMatchesCurrentFilters(question)) {
+      return source;
+    }
+
+    final next = [
+      question,
+      ...source.where((item) => item.uuid != question.uuid),
+    ];
+    next.sort(_sortQuestions);
+    return next;
+  }
+
+  List<PeerQuestion> _recordQuestionComment(
+    List<PeerQuestion> source,
+    String questionUuid,
+    PeerComment comment,
+  ) {
+    var didUpdate = false;
+    final next = source.map((question) {
+      if (question.uuid != questionUuid) return question;
+      didUpdate = true;
+      final alreadyCounted =
+          comment.uuid.isNotEmpty && question.lastComment?.uuid == comment.uuid;
+      return question.copyWith(
+        commentsCount: alreadyCounted
+            ? question.commentsCount
+            : question.commentsCount + 1,
+        lastComment: comment,
+        lastCommentAt: comment.createdAt ?? DateTime.now(),
+        updatedAt: comment.createdAt ?? DateTime.now(),
+      );
+    }).toList();
+    if (!didUpdate) return source;
+    next.sort(_sortQuestions);
+    return next;
+  }
+
+  List<PeerTopic> _recordTopicComment(
+    List<PeerTopic> source,
+    String topicUuid,
+    PeerComment comment,
+  ) {
+    var didUpdate = false;
+    final next = source.map((topic) {
+      if (topic.uuid != topicUuid) return topic;
+      didUpdate = true;
+      final alreadyCounted =
+          comment.uuid.isNotEmpty && topic.lastComment?.uuid == comment.uuid;
+      return topic.copyWith(
+        commentsCount: alreadyCounted
+            ? topic.commentsCount
+            : topic.commentsCount + 1,
+        lastComment: comment,
+        lastCommentAt: comment.createdAt ?? DateTime.now(),
+        updatedAt: comment.createdAt ?? DateTime.now(),
+      );
+    }).toList();
+    if (!didUpdate) return source;
+    next.sort(_sortTopics);
+    return next;
+  }
+
+  bool _questionMatchesCurrentFilters(PeerQuestion question) {
+    final selectedCategoryUuid = state.selectedCategoryUuid?.trim();
+    if (selectedCategoryUuid != null &&
+        selectedCategoryUuid.isNotEmpty &&
+        question.categoryUuid != selectedCategoryUuid) {
+      return false;
+    }
+
+    final query = state.searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return true;
+    return question.content.toLowerCase().contains(query) ||
+        (question.category?.name ?? '').toLowerCase().contains(query);
+  }
+
+  int _sortQuestions(PeerQuestion left, PeerQuestion right) {
+    final leftDate =
+        left.lastCommentAt ?? left.updatedAt ?? left.createdAt ?? DateTime(0);
+    final rightDate =
+        right.lastCommentAt ??
+        right.updatedAt ??
+        right.createdAt ??
+        DateTime(0);
+    return rightDate.compareTo(leftDate);
+  }
+
+  int _sortTopics(PeerTopic left, PeerTopic right) {
+    final leftDate =
+        left.lastCommentAt ?? left.updatedAt ?? left.createdAt ?? DateTime(0);
+    final rightDate =
+        right.lastCommentAt ??
+        right.updatedAt ??
+        right.createdAt ??
+        DateTime(0);
+    return rightDate.compareTo(leftDate);
   }
 
   Future<List<PeerConversation>> _loadGroups(String searchQuery) async {

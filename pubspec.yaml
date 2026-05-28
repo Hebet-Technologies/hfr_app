@@ -1,9 +1,9 @@
 name: staffportal
-description: "A new Flutter project."
+description: "A secure ZANHRH staff portal for requests, training, profiles, and workplace communication."
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.0+4
+version: 1.0.0+9
 
 environment:
   sdk: ^3.9.0
@@ -33,6 +33,7 @@ dependencies:
   pusher_channels_flutter: ^2.5.0
   package_info_plus: ^8.3.0
   device_info_plus: ^11.5.0
+  shorebird_code_push: ^2.0.6
 
 dev_dependencies:
   flutter_test:

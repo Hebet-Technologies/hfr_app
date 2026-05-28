@@ -636,6 +636,46 @@ class PeerQuestion {
       author: _questionAuthorFromJson(json),
     );
   }
+
+  PeerQuestion copyWith({
+    String? uuid,
+    int? categoryId,
+    String? categoryUuid,
+    String? content,
+    int? lastCommentId,
+    DateTime? lastCommentAt,
+    bool? isActive,
+    int? createdBy,
+    int? updatedBy,
+    DateTime? deletedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? commentsCount,
+    PeerQuestionCategory? category,
+    List<PeerAttachment>? attachments,
+    PeerComment? lastComment,
+    PeerAuthor? author,
+  }) {
+    return PeerQuestion(
+      uuid: uuid ?? this.uuid,
+      categoryId: categoryId ?? this.categoryId,
+      categoryUuid: categoryUuid ?? this.categoryUuid,
+      content: content ?? this.content,
+      lastCommentId: lastCommentId ?? this.lastCommentId,
+      lastCommentAt: lastCommentAt ?? this.lastCommentAt,
+      isActive: isActive ?? this.isActive,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
+      deletedAt: deletedAt ?? this.deletedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      commentsCount: commentsCount ?? this.commentsCount,
+      category: category ?? this.category,
+      attachments: attachments ?? this.attachments,
+      lastComment: lastComment ?? this.lastComment,
+      author: author ?? this.author,
+    );
+  }
 }
 
 PeerAuthor? _questionAuthorFromJson(Map<String, dynamic> json) {
@@ -841,6 +881,40 @@ class PeerTopic {
       lastComment: _asMap(json['last_comment']) == null
           ? null
           : PeerComment.fromJson(_asMap(json['last_comment'])!),
+    );
+  }
+
+  PeerTopic copyWith({
+    String? uuid,
+    String? name,
+    String? description,
+    int? lastCommentId,
+    DateTime? lastCommentAt,
+    bool? isActive,
+    int? createdBy,
+    int? updatedBy,
+    DateTime? deletedAt,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? commentsCount,
+    List<PeerTopicAudience>? audiences,
+    PeerComment? lastComment,
+  }) {
+    return PeerTopic(
+      uuid: uuid ?? this.uuid,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      lastCommentId: lastCommentId ?? this.lastCommentId,
+      lastCommentAt: lastCommentAt ?? this.lastCommentAt,
+      isActive: isActive ?? this.isActive,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
+      deletedAt: deletedAt ?? this.deletedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      commentsCount: commentsCount ?? this.commentsCount,
+      audiences: audiences ?? this.audiences,
+      lastComment: lastComment ?? this.lastComment,
     );
   }
 }

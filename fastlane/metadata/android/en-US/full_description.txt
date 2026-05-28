@@ -1,0 +1,3 @@
+HRH staff portal gives staff a secure way to manage workplace services from one mobile app.
+
+Employees can submit and track requests, follow training opportunities, keep profile details current, receive important updates, and communicate with colleagues through the staff community features.

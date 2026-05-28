@@ -1003,9 +1003,10 @@ class _ApprovalTaskDetailScreenState
                   _DetailRow(field: field),
                   const Divider(height: 24, color: _requestBorder),
                 ],
-                if (_task.attachmentName != null &&
-                    _task.attachmentName!.trim().isNotEmpty)
-                  _AttachmentCard(name: _task.attachmentName!),
+                if (_documentUrlFromAttachment(_task.attachmentName) != null)
+                  _AttachmentCard(
+                    url: _documentUrlFromAttachment(_task.attachmentName)!,
+                  ),
               ],
             ),
           ),
@@ -1598,12 +1599,14 @@ class RequestDetailScreen extends ConsumerWidget {
               ],
             ),
           ),
-          if (currentRequest.attachmentName != null &&
-              currentRequest.attachmentName!.trim().isNotEmpty) ...[
+          if (_documentUrlFromAttachment(currentRequest.attachmentName) !=
+              null) ...[
             const SizedBox(height: 14),
             _DetailSectionCard(
               title: 'Attachments',
-              child: _AttachmentCard(name: currentRequest.attachmentName!),
+              child: _AttachmentCard(
+                url: _documentUrlFromAttachment(currentRequest.attachmentName)!,
+              ),
             ),
           ],
           const SizedBox(height: 14),
@@ -2400,6 +2403,27 @@ Future<void> _openLeaveDocument(BuildContext context, String url) async {
   }
 }
 
+Future<void> _openRequestDocument(BuildContext context, String value) async {
+  final url = _documentUrlFromAttachment(value);
+  if (url == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Document is not available yet.')),
+    );
+    return;
+  }
+
+  final uri = Uri.parse(url);
+  var opened = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+  if (!opened) {
+    opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+  if (!opened && context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Could not open document.')));
+  }
+}
+
 class _NewRequestSheet extends StatelessWidget {
   const _NewRequestSheet({required this.parentContext});
 
@@ -3009,33 +3033,42 @@ class _DetailRow extends StatelessWidget {
 }
 
 class _AttachmentCard extends StatelessWidget {
-  const _AttachmentCard({required this.name});
+  const _AttachmentCard({required this.url});
 
-  final String name;
+  final String url;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _requestBorder),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.insert_drive_file_rounded, color: _requestBlue),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              name,
-              style: _requestTextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
+    final name = _documentNameFromUrl(url);
+    return InkWell(
+      onTap: () => _openRequestDocument(context, url),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _requestBorder),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.insert_drive_file_rounded, color: _requestBlue),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _requestTextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 10),
+            const Icon(Icons.open_in_new_rounded, color: _requestMuted),
+          ],
+        ),
       ),
     );
   }
@@ -3597,6 +3630,33 @@ String _withdrawPromptFor(StaffRequestType type) {
     case StaffRequestType.sickLeave:
       return 'This request cannot be withdrawn.';
   }
+}
+
+String? _documentUrlFromAttachment(String? value) {
+  final normalized = value?.trim() ?? '';
+  if (normalized.isEmpty) return null;
+
+  final match = RegExp(
+    r'https?://\S+',
+    caseSensitive: false,
+  ).firstMatch(normalized);
+  if (match == null) return null;
+
+  final url = match.group(0)?.replaceFirst(RegExp(r'[)\],.]+$'), '') ?? '';
+  final uri = Uri.tryParse(url);
+  if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+    return null;
+  }
+  return url;
+}
+
+String _documentNameFromUrl(String url) {
+  final uri = Uri.tryParse(url);
+  final path = uri?.pathSegments.isNotEmpty == true
+      ? uri!.pathSegments.last
+      : '';
+  final decoded = Uri.decodeComponent(path).trim();
+  return decoded.isEmpty ? 'Open Document' : decoded;
 }
 
 IconData _iconFor(StaffRequestType type) {

@@ -14,7 +14,6 @@ import 'activity_request_form.dart';
 import 'leave_request_form.dart';
 import 'loan_request_form.dart';
 import 'request_form_widgets.dart';
-import 'sick_sheet_form.dart';
 import 'transfer_request_form.dart';
 
 part '../widgets/requests_screen_widgets.dart';
@@ -40,7 +39,9 @@ void openRequestFormScreen(BuildContext context, StaffRequestType type) {
     StaffRequestType.leave => const LeaveRequestFormScreen(),
     StaffRequestType.transfer => const TransferRequestFormScreen(),
     StaffRequestType.loan => const LoanRequestFormScreen(),
-    StaffRequestType.sickLeave => const SickSheetFormScreen(),
+    StaffRequestType.sickLeave => const LeaveRequestFormScreen(
+      preferSickLeave: true,
+    ),
   };
 
   Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));

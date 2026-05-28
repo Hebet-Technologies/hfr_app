@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:staffportal/core/network/api_service.dart';
 import 'package:staffportal/features/requests/models/staff_request_models.dart';
@@ -8,6 +11,10 @@ import 'package:staffportal/core/utils/url_resolver.dart';
 
 class TrainingRepository {
   TrainingRepository();
+
+  static const _countriesCacheKey = 'training_countries_cache_v1';
+  static const _institutesCachePrefix = 'training_institutes_cache_v1';
+
   final Dio _dio = createLoggedDio(
     BaseOptions(
       baseUrl: ApiService.baseUrl,
@@ -16,15 +23,14 @@ class TrainingRepository {
       headers: const {'Accept': 'application/json'},
     ),
   );
+  List<TrainingCountry>? _cachedCountries;
+  final Map<String, List<TrainingInstitute>> _cachedInstitutes = {};
 
   Future<List<TrainingProgram>> fetchLatestTrainings({
     List<TrainingProgram> myTrainings = const [],
   }) async {
     final response = await _get('/getPublishedDevelopmentPlanCurrentYear');
     final items = _extractList(response.data);
-    if (items.isEmpty) {
-      return const [];
-    }
 
     final byDevelopmentPlanVendorId = <String, TrainingProgram>{};
     for (final item in myTrainings) {
@@ -48,7 +54,7 @@ class TrainingRepository {
       final isShortCourse = _boolValue(item['is_short_course']);
       final trainingType = isShortCourse
           ? 'Short Course'
-          : _stringValue(item['training_name']);
+          : _stringValue(item['training_name'], fallback: 'Training');
       final title = matchedTraining?.title.isNotEmpty == true
           ? matchedTraining!.title
           : _compact([trainingType, caderName, educationLevelName]).join(' - ');
@@ -95,10 +101,10 @@ class TrainingRepository {
           workingStationName: matchedTraining?.workingStationName,
           batchYear: _stringValue(item['batch_year']),
           workingExperienceLabel: _stringValue(item['working_expirience']),
+          rawStatus: matchedTraining?.rawStatus,
           isLive: true,
           canApplyLive:
               matchedTraining == null &&
-              !isShortCourse &&
               developmentPlanVendorId.isNotEmpty &&
               _dateValue(item['start_date']) != null &&
               _dateValue(item['end_date']) != null,
@@ -111,7 +117,9 @@ class TrainingRepository {
         myTrainings: myTrainings,
       );
       programs.addAll(shortCourses);
-    } catch (_) {}
+    } catch (_) {
+      // Keep published trainings visible even if short-course plans fail.
+    }
 
     programs.sort(_sortProgramsByDate);
     return programs;
@@ -168,8 +176,14 @@ class TrainingRepository {
         shortCourseDescriptionId: shortCourseId,
         programId: programId,
         workingStationName: matchedTraining?.workingStationName,
+        rawStatus: matchedTraining?.rawStatus,
         isLive: true,
-        canApplyLive: shortCourseId.isNotEmpty && programId.isNotEmpty,
+        canApplyLive:
+            matchedTraining == null &&
+            shortCourseId.isNotEmpty &&
+            programId.isNotEmpty &&
+            startDate != null &&
+            endDate != null,
       );
     }).toList();
   }
@@ -186,54 +200,61 @@ class TrainingRepository {
       data: {'personal_information_id': user.personalInformationId},
     );
     final items = _extractList(response.data);
-    if (items.isEmpty) {
-      return const [];
-    }
 
-    final programs = items
-        .map(
-          (item) => TrainingProgram(
-            id: 'my-${_stringValue(item['training_application_id'])}',
-            title: _stringValue(item['training_name']),
-            trainingType: _stringValue(item['education_level_name']),
-            organizer: _stringValue(item['vendor_name']),
-            location: _stringValue(item['institute_name']),
-            description:
-                'Training application submitted through the staff portal and awaiting the next workflow action.',
-            targetCadres: _compact([
-              _stringValue(item['cader_name']),
-              _stringValue(item['education_level_name']),
-              user.workingStationName,
-            ]),
-            badge: 'Internal',
-            status: TrainingParticipationStatusX.fromRaw(
-              item['training_app_status'],
+    final programs = items.map((item) {
+      final rawStatus = _stringValue(item['training_app_status']);
+      final attachmentItems = _extractList(item['attachments']);
+      final resources = attachmentItems
+          .map(
+            (attachment) => _approvalResourceFromItem(
+              attachment,
+              idPrefix:
+                  'my-attachment-${_stringValue(item['training_application_id'])}-${_stringValue(attachment['upload_type_id'], fallback: _stringValue(attachment['upload_file_name']))}',
             ),
-            availableSlots: 25,
-            participantCount: 25,
-            resources: const [],
-            startDate: _dateValue(item['start_date']),
-            endDate: _dateValue(item['end_date']),
-            trainingApplicationId: _stringValue(
-              item['training_application_id'],
-            ),
-            developmentPlanVendorId: _stringValue(
-              item['development_plan_vendor_id'],
-            ),
-            instituteId: _stringValue(item['institute_id']),
-            educationLevelId: _stringValue(item['education_level_id']),
-            educationLevelName: _stringValue(item['education_level_name']),
-            workingStationName: user.workingStationName,
-            batchYear: _stringValue(item['batch_year']),
-            isLive: true,
-            canApplyLive: false,
-          ),
-        )
-        .toList();
+          )
+          .whereType<TrainingResource>()
+          .toList();
+
+      return TrainingProgram(
+        id: 'my-${_stringValue(item['training_application_id'])}',
+        title: _stringValue(item['training_name']),
+        trainingType: _stringValue(item['education_level_name']),
+        organizer: _stringValue(item['vendor_name']),
+        location: _stringValue(item['institute_name']),
+        description:
+            'Training application submitted through the staff portal and awaiting the next workflow action.',
+        targetCadres: _compact([
+          _stringValue(item['cader_name']),
+          _stringValue(item['education_level_name']),
+          user.workingStationName,
+        ]),
+        badge: 'Internal',
+        status: TrainingParticipationStatusX.fromRaw(rawStatus),
+        availableSlots: 25,
+        participantCount: 25,
+        resources: resources,
+        startDate: _dateValue(item['start_date']),
+        endDate: _dateValue(item['end_date']),
+        trainingApplicationId: _stringValue(item['training_application_id']),
+        developmentPlanVendorId: _stringValue(
+          item['development_plan_vendor_id'],
+        ),
+        instituteId: _stringValue(item['institute_id']),
+        educationLevelId: _stringValue(item['education_level_id']),
+        educationLevelName: _stringValue(item['education_level_name']),
+        workingStationName: user.workingStationName,
+        batchYear: _stringValue(item['batch_year']),
+        rawStatus: rawStatus,
+        isLive: true,
+        canApplyLive: false,
+      );
+    }).toList();
 
     try {
       programs.addAll(await fetchMyShortCourseRequests(user));
-    } catch (_) {}
+    } catch (_) {
+      // Keep training requests visible even if short-course requests fail.
+    }
 
     programs.sort(_sortProgramsByDate);
     return programs;
@@ -279,6 +300,7 @@ class TrainingRepository {
             batchYear: _stringValue(item['batch_year']),
             educationLevelName: _stringValue(item['education_level_name']),
             workingStationName: user.workingStationName,
+            rawStatus: 'APPROVED',
             isLive: true,
             canApplyLive: false,
           ),
@@ -313,6 +335,7 @@ class TrainingRepository {
       final startDate = _dateValue(item['start_date']);
       final endDate = _dateValue(item['end_date']);
       final shortCourseId = _stringValue(item['short_course_descr_id']);
+      final rawStatus = _stringValue(item['short_course_status']);
 
       return TrainingProgram(
         id: 'my-short-${_stringValue(item['short_course_application_id'], fallback: '$title-${_stringValue(item['start_date'])}')}',
@@ -324,9 +347,7 @@ class TrainingRepository {
             'Short course request submitted through the staff portal and awaiting workflow review.',
         targetCadres: _compact([user.workingStationName, 'Staff Members']),
         badge: 'Short Course',
-        status: TrainingParticipationStatusX.fromRaw(
-          item['short_course_status'],
-        ),
+        status: TrainingParticipationStatusX.fromRaw(rawStatus),
         availableSlots: 1,
         participantCount: 1,
         resources: const [],
@@ -341,6 +362,7 @@ class TrainingRepository {
           item['working_station_name'],
           fallback: user.workingStationName,
         ),
+        rawStatus: rawStatus,
         isLive: true,
         canApplyLive: false,
       );
@@ -388,14 +410,137 @@ class TrainingRepository {
     return resources;
   }
 
-  Future<List<TrainingCountry>> fetchTrainingCountries() async {
+  Future<List<TrainingCountry>> fetchTrainingCountries({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cached = await _readCachedCountries();
+      if (cached != null && cached.isNotEmpty) return cached;
+    }
+
     final response = await _get('/getCountries');
-    final items = _extractList(response.data);
+    final countries = _parseTrainingCountries(_extractList(response.data));
+    await _writeCachedCountries(countries);
+    return countries;
+  }
+
+  Future<List<TrainingInstitute>> fetchInstitutes({
+    required String countryCode,
+    required String educationLevelId,
+    bool forceRefresh = false,
+  }) async {
+    final cacheKey = _institutesCacheKey(
+      countryCode: countryCode,
+      educationLevelId: educationLevelId,
+    );
+    if (!forceRefresh) {
+      final cached = await _readCachedInstitutes(cacheKey);
+      if (cached != null && cached.isNotEmpty) return cached;
+    }
+
+    final response = await _get(
+      '/getInstitutes/$countryCode/$educationLevelId',
+    );
+    final institutes = _parseTrainingInstitutes(_extractList(response.data));
+    await _writeCachedInstitutes(cacheKey, institutes);
+    return institutes;
+  }
+
+  Future<List<TrainingCountry>?> _readCachedCountries() async {
+    final memoryCache = _cachedCountries;
+    if (memoryCache != null && memoryCache.isNotEmpty) return memoryCache;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final countries = _parseTrainingCountries(
+        _decodeCachedList(prefs.getString(_countriesCacheKey)),
+      );
+      if (countries.isEmpty) return null;
+      _cachedCountries = countries;
+      return countries;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeCachedCountries(List<TrainingCountry> countries) async {
+    if (countries.isEmpty) return;
+    _cachedCountries = List<TrainingCountry>.unmodifiable(countries);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _countriesCacheKey,
+        jsonEncode(
+          countries
+              .map((item) => {'code': item.code, 'name': item.name})
+              .toList(),
+        ),
+      );
+    } catch (_) {
+      // Cache writes are best effort; fresh API data should still render.
+    }
+  }
+
+  Future<List<TrainingInstitute>?> _readCachedInstitutes(String key) async {
+    final memoryCache = _cachedInstitutes[key];
+    if (memoryCache != null && memoryCache.isNotEmpty) return memoryCache;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final institutes = _parseTrainingInstitutes(
+        _decodeCachedList(prefs.getString(key)),
+      );
+      if (institutes.isEmpty) return null;
+      _cachedInstitutes[key] = institutes;
+      return institutes;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _writeCachedInstitutes(
+    String key,
+    List<TrainingInstitute> institutes,
+  ) async {
+    if (institutes.isEmpty) return;
+    _cachedInstitutes[key] = List<TrainingInstitute>.unmodifiable(institutes);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        key,
+        jsonEncode(
+          institutes
+              .map(
+                (item) => {
+                  'id': item.id,
+                  'name': item.name,
+                  'countryName': item.countryName,
+                },
+              )
+              .toList(),
+        ),
+      );
+    } catch (_) {
+      // Cache writes are best effort; fresh API data should still render.
+    }
+  }
+
+  List<TrainingCountry> _parseTrainingCountries(
+    List<Map<String, dynamic>> items,
+  ) {
     return items
         .map(
           (item) => TrainingCountry(
-            code: _stringValue(item['country_code']),
-            name: _stringValue(item['country_name']),
+            code: _stringValue(
+              item['country_code'],
+              fallback: _stringValue(item['code']),
+            ),
+            name: _stringValue(
+              item['country_name'],
+              fallback: _stringValue(item['name']),
+            ),
           ),
         )
         .where((item) => item.code.isNotEmpty && item.name.isNotEmpty)
@@ -403,25 +548,60 @@ class TrainingRepository {
       ..sort((first, second) => first.name.compareTo(second.name));
   }
 
-  Future<List<TrainingInstitute>> fetchInstitutes({
-    required String countryCode,
-    required String educationLevelId,
-  }) async {
-    final response = await _get(
-      '/getInstitutes/$countryCode/$educationLevelId',
-    );
-    final items = _extractList(response.data);
+  List<TrainingInstitute> _parseTrainingInstitutes(
+    List<Map<String, dynamic>> items,
+  ) {
     return items
         .map(
           (item) => TrainingInstitute(
-            id: _stringValue(item['institute_id']),
-            name: _stringValue(item['institute_name']),
-            countryName: _stringValue(item['country_name']),
+            id: _stringValue(
+              item['institute_id'],
+              fallback: _stringValue(item['id']),
+            ),
+            name: _stringValue(
+              item['institute_name'],
+              fallback: _stringValue(item['name']),
+            ),
+            countryName: _stringValue(
+              item['country_name'],
+              fallback: _stringValue(item['countryName']),
+            ),
           ),
         )
         .where((item) => item.id.isNotEmpty && item.name.isNotEmpty)
         .toList()
       ..sort((first, second) => first.name.compareTo(second.name));
+  }
+
+  List<Map<String, dynamic>> _decodeCachedList(String? encoded) {
+    if (encoded == null || encoded.trim().isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is! List) return const [];
+      return decoded
+          .whereType<Map>()
+          .map((item) => item.map((key, value) => MapEntry('$key', value)))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  String _institutesCacheKey({
+    required String countryCode,
+    required String educationLevelId,
+  }) {
+    final country = _cacheKeyPart(countryCode);
+    final education = _cacheKeyPart(educationLevelId);
+    return '$_institutesCachePrefix.$country.$education';
+  }
+
+  String _cacheKeyPart(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
   }
 
   Future<TrainingProgram> fetchTrainingDetails(TrainingProgram training) async {
@@ -495,6 +675,10 @@ class TrainingRepository {
       workingStationName: _stringValue(
         detail['working_station_name'],
         fallback: _stringValue(training.workingStationName),
+      ),
+      rawStatus: _stringValue(
+        detail['training_app_status'],
+        fallback: _stringValue(training.rawStatus),
       ),
       isLive: true,
       canApplyLive: false,
@@ -678,6 +862,8 @@ class TrainingRepository {
   Future<TrainingProgram> applyForTraining({
     required UserModel user,
     required TrainingProgram training,
+    String? admissionLetterPath,
+    String? admissionLetterName,
   }) async {
     final shortCourseDescriptionId = _stringValue(
       training.shortCourseDescriptionId,
@@ -686,13 +872,17 @@ class TrainingRepository {
     if (shortCourseDescriptionId.isNotEmpty &&
         programId.isNotEmpty &&
         user.personalInformationId.trim().isNotEmpty) {
-      await _postJson(
+      final response = await _postJson(
         '/storeShortRequest',
         data: {
           'personal_information_id': user.personalInformationId,
           'short_course_descr_id': shortCourseDescriptionId,
           'program_id': programId,
         },
+      );
+      _ensureSuccessfulResponse(
+        response,
+        fallback: 'Short course request could not be submitted.',
       );
 
       return buildOptimisticAppliedProgram(training).copyWith(isLive: true);
@@ -707,18 +897,37 @@ class TrainingRepository {
         training.endDate != null;
 
     if (!canSubmitLive) {
+      if (training.isLive) {
+        throw Exception('Training request details are incomplete.');
+      }
       return buildOptimisticAppliedProgram(training);
     }
 
-    await _postForm(
-      '/storeTrainingRequest',
-      data: {
-        'personal_information_id': user.personalInformationId,
-        'development_plan_vendor_id': training.developmentPlanVendorId,
-        'institute_id': training.instituteId,
-        'start_date': _toApiDate(training.startDate!),
-        'end_date': _toApiDate(training.endDate!),
-      },
+    if (_requiresAdmissionLetter(training) &&
+        (admissionLetterPath ?? '').trim().isEmpty) {
+      throw Exception(
+        'Admission letter is required for short course training.',
+      );
+    }
+
+    final payload = <String, dynamic>{
+      'personal_information_id': user.personalInformationId,
+      'development_plan_vendor_id': training.developmentPlanVendorId,
+      'institute_id': training.instituteId,
+      'start_date': _toApiDate(training.startDate!),
+      'end_date': _toApiDate(training.endDate!),
+    };
+    if ((admissionLetterPath ?? '').trim().isNotEmpty) {
+      payload['admission_letter'] = await MultipartFile.fromFile(
+        admissionLetterPath!,
+        filename: admissionLetterName,
+      );
+    }
+
+    final response = await _postForm('/storeTrainingRequest', data: payload);
+    _ensureSuccessfulResponse(
+      response,
+      fallback: 'Training request could not be submitted.',
     );
 
     return buildOptimisticAppliedProgram(training).copyWith(isLive: true);
@@ -975,6 +1184,7 @@ class TrainingRepository {
       trainingApplicationId:
           training.trainingApplicationId ??
           'local-training-${now.microsecondsSinceEpoch}',
+      rawStatus: training.rawStatus ?? 'REQUESTED',
       canApplyLive: false,
     );
   }
@@ -1244,6 +1454,11 @@ class TrainingRepository {
   }
 
   String _extractMessage(dynamic responseData, {required String fallback}) {
+    final validationMessage = _validationMessage(responseData);
+    if (validationMessage.isNotEmpty) {
+      return validationMessage;
+    }
+
     if (responseData is Map<String, dynamic>) {
       final message = _stringValue(responseData['message']);
       return message.isEmpty ? fallback : message;
@@ -1257,6 +1472,27 @@ class TrainingRepository {
     return fallback;
   }
 
+  String _validationMessage(dynamic responseData) {
+    if (responseData is Map<String, dynamic>) {
+      for (final entry in responseData.entries) {
+        if (entry.key == 'data' || entry.key == 'message') continue;
+        final value = entry.value;
+        if (value is List && value.isNotEmpty) {
+          return _stringValue(value.first);
+        }
+        if (value is String && value.trim().isNotEmpty) {
+          return value.trim();
+        }
+      }
+    }
+    if (responseData is Map) {
+      return _validationMessage(
+        responseData.map((key, value) => MapEntry(key.toString(), value)),
+      );
+    }
+    return '';
+  }
+
   void _ensureSuccessfulResponse(
     Response<dynamic> response, {
     required String fallback,
@@ -1267,6 +1503,10 @@ class TrainingRepository {
     }
 
     final statusCode = _extractStatusCode(response.data);
+    final validationMessage = _validationMessage(response.data);
+    if (statusCode == null && validationMessage.isNotEmpty) {
+      throw Exception(validationMessage);
+    }
     if (statusCode == null || statusCode == 200 || statusCode == 201) return;
 
     throw Exception(_extractMessage(response.data, fallback: fallback));
@@ -1294,6 +1534,13 @@ class TrainingRepository {
     final firstDate = first.startDate ?? first.endDate ?? DateTime(2100);
     final secondDate = second.startDate ?? second.endDate ?? DateTime(2100);
     return firstDate.compareTo(secondDate);
+  }
+
+  bool _requiresAdmissionLetter(TrainingProgram training) {
+    final type = training.trainingType.trim().toLowerCase();
+    return type == 'short course' &&
+        _stringValue(training.shortCourseDescriptionId).isEmpty &&
+        _stringValue(training.developmentPlanVendorId).isNotEmpty;
   }
 
   List<String> _compact(List<String> values) {

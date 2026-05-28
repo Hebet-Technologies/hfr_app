@@ -10,7 +10,9 @@ import 'request_form_widgets.dart';
 import 'request_submission_success.dart';
 
 class LeaveRequestFormScreen extends ConsumerStatefulWidget {
-  const LeaveRequestFormScreen({super.key});
+  const LeaveRequestFormScreen({super.key, this.preferSickLeave = false});
+
+  final bool preferSickLeave;
 
   @override
   ConsumerState<LeaveRequestFormScreen> createState() =>
@@ -28,6 +30,7 @@ class _LeaveRequestFormScreenState
   String? _leaveTypeId;
   String? _representativeId;
   PlatformFile? _selectedFile;
+  bool _didApplyPreferredLeaveType = false;
 
   @override
   void dispose() {
@@ -47,6 +50,7 @@ class _LeaveRequestFormScreenState
     );
     final requiresRepresentative = authState.user?.primaryRoleId != '7';
     final canBackdateLeave = _canBackdateLeave(selectedLeaveType);
+    _applyPreferredLeaveType(state.leaveTypes);
 
     return Scaffold(
       backgroundColor: requestSurface,
@@ -55,7 +59,7 @@ class _LeaveRequestFormScreenState
         elevation: 0,
         centerTitle: true,
         title: Text(
-          'Apply Leave',
+          widget.preferSickLeave ? 'Apply Sick Leave' : 'Apply Leave',
           style: requestTextStyle(fontSize: 17, fontWeight: FontWeight.w700),
         ),
       ),
@@ -180,6 +184,8 @@ class _LeaveRequestFormScreenState
                       child: Text(
                         state.isSubmitting
                             ? 'Submitting...'
+                            : widget.preferSickLeave
+                            ? 'Submit Sick Leave'
                             : 'Submit Leave Request',
                       ),
                     ),
@@ -306,5 +312,23 @@ class _LeaveRequestFormScreenState
         label.contains('childbirth') ||
         label.contains('kujifungua') ||
         label.contains('kuumwa');
+  }
+
+  void _applyPreferredLeaveType(List<RequestLookupOption> leaveTypes) {
+    if (!widget.preferSickLeave ||
+        _didApplyPreferredLeaveType ||
+        _leaveTypeId != null ||
+        leaveTypes.isEmpty) {
+      return;
+    }
+
+    final sickLeaveType = leaveTypes.firstWhereOrNull(_canBackdateLeave);
+    if (sickLeaveType == null) return;
+
+    _didApplyPreferredLeaveType = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _leaveTypeId != null) return;
+      setState(() => _leaveTypeId = sickLeaveType.id);
+    });
   }
 }
